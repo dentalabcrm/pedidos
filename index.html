@@ -67,6 +67,49 @@
     display:flex;align-items:center;justify-content:center;flex-shrink:0;
   }
   .btn-tema:hover{background:var(--border);}
+  .btn-instalar{
+    background:var(--panel2);border:1px solid var(--border);color:var(--text2);
+    height:38px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:6px;flex-shrink:0;padding:0 12px;
+  }
+  .btn-instalar:hover{background:var(--border);}
+  #instalar-backdrop{
+    position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99998;display:none;
+    align-items:center;justify-content:center;padding:16px;
+  }
+  #instalar-backdrop.abierto{display:flex;}
+  #instalar-box{
+    background:var(--panel);border-radius:16px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;
+    box-shadow:0 16px 48px rgba(0,0,0,.3);
+  }
+  .instalar-header{
+    background:linear-gradient(135deg,var(--blue),#0369a1);padding:18px 20px;
+    display:flex;align-items:center;gap:12px;color:#fff;position:sticky;top:0;
+  }
+  .instalar-header b{font-size:15px;display:block;}
+  .instalar-header span{font-size:12px;opacity:.85;}
+  #instalar-close{margin-left:auto;background:rgba(255,255,255,.2);border:none;border-radius:8px;
+    width:28px;height:28px;color:#fff;font-size:14px;cursor:pointer;flex-shrink:0;}
+  .instalar-body{padding:20px;display:flex;flex-direction:column;gap:16px;}
+  .instalar-cta{
+    background:var(--blue);color:#fff;border:none;border-radius:10px;padding:12px 16px;
+    font-size:14px;font-weight:700;cursor:pointer;width:100%;display:none;
+  }
+  .instalar-cta.visible{display:block;}
+  .instalar-plataforma{border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+  .instalar-plataforma summary{
+    padding:12px 14px;font-weight:700;font-size:13.5px;color:var(--text);cursor:pointer;
+    display:flex;align-items:center;gap:8px;background:var(--panel2);list-style:none;
+  }
+  .instalar-plataforma summary::-webkit-details-marker{display:none;}
+  .instalar-plataforma[open] summary{border-bottom:1px solid var(--border);}
+  .instalar-pasos{padding:14px;display:flex;flex-direction:column;gap:10px;}
+  .instalar-paso{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--text2);line-height:1.5;}
+  .instalar-paso b{color:var(--text);}
+  .instalar-paso-num{
+    background:var(--blue);color:#fff;width:20px;height:20px;border-radius:50%;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;margin-top:1px;
+  }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
   .promo-marquee{background:#0f172a;color:#fff;overflow:hidden;white-space:nowrap;padding:9px 0;margin:-18px -14px 0;}
   .horarios-bar{background:#eef1f6;color:var(--text2);text-align:center;padding:8px 14px;font-size:12.5px;margin:0 -14px 18px;}
@@ -467,8 +510,55 @@
         Pedido por WhatsApp
       </div>
       </div>
+      <button class="btn-instalar" id="btn-instalar-app" onclick="abrirModalInstalar()" title="Instalar la app" style="display:none;">📲 Instalar app</button>
       <button class="btn-tema" id="btn-tema" onclick="toggleTemaOscuro()" title="Cambiar a modo nocturno">🌙</button>
     </div>
+    <!-- ══ Modal: cómo instalar la app ══ -->
+    <div id="instalar-backdrop" onclick="if(event.target===this)cerrarModalInstalar()">
+      <div id="instalar-box">
+        <div class="instalar-header">
+          <div>
+            <b>📲 Instalá la app</b>
+            <span>Acceso directo desde tu celular o PC</span>
+          </div>
+          <button id="instalar-close" onclick="cerrarModalInstalar()">✕</button>
+        </div>
+        <div class="instalar-body">
+          <button class="instalar-cta" id="instalar-cta-nativo" onclick="_instalarNativo()">⬇️ Instalar ahora</button>
+
+          <details class="instalar-plataforma" id="instalar-android">
+            <summary>🤖 Android (Chrome)</summary>
+            <div class="instalar-pasos">
+              <div class="instalar-paso"><span class="instalar-paso-num">1</span><span>Entrá a <b>dentalabcrm.github.io/pedidos/</b> desde Chrome.</span></div>
+              <div class="instalar-paso"><span class="instalar-paso-num">2</span><span>Puede aparecer solo un cartel abajo: <b>"Agregar Dentalab a la pantalla de inicio"</b>. Tocalo.</span></div>
+              <div class="instalar-paso"><span class="instalar-paso-num">3</span><span>Si no aparece: tocá los <b>3 puntitos ⋮</b> arriba a la derecha → <b>"Instalar app"</b>.</span></div>
+              <div class="instalar-paso"><span class="instalar-paso-num">4</span><span>Confirmá. Va a aparecer el ícono de Dentalab en tu pantalla de inicio.</span></div>
+            </div>
+          </details>
+
+          <details class="instalar-plataforma" id="instalar-ios">
+            <summary>🍏 iPhone (Safari)</summary>
+            <div class="instalar-pasos">
+              <div class="instalar-paso"><span class="instalar-paso-num">1</span><span>Entrá a <b>dentalabcrm.github.io/pedidos/</b> desde <b>Safari</b> (tiene que ser Safari, no Chrome).</span></div>
+              <div class="instalar-paso"><span class="instalar-paso-num">2</span><span>Tocá el ícono de <b>Compartir</b> ⬆️ (el cuadrado con la flecha, abajo al centro).</span></div>
+              <div class="instalar-paso"><span class="instalar-paso-num">3</span><span>Deslizá hacia abajo y tocá <b>"Agregar a inicio"</b>.</span></div>
+              <div class="instalar-paso"><span class="instalar-paso-num">4</span><span>Confirmá el nombre y tocá <b>"Agregar"</b>. Listo.</span></div>
+            </div>
+          </details>
+
+          <details class="instalar-plataforma" id="instalar-pc">
+            <summary>💻 Computadora (Chrome / Edge)</summary>
+            <div class="instalar-pasos">
+              <div class="instalar-paso"><span class="instalar-paso-num">1</span><span>Entrá a <b>dentalabcrm.github.io/pedidos/</b> desde Chrome o Edge (no funciona en Safari de Mac).</span></div>
+              <div class="instalar-paso"><span class="instalar-paso-num">2</span><span>Buscá el ícono de instalar en la barra de direcciones (al lado de la estrella ⭐), o andá a <b>⋮ → Más herramientas → Crear acceso directo</b>.</span></div>
+              <div class="instalar-paso"><span class="instalar-paso-num">3</span><span>Tildá <b>"Abrir como ventana"</b> y confirmá.</span></div>
+              <div class="instalar-paso"><span class="instalar-paso-num">4</span><span>Queda como una app en tu escritorio, sin la barra del navegador.</span></div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+
     <div id="carrusel-banners" style="display:none;"></div>
     <div id="app">
       <div class="loading"><div class="spinner"></div>Cargando catálogo…</div>
@@ -3536,7 +3626,7 @@ cargarCatalogo();
 })();
 </script>
 
-<!-- ══ PWA: registrar service worker ══ -->
+<!-- ══ PWA: registrar service worker + modal "Instalar app" ══ -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -3545,6 +3635,58 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+
+(function() {
+  const $btn = document.getElementById('btn-instalar-app');
+  const $backdrop = document.getElementById('instalar-backdrop');
+  const $ctaNativo = document.getElementById('instalar-cta-nativo');
+  let _deferredPrompt = null;
+
+  // ¿Ya está instalada / corriendo como app? Si es así, no hace falta mostrar nada.
+  function _yaInstalada() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
+
+  const _ua = navigator.userAgent || '';
+  const _esIOS = /iPad|iPhone|iPod/.test(_ua) && !window.MSStream;
+  const _esAndroid = /Android/.test(_ua);
+
+  if (!_yaInstalada()) {
+    $btn.style.display = 'flex';
+  }
+
+  // Chrome/Edge/Android avisan que la app se puede instalar de forma nativa —
+  // guardamos el evento para poder disparar el instalador real desde nuestro botón.
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _deferredPrompt = e;
+    if ($ctaNativo) $ctaNativo.classList.add('visible');
+  });
+
+  window.addEventListener('appinstalled', () => {
+    _deferredPrompt = null;
+    $btn.style.display = 'none';
+    if (typeof showToast === 'function') showToast('✅ App instalada', 'ok');
+  });
+
+  window._instalarNativo = function() {
+    if (!_deferredPrompt) return;
+    _deferredPrompt.prompt();
+    _deferredPrompt.userChoice.finally(() => { _deferredPrompt = null; });
+  };
+
+  window.abrirModalInstalar = function() {
+    $backdrop.classList.add('abierto');
+    // Abrir automáticamente la sección de la plataforma detectada, para no obligar a buscarla
+    document.querySelectorAll('.instalar-plataforma').forEach(d => d.removeAttribute('open'));
+    const _target = _esIOS ? 'instalar-ios' : _esAndroid ? 'instalar-android' : 'instalar-pc';
+    document.getElementById(_target)?.setAttribute('open', '');
+  };
+
+  window.cerrarModalInstalar = function() {
+    $backdrop.classList.remove('abierto');
+  };
+})();
 </script>
 
 </body>
