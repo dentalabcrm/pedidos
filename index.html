@@ -3244,7 +3244,17 @@ cargarCatalogo();
       sugerencia:'Cómo hacer un pedido',
       claves:['como hago un pedido','como hago para pedir','como hacer un pedido','hacer un pedido','como pido','como compro','como se compra','como se hace un pedido','como funciona la pagina','como funciona el sitio','como funciona esto','como armo el pedido','no se como pedir','no se como comprar','ayuda para pedir','ayuda para comprar','tutorial','instrucciones','paso a paso','como usar','como me registro','registrarme','como puedo registrarme','no me deja registrarme','no puedo comprar','como puedo comprar','como funciona','como se pide','como se compra aca','como comprar'],
       chip:'❓ Cómo hacer un pedido',
-      respuesta: () => `¡Así de fácil! No hace falta registrarse en ningún lado. 🛒\n\n1️⃣ Elegís cómo querés recibir tu pedido: retiro por el local, envío, o "todavía no lo sé".\n\n2️⃣ Elegís la forma de pago: Contado (10% off, con efectivo, débito, transferencia o Mercado Pago) o Tarjeta de crédito en 1 pago. Según lo que elijas vas a ver los precios correspondientes.\n\n3️⃣ Buscás los productos por nombre o SKU y los agregás al carrito con el botón "+".\n\n4️⃣ Cuando terminás, tocás "Ver pedido ▾", completás tus datos y le das a "Enviar pedido a Dentalab". Se abre WhatsApp con todo el pedido armado para que lo confirmemos.\n\n¡Y listo! 🦷`
+      respuesta: () => `¡Así de fácil! Acá en este catálogo no hace falta registrarse. 🛒\n\n1️⃣ Elegís cómo querés recibir tu pedido: retiro por el local, envío, o "todavía no lo sé".\n\n2️⃣ Elegís la forma de pago: Contado (10% off, con efectivo, débito, transferencia o Mercado Pago) o Tarjeta de crédito en 1 pago. Según lo que elijas vas a ver los precios correspondientes.\n\n3️⃣ Buscás los productos por nombre o SKU y los agregás al carrito con el botón "+".\n\n4️⃣ Cuando terminás, tocás "Ver pedido ▾", completás tus datos y le das a "Enviar pedido a Dentalab". Se abre WhatsApp con todo el pedido armado para que lo confirmemos.\n\n¡Y listo! 🦷`
+    },
+    {
+      id:'pagina_web',
+      sugerencia:'Página web',
+      claves:['pagina web','sitio web','tienda online','comprar en la web','compra online','dentalab.com.ar','tienda virtual','ecommerce','e-commerce','comprar por la pagina','comprar por la pagina web','comprar desde la pagina'],
+      chip:'🌐 Página web',
+      custom: () => {
+        _chatbotAgregarMsg(`🌐 También podés comprar desde nuestra página web (con envío a todo el país y pago online):\n\n1️⃣ Elegís los productos que necesitás y tocás "Comprar".\n\n2️⃣ Tocás "Mostrar Carro" — te va a pedir un mail y una contraseña para registrarte. Confirmá con "Registrar y comprar".\n\n3️⃣ Completás los datos de facturación, envío/retiro y forma de pago.\n\n4️⃣ Tocás "Confirmar compra" y listo. ✅`, 'bot');
+        _chatbotBotonLink('https://dentalab.com.ar/', 'Ir a dentalab.com.ar', '🌐');
+      }
     },
     {
       id:'ofertas',
@@ -3433,6 +3443,21 @@ cargarCatalogo();
     a.rel = 'noopener';
     a.href = 'https://wa.me/' + CHATBOT_WA_NUM + '?text=' + encodeURIComponent(mensajePrellenado);
     a.innerHTML = '🟢 ' + (texto || 'Hablar por WhatsApp');
+    const wrap = document.createElement('div');
+    wrap.style.alignSelf = 'flex-start';
+    wrap.appendChild(a);
+    $mensajes.appendChild(wrap);
+    _chatbotScrollAbajo();
+  }
+
+  function _chatbotBotonLink(url, texto, emoji){
+    const a = document.createElement('a');
+    a.className = 'chatbot-wa-btn';
+    a.style.background = 'var(--blue, #0284c7)';
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.href = url;
+    a.innerHTML = (emoji || '🌐') + ' ' + (texto || 'Ir al sitio');
     const wrap = document.createElement('div');
     wrap.style.alignSelf = 'flex-start';
     wrap.appendChild(a);
