@@ -2260,6 +2260,12 @@ function buscarProductos(){
       return filtroOrdenPrecio === 'asc' ? va - vb : vb - va;
     });
   }
+
+  // Los agotados siempre van al final, para no confundir al cliente mostrando primero
+  // algo que no está disponible. El sort es estable, así que dentro de "disponibles" y
+  // dentro de "agotados" se mantiene el orden que ya se calculó arriba (precio/nombre).
+  ordenados.sort((a, b) => (a.st ? 1 : 0) - (b.st ? 1 : 0));
+
   return ordenados;
 }
 
