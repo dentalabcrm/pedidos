@@ -735,15 +735,15 @@ let filtroCategoria = 'todas';
 let filtroSubgrupo = 'todas';
 // Preferencia de vista del cliente (grilla con fotos grandes, o lista compacta) — se
 // guarda en su navegador, cada visitante puede elegir la suya sin afectar a los demás.
-// Preferencia de vista del cliente (grilla con fotos grandes, o lista compacta) — se
-// guarda en su navegador, cada visitante puede elegir la suya sin afectar a los demás.
-// Si todavía no eligió ninguna, arranca en "lista" (en mobile y en PC).
+// Si todavía no eligió ninguna: arranca en "grilla" en PC (se aprovecha mejor el ancho de
+// pantalla) y en "lista" en mobile (más compacto, se ve más catálogo sin scrollear tanto).
 let vistaProductos = (() => {
   try {
     const guardada = localStorage.getItem('dentalab_vista_productos');
     if (guardada === 'grilla' || guardada === 'lista') return guardada;
   } catch (e) {}
-  return 'lista';
+  const _esMobileDefault = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '') || window.innerWidth < 720;
+  return _esMobileDefault ? 'lista' : 'grilla';
 })();
 
 const MODALIDAD_LABEL = {
