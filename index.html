@@ -104,6 +104,11 @@
     font-size:14px;font-weight:700;cursor:pointer;width:100%;display:none;
   }
   .instalar-cta.visible{display:block;}
+  .instalar-cta-pulso{animation:instalarPulso 1.1s ease-in-out 3;}
+  @keyframes instalarPulso{
+    0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(2,132,199,.5);}
+    50%{transform:scale(1.035);box-shadow:0 0 0 8px rgba(2,132,199,0);}
+  }
   .instalar-plataforma{border:1px solid var(--border);border-radius:12px;overflow:hidden;}
   .instalar-plataforma summary{
     padding:12px 14px;font-weight:700;font-size:13.5px;color:var(--text);cursor:pointer;
@@ -3771,7 +3776,7 @@ if ('serviceWorker' in navigator) {
     if (_qrGenerado) return;
     try {
       const qr = qrcode(4, 'M'); // nivel de corrección M: buen balance tamaño/legibilidad
-      qr.addData('https://dentalabcrm.github.io/pedidos/');
+      qr.addData('https://dentalabcrm.github.io/pedidos/?instalar=1');
       qr.make();
       document.getElementById('qr-contenedor').innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2 });
       _qrGenerado = true;
@@ -3784,6 +3789,21 @@ if ('serviceWorker' in navigator) {
   window.cerrarModalQR = function() {
     document.getElementById('qr-backdrop')?.classList.remove('abierto');
   };
+
+  // ── Si se llegó escaneando el QR (?instalar=1): abrir el modal de instalación solo,
+  //    sin que la persona tenga que buscar el botón. Ningún navegador permite instalar
+  //    sin un toque explícito (por seguridad), así que esto deja UN solo toque en vez de dos. ──
+  try {
+    const _params = new URLSearchParams(location.search);
+    if (_params.get('instalar') === '1' && !_yaInstalada()) {
+      // Limpiar el parámetro de la URL para que un refresh no vuelva a abrir el modal solo.
+      history.replaceState(null, '', location.pathname);
+      setTimeout(() => {
+        abrirModalInstalar();
+        $ctaNativo?.classList.add('instalar-cta-pulso');
+      }, 600); // pequeño delay para dar tiempo a que 'beforeinstallprompt' llegue a dispararse
+    }
+  } catch (e) { /* URLSearchParams no soportado en navegadores muy viejos; no rompe nada */ }
 })();
 </script>
 
