@@ -15,6 +15,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Dentalab">
 <meta name="mobile-web-app-capable" content="yes">
+<script src="qrcode.min.js"></script>
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Dentalab">
 <meta property="og:title" content="🦷 Pedido por WhatsApp · Dentalab">
@@ -117,6 +118,20 @@
     background:var(--blue);color:#fff;width:20px;height:20px;border-radius:50%;flex-shrink:0;
     display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;margin-top:1px;
   }
+  #qr-backdrop{
+    position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99998;display:none;
+    align-items:center;justify-content:center;padding:16px;
+  }
+  #qr-backdrop.abierto{display:flex;}
+  #qr-box{
+    background:var(--panel);border-radius:16px;width:100%;max-width:340px;overflow:hidden;
+    box-shadow:0 16px 48px rgba(0,0,0,.3);
+  }
+  .qr-body{padding:22px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;}
+  #qr-contenedor{background:#fff;border-radius:12px;padding:14px;line-height:0;}
+  #qr-contenedor svg{width:100%;height:auto;max-width:220px;display:block;}
+  .qr-hint{font-size:12.5px;color:var(--text2);line-height:1.5;}
+  .qr-link{font-size:11.5px;color:var(--blue);word-break:break-all;font-family:'DM Mono',monospace;}
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
   .promo-marquee{background:#0f172a;color:#fff;overflow:hidden;white-space:nowrap;padding:9px 0;margin:-18px -14px 0;}
   .horarios-bar{background:#eef1f6;color:var(--text2);text-align:center;padding:8px 14px;font-size:12.5px;margin:0 -14px 18px;}
@@ -518,6 +533,7 @@
       </div>
       </div>
       <button class="btn-instalar" id="btn-instalar-app" onclick="abrirModalInstalar()" title="Instalar la app" style="display:none;">📲 Instalar app</button>
+      <button class="btn-instalar" id="btn-qr-app" onclick="abrirModalQR()" title="Instalar en tu celular escaneando un QR" style="display:none;">📷 QR</button>
       <button class="btn-tema" id="btn-tema" onclick="toggleTemaOscuro()" title="Cambiar a modo nocturno">🌙</button>
     </div>
     <!-- ══ Modal: cómo instalar la app ══ -->
@@ -562,6 +578,24 @@
               <div class="instalar-paso"><span class="instalar-paso-num">4</span><span>Queda como una app en tu escritorio, sin la barra del navegador.</span></div>
             </div>
           </details>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ Modal: QR para instalar en el celular ══ -->
+    <div id="qr-backdrop" onclick="if(event.target===this)cerrarModalQR()">
+      <div id="qr-box">
+        <div class="instalar-header">
+          <div>
+            <b>📷 Escaneá con tu celular</b>
+            <span>Te lleva directo al catálogo</span>
+          </div>
+          <button id="qr-close" onclick="cerrarModalQR()" style="margin-left:auto;background:rgba(255,255,255,.2);border:none;border-radius:8px;width:28px;height:28px;color:#fff;font-size:14px;cursor:pointer;flex-shrink:0;">✕</button>
+        </div>
+        <div class="qr-body">
+          <div id="qr-contenedor"></div>
+          <div class="qr-hint">Abrí la cámara de tu celular y apuntá al código. Una vez adentro, tocá <b>"📲 Instalar app"</b> para agregarlo a tu pantalla de inicio.</div>
+          <div class="qr-link">dentalabcrm.github.io/pedidos/</div>
         </div>
       </div>
     </div>
@@ -3723,6 +3757,32 @@ if ('serviceWorker' in navigator) {
 
   window.cerrarModalInstalar = function() {
     $backdrop.classList.remove('abierto');
+  };
+
+  // ── Botón "📷 QR": solo tiene sentido en PC (quien ya está en el celular no necesita escanear nada) ──
+  const $btnQR = document.getElementById('btn-qr-app');
+  if ($btnQR && !_esIOS && !_esAndroid) {
+    $btnQR.style.display = 'flex';
+  }
+
+  let _qrGenerado = false;
+  window.abrirModalQR = function() {
+    document.getElementById('qr-backdrop')?.classList.add('abierto');
+    if (_qrGenerado) return;
+    try {
+      const qr = qrcode(4, 'M'); // nivel de corrección M: buen balance tamaño/legibilidad
+      qr.addData('https://dentalabcrm.github.io/pedidos/');
+      qr.make();
+      document.getElementById('qr-contenedor').innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2 });
+      _qrGenerado = true;
+    } catch (e) {
+      console.warn('[QR] No se pudo generar el código:', e);
+      document.getElementById('qr-contenedor').innerHTML = '<div style="color:#dc2626;font-size:12.5px;padding:20px;">No se pudo generar el QR. Probá recargar la página.</div>';
+    }
+  };
+
+  window.cerrarModalQR = function() {
+    document.getElementById('qr-backdrop')?.classList.remove('abierto');
   };
 })();
 </script>
