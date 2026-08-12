@@ -68,6 +68,8 @@
   html[data-theme="dark"] .prod-row-en-carrito:hover{background:#1c3a5a;}
   html[data-theme="dark"] .prod-card-clickeable:active{background:#1c3a5a;}
   html[data-theme="dark"] .prod-card-en-carrito{background:#173049;}
+  .banner-info-suave{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;}
+  html[data-theme="dark"] .banner-info-suave{background:#1e3a5f;border-color:#2c4f7c;color:#93c5fd;}
   body, .card, .pago-activo, input, select, textarea, button{ transition:background-color .18s ease, color .18s ease, border-color .18s ease; }
   .btn-tema{
     background:var(--panel2);border:1px solid var(--border);color:var(--text2);
@@ -655,6 +657,41 @@ let catalogoBySku = new Map();
 let listaActiva = null; // 'p1' (Contado -10%) | 'p2' (Tarjeta 1 pago)
 let medioPagoContado = null; // 'efectivo' | 'debito' | 'transferencia' (solo si listaActiva === 'p1')
 let modalidadEntrega = null; // 'retiro' | 'envio' | 'no_se'
+
+// ── Mensaje de bienvenida / "hace rato no venías" ──
+// Se calcula UNA sola vez al cargar la página, comparando contra la fecha de la
+// visita anterior guardada en localStorage (por eso es por navegador/dispositivo,
+// no por persona: si cambia de celular o borra datos del sitio, no hay forma de saberlo).
+const LS_ULTIMA_VISITA = 'dentalab_ultima_visita';
+const DIAS_PARA_REGRESO = 18;
+let _bienvenidaMsg = (() => {
+  try {
+    const ahora = Date.now();
+    const anterior = localStorage.getItem(LS_ULTIMA_VISITA);
+    let msg = null;
+    if (!anterior) {
+      msg = '👋 <b>¡Bienvenido a Dentalab!</b> Elegí tu forma de pago para ver los precios, armá tu pedido, y te lo confirmamos por WhatsApp.';
+    } else {
+      const dias = (ahora - Number(anterior)) / 86400000;
+      if (dias >= DIAS_PARA_REGRESO) {
+        msg = '👋 <b>¡Te extrañábamos!</b> Recordá que tenés 10% off pagando con débito, transferencia o efectivo.';
+      }
+    }
+    localStorage.setItem(LS_ULTIMA_VISITA, String(ahora));
+    return msg;
+  } catch (e) { return null; }
+})();
+
+function _htmlBienvenida(){
+  if (!_bienvenidaMsg) return '';
+  const html = `<div id="bienvenida-banner" class="banner-info-suave" style="display:flex;align-items:center;gap:10px;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.4;margin-bottom:12px;">
+    <span style="flex:1;">${_bienvenidaMsg}</span>
+    <button onclick="document.getElementById('bienvenida-banner')?.remove()" style="background:none;border:none;color:inherit;font-size:15px;cursor:pointer;flex-shrink:0;padding:2px 4px;">✕</button>
+  </div>`;
+  _bienvenidaMsg = null; // se muestra una sola vez por carga de página, no en cada re-render (ej: al tocar "Cambiar")
+  return html;
+}
+
 let _finRates = [];  // cuotas con recargo, sincronizadas desde el CRM (dentalab/fin_rates)
 let _finNoInt = [];  // cuotas sin interés, sincronizadas desde el CRM (dentalab/fin_noint)
 let ocultarSinStock = false; // se muestran todos los productos, tengan o no stock
@@ -1960,14 +1997,14 @@ async function cargarCatalogo(){
 
     _restaurarCarritoLS();
     const estadoGuardado = _restaurarEstadoLS();
-    if (carrito.size && estadoGuardado && estadoGuardado.modalidadEntrega && estadoGuardado.listaActiva) {
-      modalidadEntrega = estadoGuardado.modalidadEntrega;
+    if (carrito.size && estadoGuardado && estadoGuardado.listaActiva) {
+      modalidadEntrega = estadoGuardado.modalidadEntrega || null;
       listaActiva = estadoGuardado.listaActiva;
       medioPagoContado = estadoGuardado.medioPagoContado || null;
       renderPrincipal();
       _initBarrasFlotantes();
     } else {
-      renderSeleccionEntrega();
+      renderSeleccionPago();
     }
   } catch (e) {
     renderError('No pudimos cargar el catálogo. Revisá tu conexión e intentá de nuevo.');
@@ -2015,15 +2052,12 @@ function renderSeleccionPago(){
   const mapSec = document.querySelector('.map-footer-section');
   if (mapSec) mapSec.style.display = 'none';
   app.innerHTML = `
-    <div class="pago-activo">
-      <span>Entrega: <b>${escHtml(MODALIDAD_LABEL[modalidadEntrega] || '')}</b></span>
-      <button onclick="renderSeleccionEntrega()">‹ Volver</button>
-    </div>
+    ${_htmlBienvenida()}
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
           <h1>¿Cómo vas a pagar?</h1>
-          <div class="sub">Paso 2 de 2 — Elegí la forma de pago para ver los precios correspondientes.</div>
+          <div class="sub">Elegí la forma de pago para ver los precios correspondientes. Podés cambiarla más adelante si te arrepentís. La entrega (retiro o envío) se elige más adelante.</div>
         </div>
         ${esAdminCatalogo() ? `<button onclick="abrirEditorTextosCatalogo()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap;">✏️ Editar textos</button>` : ''}
       </div>
@@ -2045,7 +2079,6 @@ function renderSeleccionMedioContado(){
   _ocultarCarruselBanners();
   app.innerHTML = `
     <div class="pago-activo">
-      <span>Entrega: <b>${escHtml(MODALIDAD_LABEL[modalidadEntrega] || '')}</b></span>
       <button onclick="renderSeleccionPago()">‹ Volver</button>
     </div>
     <div class="card">
@@ -2753,20 +2786,75 @@ function _actualizarBarraCarritoFlotante(){
   document.body.style.paddingBottom = '64px';
 }
 
+function _htmlCamposEnvioExtra(){
+  if (modalidadEntrega !== 'envio') return '';
+  return `
+      <div class="field" style="margin-top:10px;"><label>Dirección de envío</label><input id="cf-direccion" type="text" placeholder="Calle, número, piso/depto"></div>
+      ${(listaActiva === 'p1' && medioPagoContado === 'efectivo') ? `
+      <div style="margin-top:10px;font-size:12.5px;color:#b45309;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);border-radius:8px;padding:8px 10px;">💵 Los pagos en efectivo solo los recibimos para envíos dentro de <strong>CABA</strong>. Si necesitás envío a otra provincia, elegí otro medio de pago.</div>
+      ` : ''}
+      <div class="cliente-fields" style="margin-top:10px;">
+        <div class="field"><label>Código postal</label><input id="cf-cp" type="text" placeholder="1425"></div>
+        <div class="field"><label>Ciudad / Localidad</label><input id="cf-ciudad" type="text" placeholder="Ciudad o localidad"></div>
+        <div class="field"><label>Provincia</label>
+          <select id="cf-provincia" ${(listaActiva === 'p1' && medioPagoContado === 'efectivo') ? 'disabled' : ''}>
+            ${(listaActiva === 'p1' && medioPagoContado === 'efectivo') ? `
+            <option value="CABA" selected>CABA</option>
+            ` : `
+            <option value="">Seleccioná…</option>
+            <option>CABA</option>
+            <option>Buenos Aires</option>
+            <option>Catamarca</option>
+            <option>Chaco</option>
+            <option>Chubut</option>
+            <option>Córdoba</option>
+            <option>Corrientes</option>
+            <option>Entre Ríos</option>
+            <option>Formosa</option>
+            <option>Jujuy</option>
+            <option>La Pampa</option>
+            <option>La Rioja</option>
+            <option>Mendoza</option>
+            <option>Misiones</option>
+            <option>Neuquén</option>
+            <option>Río Negro</option>
+            <option>Salta</option>
+            <option>San Juan</option>
+            <option>San Luis</option>
+            <option>Santa Cruz</option>
+            <option>Santa Fe</option>
+            <option>Santiago del Estero</option>
+            <option>Tierra del Fuego</option>
+            <option>Tucumán</option>
+            `}
+          </select>
+        </div>
+      </div>
+  `;
+}
+
+// Se llama al cambiar el selector "¿Cómo querés recibir tu pedido?" dentro del checkout.
+// Actualiza solo el bloque de campos de envío (sin re-renderizar toda la página, para no
+// perder lo que el cliente ya tipeó en nombre/tel/etc.).
+window.onCambioEntregaCheckout = () => {
+  const sel = document.getElementById('cf-entrega');
+  modalidadEntrega = sel?.value || null;
+  sel.style.outline = '';
+  _guardarEstadoLS();
+  const cont = document.getElementById('cf-envio-extra');
+  if (cont) cont.innerHTML = _htmlCamposEnvioExtra();
+};
+
 function renderPrincipal(){
   if (typeof _renderCarruselBanners === 'function') _renderCarruselBanners();
   const mapSec = document.querySelector('.map-footer-section');
   if (mapSec) mapSec.style.display = 'block';
   let listaLabel = listaActiva === 'p1' ? 'Contado (10% off)' : 'Tarjeta — 1 pago';
   if (listaActiva === 'p1' && medioPagoContado) listaLabel += ' — ' + MEDIO_CONTADO_LABEL[medioPagoContado];
-  const entregaLabel = MODALIDAD_LABEL[modalidadEntrega] || '';
   app.innerHTML = `
     <h1 class="page-title">Armá tu pedido</h1>
-    ${_pedidoRestauradoDeLS ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600;margin-bottom:12px;">🔄 Recuperamos el pedido que tenías armado.</div>` : ''}
-    <div class="pago-activo">
-      <span>Entrega: <b>${escHtml(entregaLabel)}</b></span>
-      <button onclick="renderSeleccionEntrega()">Cambiar</button>
-    </div>
+    ${_htmlBienvenida()}
+    ${_pedidoRestauradoDeLS ? `<div class="banner-info-suave" style="border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600;margin-bottom:12px;">🔄 Recuperamos el pedido que tenías armado.</div>` : ''}
     <div class="pago-activo pago-activo-pago">
       <span>Forma de pago: <b>${listaLabel}</b></span>
       <button onclick="cambiarPago()">Cambiar</button>
@@ -2828,49 +2916,16 @@ function renderPrincipal(){
         <div class="field"><label>E-mail</label><input id="cf-email" type="email" placeholder="tu@mail.com"></div>
         <div class="field"><label>Teléfono</label><input id="cf-tel" type="tel" placeholder="11 1234-5678"></div>
       </div>
-      ${modalidadEntrega === 'envio' ? `
-      <div class="field" style="margin-top:10px;"><label>Dirección de envío</label><input id="cf-direccion" type="text" placeholder="Calle, número, piso/depto"></div>
-      ${(listaActiva === 'p1' && medioPagoContado === 'efectivo') ? `
-      <div style="margin-top:10px;font-size:12.5px;color:#b45309;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);border-radius:8px;padding:8px 10px;">💵 Los pagos en efectivo solo los recibimos para envíos dentro de <strong>CABA</strong>. Si necesitás envío a otra provincia, elegí otro medio de pago.</div>
-      ` : ''}
-      <div class="cliente-fields" style="margin-top:10px;">
-        <div class="field"><label>Código postal</label><input id="cf-cp" type="text" placeholder="1425"></div>
-        <div class="field"><label>Ciudad / Localidad</label><input id="cf-ciudad" type="text" placeholder="Ciudad o localidad"></div>
-        <div class="field"><label>Provincia</label>
-          <select id="cf-provincia" ${(listaActiva === 'p1' && medioPagoContado === 'efectivo') ? 'disabled' : ''}>
-            ${(listaActiva === 'p1' && medioPagoContado === 'efectivo') ? `
-            <option value="CABA" selected>CABA</option>
-            ` : `
-            <option value="">Seleccioná…</option>
-            <option>CABA</option>
-            <option>Buenos Aires</option>
-            <option>Catamarca</option>
-            <option>Chaco</option>
-            <option>Chubut</option>
-            <option>Córdoba</option>
-            <option>Corrientes</option>
-            <option>Entre Ríos</option>
-            <option>Formosa</option>
-            <option>Jujuy</option>
-            <option>La Pampa</option>
-            <option>La Rioja</option>
-            <option>Mendoza</option>
-            <option>Misiones</option>
-            <option>Neuquén</option>
-            <option>Río Negro</option>
-            <option>Salta</option>
-            <option>San Juan</option>
-            <option>San Luis</option>
-            <option>Santa Cruz</option>
-            <option>Santa Fe</option>
-            <option>Santiago del Estero</option>
-            <option>Tierra del Fuego</option>
-            <option>Tucumán</option>
-            `}
-          </select>
-        </div>
+      <div class="field" style="margin-top:10px;">
+        <label>¿Cómo querés recibir tu pedido? *</label>
+        <select id="cf-entrega" required oninput="this.style.outline=''" onchange="onCambioEntregaCheckout()">
+          <option value="" disabled ${!modalidadEntrega ? 'selected' : ''}>Seleccioná una opción…</option>
+          <option value="retiro" ${modalidadEntrega === 'retiro' ? 'selected' : ''}>🏬 Retiro por el local</option>
+          <option value="envio" ${modalidadEntrega === 'envio' ? 'selected' : ''}>🚚 Envío</option>
+          <option value="no_se" ${modalidadEntrega === 'no_se' ? 'selected' : ''}>🤔 Todavía no lo sé</option>
+        </select>
       </div>
-      ` : ''}
+      <div id="cf-envio-extra">${_htmlCamposEnvioExtra()}</div>
       <div class="field" style="margin-top:10px;"><label>Observaciones (opcional)</label><textarea id="cf-obs" placeholder="Alguna aclaración para tu pedido…"></textarea></div>
     </div>
 
@@ -2964,6 +3019,15 @@ window.enviarPedido = async () => {
     campoNombre.focus();
     campoNombre.style.outline = '2px solid var(--red)';
     campoNombre.style.outlineOffset = '-1px';
+    return;
+  }
+  if (!modalidadEntrega) {
+    alert('Elegí cómo querés recibir tu pedido antes de enviarlo.');
+    const campoEntrega = document.getElementById('cf-entrega');
+    campoEntrega.focus();
+    campoEntrega.style.outline = '2px solid var(--red)';
+    campoEntrega.style.outlineOffset = '-1px';
+    campoEntrega.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
 
