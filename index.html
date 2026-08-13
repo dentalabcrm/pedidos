@@ -2083,9 +2083,9 @@ function renderSeleccionPago(){
         ${esAdminCatalogo() ? `<button onclick="abrirEditorTextosCatalogo()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap;">✏️ Editar textos</button>` : ''}
       </div>
       <div class="pago-opciones">
-        ${_tarjetaCard('efectivo', 'contado', '💵', 'Efectivo', _textosCatalogo.medio_efectivo, '<span class="pc-badge">10% de descuento</span>')}
-        ${_tarjetaCard('transferencia', 'contado', '🏦', 'Transferencia bancaria', _textosCatalogo.medio_transferencia, '<span class="pc-badge">10% de descuento</span>')}
-        ${_tarjetaCard('mercadopago', 'contado', '📱', 'Mercado Pago', _textosCatalogo.medio_mercadopago, '<span class="pc-badge">10% de descuento</span>')}
+        ${_tarjetaCard('efectivo', 'contado', '💵', 'Efectivo', _textosCatalogo.medio_efectivo, '<span class="pc-badge">✓ Precios ya con 10% off</span>')}
+        ${_tarjetaCard('transferencia', 'contado', '🏦', 'Transferencia bancaria', _textosCatalogo.medio_transferencia, '<span class="pc-badge">✓ Precios ya con 10% off</span>')}
+        ${_tarjetaCard('mercadopago', 'contado', '📱', 'Mercado Pago', _textosCatalogo.medio_mercadopago, '<span class="pc-badge">✓ Precios ya con 10% off</span>')}
         ${_tarjetaCard('tarjeta', 'tarjeta', '💳', 'Tarjeta de crédito — 1 pago', _textosCatalogo.tarjeta, '')}
       </div>
     </div>`;
@@ -2839,9 +2839,10 @@ function renderPrincipal(){
     <h1 class="page-title">Armá tu pedido</h1>
     ${_htmlBienvenida()}
     ${_pedidoRestauradoDeLS ? `<div class="banner-info-suave" style="border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600;margin-bottom:12px;">🔄 Recuperamos el pedido que tenías armado.</div>` : ''}
-    <div class="pago-activo pago-activo-pago">
+    <div class="pago-activo pago-activo-pago" style="${listaActiva === 'p1' ? 'flex-wrap:wrap;row-gap:4px;' : ''}">
       <span>Forma de pago: <b>${listaLabel}</b></span>
       <button onclick="cambiarPago()">Cambiar</button>
+      ${listaActiva === 'p1' ? `<div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--green);">✓ Los precios que ves ya tienen el 10% off aplicado</div>` : ''}
     </div>
 
     <div class="card" id="card-buscar">
