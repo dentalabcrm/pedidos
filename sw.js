@@ -6,7 +6,7 @@
 //  - Todo lo demás (Firebase, APIs externas, WhatsApp, etc.): SIEMPRE va directo a la red,
 //    el service worker no lo toca.
 
-const CACHE_NAME = 'dentalab-pedidos-v13';
+const CACHE_NAME = 'dentalab-pedidos-v14';
 const APP_SHELL = [
   './',
   './index.html',

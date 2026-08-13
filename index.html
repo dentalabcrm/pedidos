@@ -371,6 +371,14 @@
     0%,100%{ opacity:1; box-shadow:0 0 0 0 rgba(2,132,199,.4); }
     50%{ opacity:.75; box-shadow:0 0 0 6px rgba(2,132,199,0); }
   }
+  .prod-restock-personal{
+    color:#7c3aed;background:rgba(124,58,237,.12);border-color:rgba(124,58,237,.4);
+    animation:pwRestockPulsePersonal 1.2s ease-in-out infinite;
+  }
+  @keyframes pwRestockPulsePersonal{
+    0%,100%{ opacity:1; box-shadow:0 0 0 0 rgba(124,58,237,.4); }
+    50%{ opacity:.75; box-shadow:0 0 0 6px rgba(124,58,237,0); }
+  }
   .aviso-dientes{display:inline-block;font-size:11px;font-weight:700;color:var(--blue);margin-top:5px;text-decoration:none;background:#0284c714;padding:4px 9px;border-radius:20px;}
   .prod-precio{font-family:'DM Mono',monospace;font-size:13.5px;font-weight:700;color:var(--text);white-space:nowrap;}
   .prod-precio-col{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;}
@@ -769,6 +777,45 @@ function _limpiarPedidoLS(){
     localStorage.removeItem(LS_KEY_DATOS);
   } catch(e) {}
 }
+
+// ── Lista de espera personal ("Avisarme cuando vuelva a ingresar") ──
+// Vive en el localStorage de este navegador/dispositivo — no es una cuenta de cliente,
+// así que si cambia de celular o borra datos del sitio, se pierde el seguimiento.
+// No depende del vendedor: cada vez que carga el catálogo, compara esta lista contra el
+// stock actual y destaca (arriba de todo + badge especial) lo que ya está disponible,
+// SOLO para este visitante — al resto del público le aparece como cualquier otro producto.
+const LS_KEY_AVISOS = 'dentalab_avisos_stock';
+const LS_KEY_AVISOS_NOTIFICADOS = 'dentalab_avisos_notificados';
+function _avisosGetLista(){
+  try { return JSON.parse(localStorage.getItem(LS_KEY_AVISOS) || '[]'); } catch (e) { return []; }
+}
+function _avisosGuardarLista(lista){
+  try { localStorage.setItem(LS_KEY_AVISOS, JSON.stringify(lista)); } catch (e) {}
+}
+function _avisosAgregar(sku, nombre){
+  const lista = _avisosGetLista();
+  if (!lista.some(a => a.sku === sku)) {
+    lista.push({ sku, nombre, desde: Date.now() });
+    _avisosGuardarLista(lista);
+  }
+}
+function _avisosQuitar(sku){
+  _avisosGuardarLista(_avisosGetLista().filter(a => a.sku !== sku));
+  try {
+    const notif = JSON.parse(localStorage.getItem(LS_KEY_AVISOS_NOTIFICADOS) || '[]');
+    localStorage.setItem(LS_KEY_AVISOS_NOTIFICADOS, JSON.stringify(notif.filter(s => s !== sku)));
+  } catch (e) {}
+}
+// Devuelve el Set de SKUs que este cliente está esperando y YA están en stock ahora.
+function _avisosLlegadosSet(){
+  const set = new Set();
+  _avisosGetLista().forEach(a => {
+    const it = catalogoBySku.get(a.sku);
+    if (it && !it.st) set.add(a.sku);
+  });
+  return set;
+}
+
 let paginaActual = 1;
 let POR_PAGINA = parseInt(localStorage.getItem('dentalab_por_pagina'), 10) || 50;
 let filtroOrdenPrecio = ''; // '' | 'asc' | 'desc'
@@ -1055,13 +1102,40 @@ window.guardarAvisoStock = async (sku, nombreCodificado) => {
       lista.unshift(nuevoFaltante);
       return lista;
     });
-    if (msgEl) msgEl.innerHTML = '<span style="color:var(--green);">✓ ¡Listo! Te avisamos apenas vuelva a ingresar.</span>';
+    _avisosAgregar(sku, nombreProd);
+    if (msgEl) msgEl.innerHTML = '<span style="color:var(--green);">✓ ¡Listo! Cuando vuelva a ingresar, te va a aparecer primero en el catálogo (solo a vos).</span>';
     if (btn) btn.style.display = 'none';
-    setTimeout(_pwCerrarAvisarmeModal, 1800);
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      const notifWrap = document.createElement('div');
+      notifWrap.style.cssText = 'margin-top:12px;';
+      notifWrap.innerHTML = `
+        <button class="btn-enviar" style="background:var(--panel2);color:var(--text);border:1px solid var(--border);" onclick="_avisosPedirPermisoNotif(this)">🔔 Avisarme también con una notificación</button>
+        <div style="font-size:10.5px;color:var(--text3);margin-top:6px;text-align:center;">Solo funciona mientras tengas esta página abierta en el navegador (no si la cerrás del todo).</div>`;
+      msgEl.parentElement.appendChild(notifWrap);
+    } else {
+      setTimeout(_pwCerrarAvisarmeModal, 2200);
+    }
   } catch (e) {
     if (msgEl) msgEl.innerHTML = '<span style="color:var(--red);">No se pudo guardar, intentá de nuevo.</span>';
     if (btn) { btn.disabled = false; btn.textContent = '🔔 Avisarme'; }
   }
+};
+window._avisosPedirPermisoNotif = async (btnEl) => {
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') {
+      btnEl.textContent = '✓ Notificaciones activadas';
+      btnEl.disabled = true;
+      new Notification('🔔 Dentalab', { body: 'Listo, te vamos a avisar acá cuando vuelva a ingresar.', icon: 'icon-192.png' });
+    } else {
+      btnEl.textContent = 'No se activaron — podés hacerlo después';
+      btnEl.disabled = true;
+    }
+  } catch (e) {
+    btnEl.textContent = 'No se pudo activar';
+    btnEl.disabled = true;
+  }
+  setTimeout(_pwCerrarAvisarmeModal, 1600);
 };
 
 // Vuelve a pintar todo lo que depende de las tasas de financiamiento (cuando cambian en vivo desde el CRM)
@@ -2322,6 +2396,14 @@ function buscarProductos(){
   // dentro de "agotados" se mantiene el orden que ya se calculó arriba (precio/nombre).
   ordenados.sort((a, b) => (a.st ? 1 : 0) - (b.st ? 1 : 0));
 
+  // Los productos que ESTE cliente estaba esperando ("Avisarme cuando vuelva a ingresar")
+  // y ya están disponibles van primero que nada, por encima de cualquier otro orden — es
+  // algo personal de este navegador, al resto de los visitantes no les cambia el orden.
+  const _avisosSet = _avisosLlegadosSet();
+  if (_avisosSet.size) {
+    ordenados.sort((a, b) => (_avisosSet.has(b.s) ? 1 : 0) - (_avisosSet.has(a.s) ? 1 : 0));
+  }
+
   return ordenados;
 }
 
@@ -2440,6 +2522,7 @@ function renderResultados(){
   const inicio = (paginaActual - 1) * POR_PAGINA;
   const mostrados = resultados.slice(inicio, inicio + POR_PAGINA);
 
+  const _avisosEsperandoSet = _avisosLlegadosSet();
   const filas = mostrados.map(it => {
     const precio = precioDe(it);
     const puedeAgregar = !!precio && !it.st;
@@ -2456,6 +2539,7 @@ function renderResultados(){
       : (puedeAgregar ? ` onclick="agregarAlCarrito('${it.s}')"` : '');
     const stockHtml = it.st
       ? `<div class="prod-stock-agotado">Agotado</div><button class="prod-avisar-link" onclick="event.stopPropagation(); abrirAvisarmeModal('${escHtml(it.s)}', '${encodeURIComponent(it.n)}')">🔔 Avisarme${vistaProductos === 'grilla' ? '' : ' cuando vuelva a ingresar'}</button>`
+      : _avisosEsperandoSet.has(it.s) ? `<div class="prod-stock-en">En stock</div><div class="prod-restock-badge prod-restock-personal">🆕 ¡Llegó! Lo estabas esperando</div>`
       : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>`
       : it.restockedAt ? `<div class="prod-stock-en">En stock</div><div class="prod-restock-badge">🎉 ¡Disponible${vistaProductos === 'grilla' ? '!' : ' otra vez!'}</div>`
       : `<div class="prod-stock-en">En stock</div>`;
@@ -2848,6 +2932,22 @@ window.onCambioEntregaCheckout = (tipo) => {
   if (cont) cont.innerHTML = _htmlCamposEnvioExtra();
 };
 
+function _htmlAvisosLlegadosBanner(){
+  const set = _avisosLlegadosSet();
+  if (!set.size) return '';
+  const nombres = Array.from(set).map(sku => catalogoBySku.get(sku)?.n).filter(Boolean);
+  return `
+    <div id="avisos-llegados-banner" style="display:flex;align-items:center;gap:10px;background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.35);color:#7c3aed;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.4;margin-bottom:12px;">
+      <span style="flex:1;">🆕 <b>¡Llegó lo que estabas esperando!</b> ${escHtml(nombres.join(', '))} — ya ${nombres.length === 1 ? 'está' : 'están'} arriba de todo en el catálogo.</span>
+      <button onclick="_avisosDescartarTodos()" style="background:none;border:1px solid currentColor;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:inherit;cursor:pointer;flex-shrink:0;white-space:nowrap;">Entendido</button>
+    </div>`;
+}
+window._avisosDescartarTodos = () => {
+  _avisosLlegadosSet().forEach(sku => _avisosQuitar(sku));
+  document.getElementById('avisos-llegados-banner')?.remove();
+  renderResultados();
+};
+
 function renderPrincipal(){
   if (typeof _renderCarruselBanners === 'function') _renderCarruselBanners();
   const mapSec = document.querySelector('.map-footer-section');
@@ -2857,6 +2957,7 @@ function renderPrincipal(){
   app.innerHTML = `
     <h1 class="page-title">Armá tu pedido</h1>
     ${_htmlBienvenida()}
+    ${_htmlAvisosLlegadosBanner()}
     ${_pedidoRestauradoDeLS ? `<div class="banner-info-suave" style="border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600;margin-bottom:12px;">🔄 Recuperamos el pedido que tenías armado.</div>` : ''}
     <div class="pago-activo pago-activo-pago" style="${listaActiva === 'p1' ? 'flex-wrap:wrap;row-gap:4px;' : ''}">
       <span>Forma de pago: <b>${listaLabel}</b></span>
@@ -3142,6 +3243,54 @@ window.toggleTemaOscuro = () => {
 _pwActualizarBotonTema();
 
 cargarCatalogo();
+
+// ── Aviso en vivo mientras la página sigue abierta ──
+// Solo tiene sentido si hay algo en la lista de espera. Escucha cambios del catálogo público
+// (Firebase) y, si algo que este cliente estaba esperando pasa a estar en stock, actualiza el
+// catálogo en memoria (sin interrumpir lo que esté haciendo) y dispara una notificación del
+// navegador si la activó. Esto SOLO funciona mientras la página siga abierta en algún lado
+// (aunque esté en segundo plano) — si cierra la pestaña del todo, no hay forma de avisarle sin
+// un sistema de notificaciones push con servidor propio, que este catálogo no tiene.
+function _avisosChequearYNotificar(){
+  const set = _avisosLlegadosSet();
+  if (!set.size) return;
+  let notificados = [];
+  try { notificados = JSON.parse(localStorage.getItem(LS_KEY_AVISOS_NOTIFICADOS) || '[]'); } catch (e) {}
+  const nuevos = Array.from(set).filter(sku => !notificados.includes(sku));
+  if (!nuevos.length) return;
+  try { localStorage.setItem(LS_KEY_AVISOS_NOTIFICADOS, JSON.stringify([...notificados, ...nuevos])); } catch (e) {}
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  nuevos.forEach(sku => {
+    const it = catalogoBySku.get(sku);
+    if (!it) return;
+    const disparar = reg => {
+      if (reg && reg.showNotification) reg.showNotification('🔔 ¡Llegó tu producto!', { body: it.n, icon: 'icon-192.png', badge: 'icon-192.png' });
+      else new Notification('🔔 ¡Llegó tu producto!', { body: it.n, icon: 'icon-192.png' });
+    };
+    if (navigator.serviceWorker && navigator.serviceWorker.ready) navigator.serviceWorker.ready.then(disparar).catch(() => disparar(null));
+    else disparar(null);
+  });
+}
+if (_avisosGetLista().length) {
+  let _avisosPrimeraCarga = true;
+  db.ref('dentalab/catalogo_publico').on('value', snap => {
+    const data = snap.val();
+    if (!data || !Array.isArray(data.items)) return;
+    data.items.forEach(it => { if (catalogoBySku.has(it.s)) catalogoBySku.set(it.s, { ...catalogoBySku.get(it.s), st: it.st, sb: it.sb }); });
+    if (_avisosPrimeraCarga) {
+      // La primera vez ya se refleja en el banner/badge de la página — no hace falta
+      // además una notificación nativa redundante. Solo marcamos como "ya visto".
+      _avisosPrimeraCarga = false;
+      try {
+        const yaVistos = Array.from(_avisosLlegadosSet());
+        if (yaVistos.length) localStorage.setItem(LS_KEY_AVISOS_NOTIFICADOS, JSON.stringify(yaVistos));
+      } catch (e) {}
+      return;
+    }
+    _avisosChequearYNotificar();
+  });
+}
+
 
 // ── Mascota "diente impaciente" — aparece tras 5 min sin actividad ──
 (function(){
