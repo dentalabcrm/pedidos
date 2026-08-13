@@ -1885,9 +1885,37 @@ window._fotoDrop = async function(ev, sku, cardEl){
   ev.preventDefault();
   cardEl.classList.remove('prod-drop-activo');
   if (!esAdminCatalogo()) return;
+
+  // Caso 1: arrastraron un archivo real (desde el explorador de archivos de la compu)
   const file = Array.from(ev.dataTransfer?.files || []).find(f => f.type.startsWith('image/'));
-  if (!file) return;
-  await _subirFotoAlProducto(sku, file, true);
+  if (file) { await _subirFotoAlProducto(sku, file, true); return; }
+
+  // Caso 2: arrastraron una imagen desde otra pestaña/página (no es un archivo, es una URL) —
+  // el navegador manda la referencia como texto/HTML, no como "Files". Hay que descargarla
+  // nosotros mismos y convertirla en un archivo antes de subirla.
+  let url = ev.dataTransfer?.getData('text/uri-list') || ev.dataTransfer?.getData('text/plain') || '';
+  if (!url) {
+    const html = ev.dataTransfer?.getData('text/html') || '';
+    const m = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (m) url = m[1];
+  }
+  url = (url || '').split('\n')[0].trim();
+  if (!url || !/^https?:\/\//i.test(url)) return;
+
+  if (typeof showToast === 'function') showToast('📥 Descargando la imagen…', 'info');
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('No se pudo descargar (HTTP ' + resp.status + ')');
+    const blob = await resp.blob();
+    if (!blob.type.startsWith('image/')) throw new Error('Eso no es una imagen');
+    const nombreArchivo = url.split('/').pop().split('?')[0] || 'foto.jpg';
+    const fileDesdeUrl = new File([blob], nombreArchivo, { type: blob.type });
+    await _subirFotoAlProducto(sku, fileDesdeUrl, true);
+  } catch (e) {
+    // Lo más común acá es que el otro sitio no permita descargar sus imágenes "cruzado"
+    // entre dominios (CORS) — no hay forma de saltear eso desde el navegador.
+    alert('No se pudo traer esa imagen directamente (posible bloqueo de seguridad entre sitios distintos).\n\nProbá: guardá la imagen en tu computadora primero (click derecho → Guardar imagen como…) y después arrastrá ese archivo guardado.\n\nDetalle: ' + e.message);
+  }
 };
 
 // ── Pegar una foto (Ctrl+V) sobre la tarjeta del producto que se está mirando ──
