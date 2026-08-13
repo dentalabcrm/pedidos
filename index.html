@@ -2817,14 +2817,33 @@ function _htmlCamposEnvioExtra(){
   `;
 }
 
-// Se llama al cambiar el selector "¿Cómo querés recibir tu pedido?" dentro del checkout.
-// Actualiza solo el bloque de campos de envío (sin re-renderizar toda la página, para no
+function _htmlEntregaCards(){
+  let _ultimaEntrega = null;
+  try {
+    const prev = _restaurarEstadoLS();
+    if (prev && prev.modalidadEntrega) _ultimaEntrega = prev.modalidadEntrega;
+  } catch (e) {}
+  const opciones = [
+    { tipo: 'retiro', emoji: '🏬', titulo: 'Retiro por el local', desc: _textosCatalogo.retiro },
+    { tipo: 'envio', emoji: '🚚', titulo: 'Envío', desc: _textosCatalogo.envio },
+    { tipo: 'no_se', emoji: '🤔', titulo: 'Todavía no lo sé', desc: _textosCatalogo.no_se },
+  ];
+  return opciones.map(o => `
+    <div class="pago-card entrega${modalidadEntrega === o.tipo ? ' pago-card-ultima' : ''}" onclick="onCambioEntregaCheckout('${o.tipo}')">
+      ${(!modalidadEntrega && _ultimaEntrega === o.tipo) ? '<span class="pago-card-ultima-tag">✓ Última vez</span>' : ''}
+      <div class="pc-titulo">${o.emoji} ${o.titulo}</div>
+      <div class="pc-desc">${o.desc}</div>
+    </div>`).join('');
+}
+
+// Se llama al elegir una tarjeta de "¿Cómo querés recibir tu pedido?" dentro del checkout.
+// Actualiza solo los bloques de entrega y envío (sin re-renderizar toda la página, para no
 // perder lo que el cliente ya tipeó en nombre/tel/etc.).
-window.onCambioEntregaCheckout = () => {
-  const sel = document.getElementById('cf-entrega');
-  modalidadEntrega = sel?.value || null;
-  sel.style.outline = '';
+window.onCambioEntregaCheckout = (tipo) => {
+  modalidadEntrega = tipo;
   _guardarEstadoLS();
+  const contCards = document.getElementById('cf-entrega-cards');
+  if (contCards) { contCards.innerHTML = _htmlEntregaCards(); contCards.style.outline = ''; }
   const cont = document.getElementById('cf-envio-extra');
   if (cont) cont.innerHTML = _htmlCamposEnvioExtra();
 };
@@ -2903,12 +2922,7 @@ function renderPrincipal(){
       </div>
       <div class="field" style="margin-top:10px;">
         <label>¿Cómo querés recibir tu pedido? *</label>
-        <select id="cf-entrega" required oninput="this.style.outline=''" onchange="onCambioEntregaCheckout()">
-          <option value="" disabled ${!modalidadEntrega ? 'selected' : ''}>Seleccioná una opción…</option>
-          <option value="retiro" ${modalidadEntrega === 'retiro' ? 'selected' : ''}>🏬 Retiro por el local</option>
-          <option value="envio" ${modalidadEntrega === 'envio' ? 'selected' : ''}>🚚 Envío</option>
-          <option value="no_se" ${modalidadEntrega === 'no_se' ? 'selected' : ''}>🤔 Todavía no lo sé</option>
-        </select>
+        <div id="cf-entrega-cards" class="pago-opciones" style="margin-top:6px;">${_htmlEntregaCards()}</div>
       </div>
       <div id="cf-envio-extra">${_htmlCamposEnvioExtra()}</div>
       <div class="field" style="margin-top:10px;"><label>Observaciones (opcional)</label><textarea id="cf-obs" placeholder="Alguna aclaración para tu pedido…"></textarea></div>
@@ -3008,10 +3022,10 @@ window.enviarPedido = async () => {
   }
   if (!modalidadEntrega) {
     alert('Elegí cómo querés recibir tu pedido antes de enviarlo.');
-    const campoEntrega = document.getElementById('cf-entrega');
-    campoEntrega.focus();
+    const campoEntrega = document.getElementById('cf-entrega-cards');
     campoEntrega.style.outline = '2px solid var(--red)';
-    campoEntrega.style.outlineOffset = '-1px';
+    campoEntrega.style.outlineOffset = '4px';
+    campoEntrega.style.borderRadius = '12px';
     campoEntrega.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
