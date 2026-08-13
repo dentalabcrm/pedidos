@@ -1896,6 +1896,14 @@ window._fotoDrop = async function(ev, sku, cardEl){
 let _skuHoverAdmin = null;
 window._fotoHoverSet = function(sku){ _skuHoverAdmin = sku; };
 window._fotoHoverClear = function(sku){ if (_skuHoverAdmin === sku) _skuHoverAdmin = null; };
+// Guard global: si se suelta un archivo en cualquier parte de la página (no solo sobre una
+// tarjeta de producto), evita que el navegador haga lo que hace por defecto con un archivo
+// soltado: navegar y mostrarlo solo, sacando al usuario de la app. Los handlers de cada
+// tarjeta (_fotoDragOver/_fotoDrop) ya hacen preventDefault también — esto es una red de
+// seguridad extra para cualquier punto de la página donde no haya un handler específico.
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => { if (!e.defaultPrevented) e.preventDefault(); });
+
 document.addEventListener('paste', async (ev) => {
   if (!esAdminCatalogo() || !_skuHoverAdmin) return;
   // No interceptar si está pegando texto en un input/textarea (ej: buscador, formulario)
