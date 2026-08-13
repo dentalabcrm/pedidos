@@ -1289,7 +1289,6 @@ function _refrescarVistaAdmin() {
   _renderBarraSeleccionFotos();
   if (typeof _renderCarruselBanners === 'function') _renderCarruselBanners();
   if (typeof _renderCarruselMarcas === 'function') _renderCarruselMarcas();
-  if (typeof renderSeleccionEntrega === 'function' && document.getElementById('app')?.innerHTML.includes('¿Cómo querés recibir')) renderSeleccionEntrega();
 }
 
 // ── Editor de textos informativos (retiro, envío, formas de pago) — solo admin ──
@@ -1346,7 +1345,7 @@ window.guardarTextosCatalogo = async function() {
     document.getElementById('editor-textos-overlay')?.remove();
     alert('✓ Textos guardados.');
     if (app.innerHTML.includes('¿Cómo vas a pagar?')) renderSeleccionPago();
-    else renderSeleccionEntrega();
+    else if (typeof renderPrincipal === 'function' && listaActiva) renderPrincipal();
   } catch (e) {
     alert('No se pudo guardar: ' + e.message);
     btn.disabled = false; btn.textContent = original;
