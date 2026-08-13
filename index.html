@@ -318,6 +318,30 @@
   }
   img.prod-card-foto{cursor:pointer;}
   .prod-card-foto-vacia{display:flex;align-items:center;justify-content:center;font-size:34px;opacity:.35;}
+  .prod-carrusel{position:relative;margin-bottom:8px;}
+  .prod-carrusel-track{
+    display:flex;overflow-x:auto;scroll-snap-type:x mandatory;border-radius:9px;
+    scrollbar-width:none;-ms-overflow-style:none;
+  }
+  .prod-carrusel-track::-webkit-scrollbar{display:none;}
+  .prod-carrusel-track > img{
+    flex:0 0 100%;width:100%;aspect-ratio:1/1;object-fit:cover;scroll-snap-align:start;background:var(--border);
+  }
+  .prod-carrusel-arrow{
+    position:absolute;top:50%;transform:translateY(-50%);background:rgba(15,23,42,.55);color:#fff;
+    border:none;width:26px;height:26px;border-radius:50%;font-size:15px;line-height:1;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;z-index:2;padding:0;
+  }
+  .prod-carrusel-arrow:hover{background:rgba(15,23,42,.8);}
+  .prod-carrusel-prev{left:6px;}
+  .prod-carrusel-next{right:6px;}
+  .prod-carrusel-dots{position:absolute;bottom:6px;left:0;right:0;display:flex;justify-content:center;gap:4px;z-index:2;pointer-events:none;}
+  .prod-carrusel-dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.55);box-shadow:0 0 2px rgba(0,0,0,.4);transition:width .15s,background .15s;}
+  .prod-carrusel-dot.active{background:#fff;width:14px;border-radius:3px;}
+  .prod-foto-badge-multi{
+    position:absolute;bottom:2px;right:2px;background:rgba(15,23,42,.75);color:#fff;font-size:9px;font-weight:700;
+    padding:1px 4px;border-radius:5px;z-index:2;pointer-events:none;
+  }
   .prod-card-admin{position:absolute;top:6px;right:6px;display:flex;gap:4px;z-index:2;}
   .prod-card-admin button, .prod-card-admin input{background:var(--panel);border:1px solid var(--border);border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.25);}
   .prod-card-admin button{font-size:12px;cursor:pointer;padding:3px 5px;line-height:1;}
@@ -1813,10 +1837,13 @@ window.adminSubirFotoProducto = async function(sku) {
       const data = await resp.json();
       const fileId = data.id;
       const key = String(sku).trim().replace(/[.#$\[\]/]/g, '_');
-      if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_imagenes/' + key).set(fileId);
-      const itCat = catalogoBySku.get(sku); if (itCat) itCat.img = fileId;
-      const itArr = catalogo.find(x => x.s === sku); if (itArr) itArr.img = fileId;
-      alert('✓ Foto subida correctamente.');
+      const itCat = catalogoBySku.get(sku);
+      const itArr = catalogo.find(x => x.s === sku);
+      const nuevosImgs = [...(itCat?.imgs || []), fileId];
+      if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_imagenes/' + key).set(nuevosImgs);
+      if (itCat) { itCat.imgs = nuevosImgs; itCat.img = nuevosImgs[0]; }
+      if (itArr) { itArr.imgs = nuevosImgs; itArr.img = nuevosImgs[0]; }
+      alert(nuevosImgs.length > 1 ? `✓ Foto agregada (ahora tiene ${nuevosImgs.length} fotos).` : '✓ Foto subida correctamente.');
       _refrescarVistaAdmin();
     } catch (e) {
       alert('No se pudo subir la foto: ' + e.message);
@@ -1827,8 +1854,10 @@ window.adminSubirFotoProducto = async function(sku) {
 
 window.adminBorrarFotoProducto = async function(sku) {
   const itCat = catalogoBySku.get(sku);
-  const fileId = itCat?.img;
-  if (!fileId) { alert('Este producto no tiene foto guardada.'); return; }
+  const imgs = itCat?.imgs || (itCat?.img ? [itCat.img] : []);
+  if (!imgs.length) { alert('Este producto no tiene foto guardada.'); return; }
+  if (imgs.length > 1) { abrirGestorFotosProducto(sku); return; }
+  const fileId = imgs[0];
   if (!confirm('¿Borrar esta foto?\n\nSe va a mover a la papelera de Google Drive (recuperable 30 días) y va a dejar de mostrarse en el catálogo.')) return;
   try {
     const token = await _pedirTokenEscrituraDrive();
@@ -1845,8 +1874,74 @@ window.adminBorrarFotoProducto = async function(sku) {
     }
     const key = String(sku).trim().replace(/[.#$\[\]/]/g, '_');
     if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_imagenes/' + key).remove();
-    delete itCat.img;
+    delete itCat.imgs; delete itCat.img;
     alert(resp.status === 404 ? '🗑 Esa foto ya no existía en Drive — se limpió la referencia vieja.' : '🗑 Foto borrada.');
+    _refrescarVistaAdmin();
+  } catch (e) {
+    alert('No se pudo borrar la foto: ' + e.message);
+  }
+};
+
+// ── Gestor de fotos (cuando un producto tiene más de una) ──
+// Permite ver todas las fotos de un SKU y borrar una en particular, sin tocar las demás.
+window.abrirGestorFotosProducto = function(sku){
+  document.getElementById('gestor-fotos-backdrop')?.remove();
+  const itCat = catalogoBySku.get(sku);
+  const render = () => {
+    const imgs = itCat?.imgs || [];
+    const bd = document.createElement('div');
+    bd.id = 'gestor-fotos-backdrop';
+    bd.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99998;display:flex;align-items:center;justify-content:center;padding:16px;';
+    bd.innerHTML = `
+      <div style="background:var(--panel);border-radius:16px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,.3);">
+        <div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+          <b style="font-size:14px;">🖼️ Fotos de este producto (${imgs.length})</b>
+          <button id="gestor-fotos-close" style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--text2);">✕</button>
+        </div>
+        <div style="padding:16px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;">
+          ${imgs.map(id => `
+            <div style="position:relative;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+              <img src="https://drive.google.com/thumbnail?id=${id}&sz=w200" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">
+              <button onclick="_borrarFotoIndividual('${escHtml(sku)}','${escHtml(id)}')" title="Borrar esta foto" style="position:absolute;top:4px;right:4px;background:rgba(220,38,38,.9);color:#fff;border:none;border-radius:6px;width:24px;height:24px;font-size:12px;cursor:pointer;">🗑️</button>
+            </div>`).join('')}
+        </div>
+        <div style="padding:0 18px 18px;">
+          <button onclick="document.getElementById('gestor-fotos-backdrop')?.remove(); adminSubirFotoProducto('${escHtml(sku)}')" style="width:100%;background:var(--panel2);border:1px dashed var(--border);border-radius:8px;padding:10px;color:var(--text2);font-size:13px;font-weight:700;cursor:pointer;">+ Agregar otra foto</button>
+        </div>
+      </div>`;
+    document.body.appendChild(bd);
+    bd.addEventListener('click', e => { if (e.target === bd) bd.remove(); });
+    document.getElementById('gestor-fotos-close').onclick = () => bd.remove();
+  };
+  render();
+  window._gestorFotosRender = render; // para refrescar después de borrar una individual sin cerrar el modal
+};
+
+window._borrarFotoIndividual = async function(sku, fileId){
+  if (!confirm('¿Borrar esta foto en particular?\n\nSe va a mover a la papelera de Google Drive (recuperable 30 días).')) return;
+  const itCat = catalogoBySku.get(sku);
+  const itArr = catalogo.find(x => x.s === sku);
+  try {
+    const token = await _pedirTokenEscrituraDrive();
+    const resp = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+      method: 'PATCH',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trashed: true })
+    });
+    if (!resp.ok && resp.status !== 404) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `Error ${resp.status}`);
+    }
+    const nuevosImgs = (itCat?.imgs || []).filter(id => id !== fileId);
+    const key = String(sku).trim().replace(/[.#$\[\]/]/g, '_');
+    if (key && typeof db !== 'undefined') {
+      if (nuevosImgs.length) await db.ref('dentalab/sku_imagenes/' + key).set(nuevosImgs);
+      else await db.ref('dentalab/sku_imagenes/' + key).remove();
+    }
+    if (itCat) { if (nuevosImgs.length) { itCat.imgs = nuevosImgs; itCat.img = nuevosImgs[0]; } else { delete itCat.imgs; delete itCat.img; } }
+    if (itArr) { if (nuevosImgs.length) { itArr.imgs = nuevosImgs; itArr.img = nuevosImgs[0]; } else { delete itArr.imgs; delete itArr.img; } }
+    if (nuevosImgs.length && window._gestorFotosRender) { document.getElementById('gestor-fotos-backdrop')?.remove(); window._gestorFotosRender(); }
+    else document.getElementById('gestor-fotos-backdrop')?.remove();
     _refrescarVistaAdmin();
   } catch (e) {
     alert('No se pudo borrar la foto: ' + e.message);
@@ -1894,13 +1989,13 @@ window.abrirFotoProducto = async function(el, autoAbrir = true) {
       el.replaceWith(img);
       // Guardar en memoria para que no haga falta re-buscarla si se vuelve a renderizar la lista
       const itCat = catalogoBySku.get(sku);
-      if (itCat) itCat.img = fileId;
+      if (itCat) { itCat.imgs = [fileId]; itCat.img = fileId; }
       const itArr = catalogo.find(x => x.s === sku);
-      if (itArr) itArr.img = fileId;
+      if (itArr) { itArr.imgs = [fileId]; itArr.img = fileId; }
       if (autoAbrir) window.open(`https://drive.google.com/file/d/${fileId}/view`, '_blank');
       try {
         const key = String(sku).trim().replace(/[.#$\[\]/]/g, '_');
-        if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_imagenes/' + key).set(fileId);
+        if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_imagenes/' + key).set([fileId]);
       } catch (e) { /* silencioso */ }
       return; // el placeholder ya no existe, no restaurar texto en el finally
     } else {
@@ -1921,6 +2016,18 @@ window.abrirFotoProducto = async function(el, autoAbrir = true) {
 
 // Se dispara cuando una miniatura ya guardada no carga más (el archivo se borró/reemplazó en
 // Drive con un ID nuevo). En vez de dejarla rota, la volvemos a buscar sola en silencio.
+// ── Carrusel de fotos (cuando un producto tiene más de una imagen) ──
+window._carruselMover = function(btnEl, dir){
+  const track = btnEl.closest('.prod-carrusel')?.querySelector('.prod-carrusel-track');
+  if (!track) return;
+  track.scrollBy({ left: dir * track.clientWidth, behavior: 'smooth' });
+};
+window._carruselOnScroll = function(trackEl){
+  if (!trackEl.clientWidth) return;
+  const idx = Math.round(trackEl.scrollLeft / trackEl.clientWidth);
+  trackEl.closest('.prod-carrusel')?.querySelectorAll('.prod-carrusel-dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+};
+
 window.manejarErrorFotoProducto = function(imgEl) {
   const div = document.createElement('div');
   div.className = 'prod-foto prod-foto-vacia';
@@ -2000,13 +2107,18 @@ async function cargarCatalogo(){
     // El catálogo publicado es una "foto congelada" armada por el CRM — las fotos pueden
     // haberse borrado/agregado después de esa publicación. Pisamos con lo último de la base
     // de fotos en vivo para que no dependa de cuándo se volvió a publicar el catálogo.
+    // Cada SKU puede tener varias fotos: en Firebase se guarda como array de IDs de Drive.
+    // Compatibilidad: si todavía queda algún SKU viejo guardado como un solo string (antes
+    // de este cambio), se lo trata como un array de una sola foto.
     try {
       const snapImg = await db.ref('dentalab/sku_imagenes').once('value');
       const imagenesVivo = snapImg.val() || {};
       const claveImg = s => String(s).trim().replace(/[.#$\[\]/]/g, '_');
       catalogo.forEach(it => {
         const vivo = imagenesVivo[claveImg(it.s)];
-        if (vivo) it.img = vivo; else delete it.img;
+        const arr = Array.isArray(vivo) ? vivo.filter(Boolean) : (vivo ? [vivo] : []);
+        if (arr.length) { it.imgs = arr; it.img = arr[0]; }
+        else { delete it.imgs; delete it.img; }
       });
     } catch (e) { /* si falla, seguimos con lo que vino en el catálogo publicado */ }
     // Fresas/piedras con SKU de estas familias: se les agrega el tipo entre paréntesis al
@@ -2582,14 +2694,24 @@ function renderResultados(){
     }
 
     // ── Vista GRILLA: tarjeta vertical con foto grande ──
-    const foto = it.img
-      ? `<img class="prod-card-foto" src="https://drive.google.com/thumbnail?id=${it.img}&sz=w300" alt="" loading="lazy" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onerror="manejarErrorFotoProducto(this)">`
+    const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
+    const foto = imgsArr.length > 1
+      ? `<div class="prod-carrusel">
+          <div class="prod-carrusel-track" onscroll="_carruselOnScroll(this)">
+            ${imgsArr.map(id => `<img class="prod-card-foto" src="https://drive.google.com/thumbnail?id=${id}&sz=w300" alt="" loading="lazy" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onerror="manejarErrorFotoProducto(this)">`).join('')}
+          </div>
+          <button class="prod-carrusel-arrow prod-carrusel-prev" onclick="event.stopPropagation(); _carruselMover(this,-1)">‹</button>
+          <button class="prod-carrusel-arrow prod-carrusel-next" onclick="event.stopPropagation(); _carruselMover(this,1)">›</button>
+          <div class="prod-carrusel-dots">${imgsArr.map((_, i) => `<span class="prod-carrusel-dot${i===0?' active':''}"></span>`).join('')}</div>
+         </div>`
+      : imgsArr.length === 1
+      ? `<img class="prod-card-foto" src="https://drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w300" alt="" loading="lazy" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onerror="manejarErrorFotoProducto(this)">`
       : `<div class="prod-card-foto prod-card-foto-vacia" style="cursor:pointer;" title="Buscar foto en Drive" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirFotoProducto(this)">🦷</div>`;
     const adminIcons = !esAdminCatalogo() ? '' : _modoSeleccionFotos
       ? (it.img ? `<div class="prod-card-admin"><input type="checkbox" ${_fotosSeleccionadas.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionFoto('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>` : '')
       : `<div class="prod-card-admin">
-          <button onclick="event.stopPropagation(); adminSubirFotoProducto('${escHtml(it.s)}')" title="Agregar/cambiar foto">✏️</button>
-          ${it.img ? `<button onclick="event.stopPropagation(); adminBorrarFotoProducto('${escHtml(it.s)}')" title="Borrar foto">🗑️</button>` : ''}
+          <button onclick="event.stopPropagation(); adminSubirFotoProducto('${escHtml(it.s)}')" title="${imgsArr.length ? 'Agregar otra foto' : 'Agregar foto'}">✏️</button>
+          ${imgsArr.length ? `<button onclick="event.stopPropagation(); adminBorrarFotoProducto('${escHtml(it.s)}')" title="Borrar foto${imgsArr.length > 1 ? ' (elegir cuál)' : ''}">🗑️</button>` : ''}
          </div>`;
     const claseTarjeta = `prod-card${(puedeAgregar || qtyEnCarrito > 0) ? ' prod-card-clickeable' : ''}${qtyEnCarrito > 0 ? ' prod-card-en-carrito' : ''}${it.st ? ' prod-card-agotado' : ''}`;
     return `
