@@ -213,6 +213,12 @@
   .pago-card .pc-badge{display:inline-block;margin-top:8px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
   .pago-card.contado .pc-badge{background:#0ea96814;color:var(--green);}
   .pago-card.tarjeta .pc-badge{background:#0284c714;color:var(--blue);}
+  .pago-card{position:relative;}
+  .pago-card-ultima{border-color:var(--blue);background:#0284c70d;}
+  .pago-card-ultima-tag{
+    position:absolute;top:-9px;right:12px;background:var(--blue);color:#fff;
+    font-size:10px;font-weight:800;padding:2px 9px;border-radius:20px;letter-spacing:.2px;
+  }
 
   /* ── Barra superior con forma de pago activa ── */
   .pago-activo{
@@ -791,7 +797,6 @@ const MODALIDAD_LABEL = {
 
 const MEDIO_CONTADO_LABEL = {
   efectivo: 'Efectivo',
-  debito: 'Tarjeta de débito',
   transferencia: 'Transferencia bancaria',
   mercadopago: 'Mercado Pago'
 };
@@ -1198,7 +1203,6 @@ window.abrirEditorTextosCatalogo = function() {
     { key: 'contado', label: '💵 Precios Contado' },
     { key: 'tarjeta', label: '💳 Tarjeta de crédito — 1 pago' },
     { key: 'medio_efectivo', label: '💵 Efectivo (aclaración opcional, debajo del título)' },
-    { key: 'medio_debito', label: '💳 Tarjeta de débito (aclaración opcional, debajo del título)' },
     { key: 'medio_transferencia', label: '🏦 Transferencia bancaria (aclaración opcional, debajo del título)' },
     { key: 'medio_mercadopago', label: '📱 Mercado Pago (aclaración opcional, debajo del título)' },
   ];
@@ -1227,7 +1231,7 @@ window.guardarTextosCatalogo = async function() {
   const btn = document.getElementById('btn-guardar-textos-catalogo');
   const original = btn.textContent;
   btn.disabled = true; btn.textContent = 'Guardando…';
-  const CAMPOS = ['horarios', 'retiro', 'envio', 'no_se', 'contado', 'tarjeta', 'medio_efectivo', 'medio_debito', 'medio_transferencia', 'medio_mercadopago'];
+  const CAMPOS = ['horarios', 'retiro', 'envio', 'no_se', 'contado', 'tarjeta', 'medio_efectivo', 'medio_transferencia', 'medio_mercadopago'];
   const nuevos = {};
   CAMPOS.forEach(key => {
     const el = document.getElementById('txt-editor-' + key);
@@ -1240,8 +1244,7 @@ window.guardarTextosCatalogo = async function() {
     if (horariosEl) horariosEl.textContent = _textosCatalogo.horarios;
     document.getElementById('editor-textos-overlay')?.remove();
     alert('✓ Textos guardados.');
-    if (app.innerHTML.includes('¿Con qué vas a pagar el contado?')) renderSeleccionMedioContado();
-    else if (app.innerHTML.includes('¿Cómo vas a pagar?')) renderSeleccionPago();
+    if (app.innerHTML.includes('¿Cómo vas a pagar?')) renderSeleccionPago();
     else renderSeleccionEntrega();
   } catch (e) {
     alert('No se pudo guardar: ' + e.message);
@@ -2051,6 +2054,24 @@ function renderSeleccionPago(){
   _ocultarCarruselBanners();
   const mapSec = document.querySelector('.map-footer-section');
   if (mapSec) mapSec.style.display = 'none';
+
+  // Detectar la forma de pago elegida la última vez (si hay), para resaltarla — no se
+  // auto-selecciona ni se saltea la pantalla, porque el precio cambia según lo que elija
+  // y siempre tiene que ser una decisión consciente, aunque sea la misma de siempre.
+  let _ultima = null;
+  try {
+    const prev = _restaurarEstadoLS();
+    if (prev) _ultima = prev.listaActiva === 'p2' ? 'tarjeta' : (prev.listaActiva === 'p1' ? prev.medioPagoContado : null);
+  } catch (e) {}
+
+  const _tarjetaCard = (tipo, claseExtra, emoji, titulo, desc, badgeHtml) => `
+        <div class="pago-card ${claseExtra}${_ultima === tipo ? ' pago-card-ultima' : ''}" onclick="elegirFormaPago('${tipo}')">
+          ${_ultima === tipo ? '<span class="pago-card-ultima-tag">✓ Última vez</span>' : ''}
+          <div class="pc-titulo">${emoji} ${titulo}</div>
+          ${desc ? `<div class="pc-desc">${desc}</div>` : ''}
+          ${badgeHtml || ''}
+        </div>`;
+
   app.innerHTML = `
     ${_htmlBienvenida()}
     <div class="card">
@@ -2062,58 +2083,21 @@ function renderSeleccionPago(){
         ${esAdminCatalogo() ? `<button onclick="abrirEditorTextosCatalogo()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap;">✏️ Editar textos</button>` : ''}
       </div>
       <div class="pago-opciones">
-        <div class="pago-card contado" onclick="renderSeleccionMedioContado()">
-          <div class="pc-titulo">Precios Contado</div>
-          <div class="pc-desc">${_textosCatalogo.contado}</div>
-          <span class="pc-badge">10% de descuento</span>
-        </div>
-        <div class="pago-card tarjeta" onclick="elegirPago('p2')">
-          <div class="pc-titulo">Tarjeta de crédito — 1 pago</div>
-          <div class="pc-desc">${_textosCatalogo.tarjeta}</div>
-        </div>
+        ${_tarjetaCard('efectivo', 'contado', '💵', 'Efectivo', _textosCatalogo.medio_efectivo, '<span class="pc-badge">10% de descuento</span>')}
+        ${_tarjetaCard('transferencia', 'contado', '🏦', 'Transferencia bancaria', _textosCatalogo.medio_transferencia, '<span class="pc-badge">10% de descuento</span>')}
+        ${_tarjetaCard('mercadopago', 'contado', '📱', 'Mercado Pago', _textosCatalogo.medio_mercadopago, '<span class="pc-badge">10% de descuento</span>')}
+        ${_tarjetaCard('tarjeta', 'tarjeta', '💳', 'Tarjeta de crédito — 1 pago', _textosCatalogo.tarjeta, '')}
       </div>
     </div>`;
 }
 
-function renderSeleccionMedioContado(){
-  _ocultarCarruselBanners();
-  app.innerHTML = `
-    <div class="pago-activo">
-      <button onclick="renderSeleccionPago()">‹ Volver</button>
-    </div>
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-        <div>
-          <h1>¿Con qué vas a pagar el contado?</h1>
-          <div class="sub">El 10% de descuento aplica igual con cualquiera de estas opciones.</div>
-        </div>
-        ${esAdminCatalogo() ? `<button onclick="abrirEditorTextosCatalogo()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap;">✏️ Editar textos</button>` : ''}
-      </div>
-      <div class="pago-opciones">
-        <div class="pago-card contado" onclick="elegirMedioContado('efectivo')">
-          <div class="pc-titulo">💵 Efectivo</div>
-          ${_textosCatalogo.medio_efectivo ? `<div class="pc-desc">${_textosCatalogo.medio_efectivo}</div>` : ''}
-        </div>
-        <div class="pago-card contado" onclick="elegirMedioContado('debito')">
-          <div class="pc-titulo">💳 Tarjeta de débito</div>
-          ${_textosCatalogo.medio_debito ? `<div class="pc-desc">${_textosCatalogo.medio_debito}</div>` : ''}
-        </div>
-        <div class="pago-card contado" onclick="elegirMedioContado('transferencia')">
-          <div class="pc-titulo">🏦 Transferencia bancaria</div>
-          ${_textosCatalogo.medio_transferencia ? `<div class="pc-desc">${_textosCatalogo.medio_transferencia}</div>` : ''}
-        </div>
-        <div class="pago-card contado" onclick="elegirMedioContado('mercadopago')">
-          <div class="pc-titulo">📱 Mercado Pago</div>
-          ${_textosCatalogo.medio_mercadopago ? `<div class="pc-desc">${_textosCatalogo.medio_mercadopago}</div>` : ''}
-        </div>
-      </div>
-    </div>`;
-}
-window.renderSeleccionMedioContado = renderSeleccionMedioContado;
-
-window.elegirMedioContado = (medio) => {
-  medioPagoContado = medio;
-  elegirPago('p1');
+window.elegirFormaPago = (tipo) => {
+  if (tipo === 'tarjeta') {
+    elegirPago('p2');
+  } else {
+    medioPagoContado = tipo;
+    elegirPago('p1');
+  }
 };
 
 window.elegirPago = (lista) => {
