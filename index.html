@@ -527,10 +527,10 @@
   </script>
   <div class="promo-marquee">
     <div class="promo-marquee-track">
-      <span class="promo-marquee-item">🔔 10% de descuento pagando con tarjeta de débito, transferencia o efectivo</span>
+      <span class="promo-marquee-item">🔔 10% de descuento pagando con transferencia, Mercado Pago o efectivo</span>
       <span class="promo-marquee-item">🚚 Envíos por OCA a todo el país</span>
       <span class="promo-marquee-item">🛵 Envíos rápidos con motomensajería a todo CABA</span>
-      <span class="promo-marquee-item">🔔 10% de descuento pagando con tarjeta de débito, transferencia o efectivo</span>
+      <span class="promo-marquee-item">🔔 10% de descuento pagando con transferencia, Mercado Pago o efectivo</span>
       <span class="promo-marquee-item">🚚 Envíos por OCA a todo el país</span>
       <span class="promo-marquee-item">🛵 Envíos rápidos con motomensajería a todo CABA</span>
     </div>
@@ -680,7 +680,7 @@ let _bienvenidaMsg = (() => {
     } else {
       const dias = (ahora - Number(anterior)) / 86400000;
       if (dias >= DIAS_PARA_REGRESO) {
-        msg = '👋 <b>¡Te extrañábamos!</b> Recordá que tenés 10% off pagando con débito, transferencia o efectivo.';
+        msg = '👋 <b>¡Te extrañábamos!</b> Recordá que tenés 10% off pagando con efectivo, transferencia o Mercado Pago.';
       }
     }
     localStorage.setItem(LS_ULTIMA_VISITA, String(ahora));
@@ -1885,7 +1885,7 @@ const _textosCatalogo = {
 📦 Si el pedido supera los 20kg, el envío tiene un cargo de $20.000.<br>
 🌎 <strong>En Provincia de Buenos Aires o el interior del país:</strong> el envío siempre corre por cuenta del comprador — el costo varía según la localidad y el tamaño del paquete. Indicanos provincia, localidad, código postal y los productos que necesitás, y te lo cotizamos por WhatsApp.`,
   no_se: `Lo definimos después, por WhatsApp.`,
-  contado: `Efectivo, débito o transferencia.`,
+  contado: `Efectivo, transferencia o Mercado Pago.`,
   tarjeta: `Precio de Lista.`,
   medio_efectivo: ``,
   medio_debito: ``,
@@ -3352,7 +3352,7 @@ cargarCatalogo();
       sugerencia:'Cómo hacer un pedido',
       claves:['como hago un pedido','como hago para pedir','como hacer un pedido','hacer un pedido','como pido','como compro','como se compra','como se hace un pedido','como funciona la pagina','como funciona el sitio','como funciona esto','como armo el pedido','no se como pedir','no se como comprar','ayuda para pedir','ayuda para comprar','tutorial','instrucciones','paso a paso','como usar','como me registro','registrarme','como puedo registrarme','no me deja registrarme','no puedo comprar','como puedo comprar','como funciona','como se pide','como se compra aca','como comprar'],
       chip:'❓ Cómo hacer un pedido',
-      respuesta: () => `¡Así de fácil! Acá en este catálogo no hace falta registrarse. 🛒\n\n1️⃣ Elegís cómo querés recibir tu pedido: retiro por el local, envío, o "todavía no lo sé".\n\n2️⃣ Elegís la forma de pago: Contado (10% off, con efectivo, débito, transferencia o Mercado Pago) o Tarjeta de crédito en 1 pago. Según lo que elijas vas a ver los precios correspondientes.\n\n3️⃣ Buscás los productos por nombre o SKU y los agregás al carrito con el botón "+".\n\n4️⃣ Cuando terminás, tocás "Ver pedido ▾", completás tus datos y le das a "Enviar pedido a Dentalab". Se abre WhatsApp con todo el pedido armado para que lo confirmemos.\n\n¡Y listo! 🦷`
+      respuesta: () => `¡Así de fácil! Acá en este catálogo no hace falta registrarse. 🛒\n\n1️⃣ Elegís la forma de pago: Efectivo, Transferencia o Mercado Pago (10% off) — o Tarjeta de crédito en 1 pago. Según lo que elijas vas a ver los precios correspondientes.\n\n2️⃣ Buscás los productos por nombre o SKU y los agregás al carrito con el botón "+".\n\n3️⃣ Cuando terminás, tocás "Ver pedido ▾", completás tus datos y elegís cómo querés recibirlo: retiro por el local, envío, o "todavía no lo sé".\n\n4️⃣ Le das a "Enviar pedido a Dentalab". Se abre WhatsApp con todo el pedido armado para que lo confirmemos.\n\n¡Y listo! 🦷`
     },
     {
       id:'pagina_web',
@@ -3419,7 +3419,7 @@ cargarCatalogo();
       sugerencia:'Formas de pago',
       claves:['pago','pagar','forma de pago','formas de pago','tarjeta','efectivo','transferencia','mercadopago','mercado pago','descuento','recargo'],
       chip:'💳 Formas de pago',
-      respuesta: () => `💳 Formas de pago disponibles:\n\n• Contado (10% off): ${_chatbotTexto('contado','efectivo, débito o transferencia.').replace(/<[^>]+>/g,'')}\n• Tarjeta de crédito — 1 pago.\n\nSi pagás en efectivo, débito, transferencia o Mercado Pago tenés un 10% de descuento. Pagando con tarjeta de crédito no aplica ese descuento (equivale a un 10% más respecto al precio contado).`
+      respuesta: () => `💳 Formas de pago disponibles:\n\n• Contado (10% off): efectivo, transferencia bancaria o Mercado Pago.\n• Tarjeta de crédito — 1 pago (precio de lista, sin el 10% off).\n\nSi pagás en efectivo, transferencia o Mercado Pago tenés un 10% de descuento. Pagando con tarjeta de crédito no aplica ese descuento (equivale a un 10% más respecto al precio contado).`
     },
     {
       id:'factura',
