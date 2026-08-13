@@ -342,6 +342,9 @@
     position:absolute;bottom:2px;right:2px;background:rgba(15,23,42,.75);color:#fff;font-size:9px;font-weight:700;
     padding:1px 4px;border-radius:5px;z-index:2;pointer-events:none;
   }
+  .prod-card.prod-drop-activo{
+    outline:2px dashed var(--blue,#0284c7);outline-offset:2px;background:rgba(2,132,199,.06);
+  }
   .prod-card-admin{position:absolute;top:6px;right:6px;display:flex;gap:4px;z-index:2;}
   .prod-card-admin button, .prod-card-admin input{background:var(--panel);border:1px solid var(--border);border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.25);}
   .prod-card-admin button{font-size:12px;cursor:pointer;padding:3px 5px;line-height:1;}
@@ -1806,12 +1809,55 @@ function _pedirTokenEscrituraDrive() {
   });
 }
 
-window.adminSubirFotoProducto = async function(sku) {
-  // Primero el login de Google (tiene que salir en respuesta directa al clic, si no el
-  // navegador bloquea la ventana emergente) y recién después el selector de archivos.
+// ── Lógica de subida compartida (usada por el selector de archivos, arrastrar/soltar y pegar) ──
+async function _subirFotoAlProducto(sku, file, silencioso){
+  if (!file || !file.type || !file.type.startsWith('image/')) {
+    if (!silencioso) alert('Eso no es una imagen.');
+    return false;
+  }
   let token;
   try {
     token = await _pedirTokenEscrituraDrive();
+  } catch (e) {
+    alert('No se pudo autorizar el acceso a Drive: ' + e.message);
+    return false;
+  }
+  try {
+    const ext = (file.name && file.name.includes('.') ? file.name.split('.').pop() : (file.type.split('/')[1] || 'jpg')).toLowerCase();
+    const metadata = { name: `${sku}.${ext}`, parents: [GDRIVE_FOLDER_ID] };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', file);
+    const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: form
+    });
+    if (!resp.ok) { const err = await resp.json().catch(() => ({})); throw new Error(err?.error?.message || `Error ${resp.status}`); }
+    const data = await resp.json();
+    const fileId = data.id;
+    const key = String(sku).trim().replace(/[.#$\[\]/]/g, '_');
+    const itCat = catalogoBySku.get(sku);
+    const itArr = catalogo.find(x => x.s === sku);
+    const nuevosImgs = [...(itCat?.imgs || []), fileId];
+    if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_imagenes/' + key).set(nuevosImgs);
+    if (itCat) { itCat.imgs = nuevosImgs; itCat.img = nuevosImgs[0]; }
+    if (itArr) { itArr.imgs = nuevosImgs; itArr.img = nuevosImgs[0]; }
+    if (!silencioso) alert(nuevosImgs.length > 1 ? `✓ Foto agregada (ahora tiene ${nuevosImgs.length} fotos).` : '✓ Foto subida correctamente.');
+    else if (typeof showToast === 'function') showToast(nuevosImgs.length > 1 ? `📷 Foto agregada (${nuevosImgs.length} en total)` : '📷 Foto agregada', 'ok');
+    _refrescarVistaAdmin();
+    return true;
+  } catch (e) {
+    alert('No se pudo subir la foto: ' + e.message);
+    return false;
+  }
+}
+
+window.adminSubirFotoProducto = async function(sku) {
+  // Primero el login de Google (tiene que salir en respuesta directa al clic, si no el
+  // navegador bloquea la ventana emergente) y recién después el selector de archivos.
+  try {
+    await _pedirTokenEscrituraDrive();
   } catch (e) {
     alert('No se pudo autorizar el acceso a Drive: ' + e.message);
     return;
@@ -1819,38 +1865,51 @@ window.adminSubirFotoProducto = async function(sku) {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
-  input.onchange = async () => {
+  input.onchange = () => {
     const file = input.files[0];
-    if (!file) return;
-    try {
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const metadata = { name: `${sku}.${ext}`, parents: [GDRIVE_FOLDER_ID] };
-      const form = new FormData();
-      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-      form.append('file', file);
-      const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + token },
-        body: form
-      });
-      if (!resp.ok) { const err = await resp.json().catch(() => ({})); throw new Error(err?.error?.message || `Error ${resp.status}`); }
-      const data = await resp.json();
-      const fileId = data.id;
-      const key = String(sku).trim().replace(/[.#$\[\]/]/g, '_');
-      const itCat = catalogoBySku.get(sku);
-      const itArr = catalogo.find(x => x.s === sku);
-      const nuevosImgs = [...(itCat?.imgs || []), fileId];
-      if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_imagenes/' + key).set(nuevosImgs);
-      if (itCat) { itCat.imgs = nuevosImgs; itCat.img = nuevosImgs[0]; }
-      if (itArr) { itArr.imgs = nuevosImgs; itArr.img = nuevosImgs[0]; }
-      alert(nuevosImgs.length > 1 ? `✓ Foto agregada (ahora tiene ${nuevosImgs.length} fotos).` : '✓ Foto subida correctamente.');
-      _refrescarVistaAdmin();
-    } catch (e) {
-      alert('No se pudo subir la foto: ' + e.message);
-    }
+    if (file) _subirFotoAlProducto(sku, file, false);
   };
   input.click();
 };
+
+// ── Arrastrar y soltar una foto directo sobre la tarjeta del producto ──
+window._fotoDragOver = function(ev, cardEl){
+  if (!esAdminCatalogo()) return;
+  ev.preventDefault();
+  cardEl.classList.add('prod-drop-activo');
+};
+window._fotoDragLeave = function(cardEl){
+  cardEl.classList.remove('prod-drop-activo');
+};
+window._fotoDrop = async function(ev, sku, cardEl){
+  ev.preventDefault();
+  cardEl.classList.remove('prod-drop-activo');
+  if (!esAdminCatalogo()) return;
+  const file = Array.from(ev.dataTransfer?.files || []).find(f => f.type.startsWith('image/'));
+  if (!file) return;
+  await _subirFotoAlProducto(sku, file, true);
+};
+
+// ── Pegar una foto (Ctrl+V) sobre la tarjeta del producto que se está mirando ──
+// Se guarda cuál producto tiene el mouse encima; al pegar una imagen del portapapeles,
+// se sube directo a ese producto (solo si el usuario es admin).
+let _skuHoverAdmin = null;
+window._fotoHoverSet = function(sku){ _skuHoverAdmin = sku; };
+window._fotoHoverClear = function(sku){ if (_skuHoverAdmin === sku) _skuHoverAdmin = null; };
+document.addEventListener('paste', async (ev) => {
+  if (!esAdminCatalogo() || !_skuHoverAdmin) return;
+  // No interceptar si está pegando texto en un input/textarea (ej: buscador, formulario)
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  const item = Array.from(ev.clipboardData?.items || []).find(i => i.type.startsWith('image/'));
+  if (!item) return;
+  const file = item.getAsFile();
+  if (!file) return;
+  ev.preventDefault();
+  await _subirFotoAlProducto(_skuHoverAdmin, file, true);
+});
+
+
 
 window.adminBorrarFotoProducto = async function(sku) {
   const itCat = catalogoBySku.get(sku);
@@ -2710,12 +2769,12 @@ function renderResultados(){
     const adminIcons = !esAdminCatalogo() ? '' : _modoSeleccionFotos
       ? (it.img ? `<div class="prod-card-admin"><input type="checkbox" ${_fotosSeleccionadas.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionFoto('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>` : '')
       : `<div class="prod-card-admin">
-          <button onclick="event.stopPropagation(); adminSubirFotoProducto('${escHtml(it.s)}')" title="${imgsArr.length ? 'Agregar otra foto' : 'Agregar foto'}">✏️</button>
+          <button onclick="event.stopPropagation(); adminSubirFotoProducto('${escHtml(it.s)}')" title="${imgsArr.length ? 'Agregar otra foto' : 'Agregar foto'} (también podés arrastrarla acá o pegarla con Ctrl+V)">✏️</button>
           ${imgsArr.length ? `<button onclick="event.stopPropagation(); adminBorrarFotoProducto('${escHtml(it.s)}')" title="Borrar foto${imgsArr.length > 1 ? ' (elegir cuál)' : ''}">🗑️</button>` : ''}
          </div>`;
     const claseTarjeta = `prod-card${(puedeAgregar || qtyEnCarrito > 0) ? ' prod-card-clickeable' : ''}${qtyEnCarrito > 0 ? ' prod-card-en-carrito' : ''}${it.st ? ' prod-card-agotado' : ''}`;
     return `
-      <div class="${claseTarjeta}"${clickeable}>
+      <div class="${claseTarjeta}"${clickeable} ondragover="_fotoDragOver(event, this)" ondragleave="_fotoDragLeave(this)" ondrop="_fotoDrop(event, '${escHtml(it.s)}', this)" onmouseenter="_fotoHoverSet('${escHtml(it.s)}')" onmouseleave="_fotoHoverClear('${escHtml(it.s)}')">
         <div style="position:relative;">${foto}${adminIcons}</div>
         <div class="prod-card-body">
           <div class="prod-sku">${escHtml(it.s)}</div>
