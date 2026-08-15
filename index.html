@@ -2733,7 +2733,8 @@ function renderResultados(){
     const precio = precioDe(it);
     const puedeAgregar = !!precio && !it.st;
     const qtyEnCarrito = carrito.get(it.s) || 0;
-    const maxQtyAttr = (it.sb && !it.st) ? ` max="${LIMITE_QTY_STOCK_A_CONFIRMAR}"` : '';
+    const _limiteQtyTarjeta = _limiteQtyPara(it.s);
+    const maxQtyAttr = isFinite(_limiteQtyTarjeta) ? ` max="${_limiteQtyTarjeta}"` : '';
     const control = qtyEnCarrito > 0
       ? `<div class="qty-stepper prod-qty" onclick="event.stopPropagation()">
            <button onclick="cambiarQtyCarrito('${it.s}', -1)">−</button>
@@ -2892,18 +2893,29 @@ window.irAPagina = (n) => {
 const LIMITE_QTY_STOCK_A_CONFIRMAR = 5;
 function _limiteQtyPara(sku){
   const it = catalogoBySku.get(sku);
-  return (it && it.sb && !it.st) ? LIMITE_QTY_STOCK_A_CONFIRMAR : Infinity;
+  if (!it || it.st) return Infinity;
+  if (it.sb) return LIMITE_QTY_STOCK_A_CONFIRMAR;
+  // Productos "En stock": topear a la cantidad real disponible (Depósito 1 + Depósito
+  // Central) — si por algún motivo no viene ese dato, no se limita (mejor no bloquear que
+  // bloquear mal por falta de información).
+  if (typeof it.stk === 'number' && it.stk > 0) return it.stk;
+  return Infinity;
 }
-function _avisarLimiteQty(){
-  const msg = `Este producto tiene "Stock a confirmar" — por ahora se puede pedir hasta ${LIMITE_QTY_STOCK_A_CONFIRMAR} unidades. Si necesitás más, escribinos por WhatsApp para confirmar disponibilidad antes.`;
-  if (typeof showToast === 'function') showToast('⚠️ Máximo ' + LIMITE_QTY_STOCK_A_CONFIRMAR + ' unidades (stock a confirmar)', 'warn');
+function _avisarLimiteQty(sku){
+  const it = catalogoBySku.get(sku);
+  const esStockReal = it && !it.sb && typeof it.stk === 'number' && it.stk > 0;
+  const limite = esStockReal ? it.stk : LIMITE_QTY_STOCK_A_CONFIRMAR;
+  const msg = esStockReal
+    ? `No hay más stock disponible de este producto por esa cantidad. Si necesitás más, escribinos por WhatsApp para confirmar cuándo vuelve a haber stock.`
+    : `Este producto tiene "Stock a confirmar" — por ahora se puede pedir hasta ${limite} unidades. Si necesitás más, escribinos por WhatsApp para confirmar disponibilidad antes.`;
+  if (typeof showToast === 'function') showToast(esStockReal ? '⚠️ No hay más stock disponible' : ('⚠️ Máximo ' + limite + ' unidades (stock a confirmar)'), 'warn');
   else alert(msg);
 }
 
 window.agregarAlCarrito = (sku) => {
   const actual = carrito.get(sku) || 0;
   const limite = _limiteQtyPara(sku);
-  if (actual + 1 > limite) { _avisarLimiteQty(); return; }
+  if (actual + 1 > limite) { _avisarLimiteQty(sku); return; }
   carrito.set(sku, actual + 1);
   requestAnimationFrame(() => { renderResultados(); renderCarrito(); });
 };
@@ -2912,7 +2924,7 @@ window.cambiarQtyCarrito = (sku, delta) => {
   const actual = carrito.get(sku) || 0;
   const nueva = actual + delta;
   const limite = _limiteQtyPara(sku);
-  if (delta > 0 && nueva > limite) { _avisarLimiteQty(); return; }
+  if (delta > 0 && nueva > limite) { _avisarLimiteQty(sku); return; }
   if (nueva <= 0) { carrito.delete(sku); } else { carrito.set(sku, nueva); }
   requestAnimationFrame(() => { renderCarrito(); renderResultados(); });
 };
@@ -2920,7 +2932,7 @@ window.cambiarQtyCarrito = (sku, delta) => {
 window.setQtyCarrito = (sku, valorTexto) => {
   let n = Math.floor(Number(valorTexto));
   const limite = _limiteQtyPara(sku);
-  if (n > limite) { _avisarLimiteQty(); n = limite; }
+  if (n > limite) { _avisarLimiteQty(sku); n = limite; }
   if (!n || n <= 0 || isNaN(n)) { carrito.delete(sku); } else { carrito.set(sku, n); }
   requestAnimationFrame(() => { renderCarrito(); renderResultados(); });
 };
@@ -2979,7 +2991,7 @@ function renderCarrito(){
           </div>
           <div class="qty-stepper">
             <button onclick="cambiarQtyCarrito('${sku}', -1)">−</button>
-            <input type="number" class="qty-val" min="1" step="1"${(it.sb && !it.st) ? ` max="${LIMITE_QTY_STOCK_A_CONFIRMAR}"` : ''} value="${qty}" onchange="setQtyCarrito('${sku}', this.value)" onclick="this.select()">
+            <input type="number" class="qty-val" min="1" step="1"${isFinite(_limiteQtyPara(sku)) ? ` max="${_limiteQtyPara(sku)}"` : ''} value="${qty}" onchange="setQtyCarrito('${sku}', this.value)" onclick="this.select()">
             <button onclick="cambiarQtyCarrito('${sku}', 1)">+</button>
           </div>
           <div class="ci-subtotal-col">
