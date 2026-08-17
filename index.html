@@ -3189,6 +3189,11 @@ window.onCambioEntregaCheckout = (tipo) => {
 // "¿Cómo preferís abonar?" (solo cuando la forma de pago activa es Contado -10%off-, y
 // solo una vez que el cliente ya eligió cómo recibe el pedido, para no mezclar preguntas).
 function _htmlMedioPagoCards(){
+  let _ultimoMedio = null;
+  try {
+    const prev = _restaurarEstadoLS();
+    if (prev && prev.listaActiva === 'p1' && prev.medioPagoContado) _ultimoMedio = prev.medioPagoContado;
+  } catch (e) {}
   const opciones = [
     { tipo: 'efectivo', emoji: '💵', titulo: 'Efectivo', desc: _textosCatalogo.medio_efectivo },
     { tipo: 'transferencia', emoji: '🏦', titulo: 'Transferencia bancaria', desc: _textosCatalogo.medio_transferencia },
@@ -3196,7 +3201,7 @@ function _htmlMedioPagoCards(){
   ];
   return opciones.map(o => `
     <div class="pago-card contado${medioPagoContado === o.tipo ? ' pago-card-ultima' : ''}" onclick="onCambioMedioPagoCheckout('${o.tipo}')">
-      ${medioPagoContado === o.tipo ? '<span class="pago-card-ultima-tag">✓ Elegido</span>' : ''}
+      ${medioPagoContado === o.tipo ? '<span class="pago-card-ultima-tag">✓ Elegido</span>' : ((!medioPagoContado && _ultimoMedio === o.tipo) ? '<span class="pago-card-ultima-tag">✓ Última vez</span>' : '')}
       <div class="pc-titulo">${o.emoji} ${o.titulo}</div>
       ${o.desc ? `<div class="pc-desc">${o.desc}</div>` : ''}
       <span class="pc-badge">✓ Precios ya con 10% off</span>
