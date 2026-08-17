@@ -820,7 +820,13 @@ const LS_KEY_ULTIMA_PREF = 'dentalab_ultima_pref_pago_v1';
 function _guardarUltimaPrefLS(){
   try {
     const prev = _restaurarUltimaPrefLS() || {};
-    const actualizado = Object.assign({}, prev, { modalidadEntrega, listaActiva, medioPagoContado });
+    const actualizado = Object.assign({}, prev);
+    // Solo pisamos cada campo si hay un valor concreto elegido ahora — así, por ejemplo,
+    // al elegir la entrega (cuando todavía no se eligió el medio de pago contado) no se
+    // borra el medio de pago guardado de una visita anterior.
+    if (modalidadEntrega) actualizado.modalidadEntrega = modalidadEntrega;
+    if (listaActiva) actualizado.listaActiva = listaActiva;
+    if (medioPagoContado) actualizado.medioPagoContado = medioPagoContado;
     localStorage.setItem(LS_KEY_ULTIMA_PREF, JSON.stringify(actualizado));
   } catch(e) {}
 }
