@@ -204,6 +204,12 @@
 
   /* ── Selección de forma de pago ── */
   .pago-opciones{display:flex;flex-direction:column;gap:10px;margin-top:14px;}
+  /* ── Secciones del formulario "Completá tus datos": separadas con un divisor sutil
+     para que cada pregunta (contacto / entrega / forma de pago / observaciones) se lea
+     como un paso propio y no se mezcle visualmente con la anterior. ── */
+  .datos-seccion{margin-top:18px;padding-top:16px;border-top:1px dashed var(--border);}
+  .datos-seccion:empty{margin-top:0;padding-top:0;border-top:none;}
+  .datos-seccion-hint{font-size:12px;color:var(--text3);margin-top:4px;}
   .pago-card{
     border:2px solid var(--border);border-radius:14px;padding:16px;cursor:pointer;
     background:var(--panel2);transition:all .15s;text-align:left;
@@ -2287,7 +2293,13 @@ async function cargarCatalogo(){
       renderPrincipal();
       _initBarrasFlotantes();
     } else {
-      renderSeleccionPago();
+      // Forma de pago predeterminada: Contado (10% off). El cliente puede cambiarla
+      // en cualquier momento con el botón "Cambiar" (renderSeleccionPago).
+      listaActiva = 'p1';
+      medioPagoContado = null;
+      _guardarEstadoLS();
+      renderPrincipal();
+      _initBarrasFlotantes();
     }
   } catch (e) {
     renderError('No pudimos cargar el catálogo. Revisá tu conexión e intentá de nuevo.');
@@ -2341,11 +2353,11 @@ function renderSeleccionPago(){
   let _ultima = null;
   try {
     const prev = _restaurarEstadoLS();
-    if (prev) _ultima = prev.listaActiva === 'p2' ? 'tarjeta' : (prev.listaActiva === 'p1' ? prev.medioPagoContado : null);
+    if (prev) _ultima = prev.listaActiva === 'p2' ? 'tarjeta' : (prev.listaActiva === 'p1' ? 'contado' : null);
   } catch (e) {}
 
-  const _tarjetaCard = (tipo, claseExtra, emoji, titulo, desc, badgeHtml) => `
-        <div class="pago-card ${claseExtra}${_ultima === tipo ? ' pago-card-ultima' : ''}" onclick="elegirFormaPago('${tipo}')">
+  const _tarjetaCard = (tipo, lista, emoji, titulo, desc, badgeHtml) => `
+        <div class="pago-card ${tipo}${_ultima === tipo ? ' pago-card-ultima' : ''}" onclick="elegirPago('${lista}')">
           ${_ultima === tipo ? '<span class="pago-card-ultima-tag">✓ Última vez</span>' : ''}
           <div class="pc-titulo">${emoji} ${titulo}</div>
           ${desc ? `<div class="pc-desc">${desc}</div>` : ''}
@@ -2358,27 +2370,16 @@ function renderSeleccionPago(){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
           <h1>¿Cómo vas a pagar?</h1>
-          <div class="sub">Elegí la forma de pago para ver los precios correspondientes. Podés cambiarla más adelante si te arrepentís. La entrega (retiro o envío) se elige más adelante.</div>
+          <div class="sub">Elegí la forma de pago para ver los precios correspondientes. Si es Contado, más adelante te preguntamos si preferís efectivo, transferencia o Mercado Pago. Podés cambiarla en cualquier momento.</div>
         </div>
         ${esAdminCatalogo() ? `<button onclick="abrirEditorTextosCatalogo()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap;">✏️ Editar textos</button>` : ''}
       </div>
       <div class="pago-opciones">
-        ${_tarjetaCard('efectivo', 'contado', '💵', 'Efectivo', _textosCatalogo.medio_efectivo, '<span class="pc-badge">✓ Precios ya con 10% off</span>')}
-        ${_tarjetaCard('transferencia', 'contado', '🏦', 'Transferencia bancaria', _textosCatalogo.medio_transferencia, '<span class="pc-badge">✓ Precios ya con 10% off</span>')}
-        ${_tarjetaCard('mercadopago', 'contado', '📱', 'Mercado Pago', _textosCatalogo.medio_mercadopago, '<span class="pc-badge">✓ Precios ya con 10% off</span>')}
-        ${_tarjetaCard('tarjeta', 'tarjeta', '💳', 'Tarjeta de crédito — 1 pago', _textosCatalogo.tarjeta, '')}
+        ${_tarjetaCard('contado', 'p1', '💵', 'Contado (10% off)', _textosCatalogo.contado, '<span class="pc-badge">✓ Precios ya con 10% off</span>')}
+        ${_tarjetaCard('tarjeta', 'p2', '💳', 'Tarjeta de crédito — 1 pago', _textosCatalogo.tarjeta, '')}
       </div>
     </div>`;
 }
-
-window.elegirFormaPago = (tipo) => {
-  if (tipo === 'tarjeta') {
-    elegirPago('p2');
-  } else {
-    medioPagoContado = tipo;
-    elegirPago('p1');
-  }
-};
 
 window.elegirPago = (lista) => {
   listaActiva = lista;
@@ -3179,6 +3180,51 @@ window.onCambioEntregaCheckout = (tipo) => {
   if (contCards) { contCards.innerHTML = _htmlEntregaCards(); contCards.style.outline = ''; }
   const cont = document.getElementById('cf-envio-extra');
   if (cont) cont.innerHTML = _htmlCamposEnvioExtra();
+  // La pregunta de "¿Cómo preferís abonar?" recién se muestra una vez que el cliente
+  // ya eligió cómo recibe el pedido — así no compiten visualmente las dos preguntas.
+  const medioWrap = document.getElementById('cf-medio-pago-wrap');
+  if (medioWrap) medioWrap.innerHTML = _htmlMedioPagoBlock();
+};
+
+// "¿Cómo preferís abonar?" (solo cuando la forma de pago activa es Contado -10%off-, y
+// solo una vez que el cliente ya eligió cómo recibe el pedido, para no mezclar preguntas).
+function _htmlMedioPagoCards(){
+  const opciones = [
+    { tipo: 'efectivo', emoji: '💵', titulo: 'Efectivo', desc: _textosCatalogo.medio_efectivo },
+    { tipo: 'transferencia', emoji: '🏦', titulo: 'Transferencia bancaria', desc: _textosCatalogo.medio_transferencia },
+    { tipo: 'mercadopago', emoji: '📱', titulo: 'Mercado Pago', desc: _textosCatalogo.medio_mercadopago },
+  ];
+  return opciones.map(o => `
+    <div class="pago-card contado${medioPagoContado === o.tipo ? ' pago-card-ultima' : ''}" onclick="onCambioMedioPagoCheckout('${o.tipo}')">
+      ${medioPagoContado === o.tipo ? '<span class="pago-card-ultima-tag">✓ Elegido</span>' : ''}
+      <div class="pc-titulo">${o.emoji} ${o.titulo}</div>
+      ${o.desc ? `<div class="pc-desc">${o.desc}</div>` : ''}
+      <span class="pc-badge">✓ Precios ya con 10% off</span>
+    </div>`).join('');
+}
+
+function _htmlMedioPagoBlock(){
+  if (listaActiva !== 'p1') return '';
+  if (!modalidadEntrega) return '';
+  return `
+      <div class="field">
+        <label>¿Cómo preferís abonar? *</label>
+        <div id="cf-medio-pago-cards" class="pago-opciones" style="margin-top:6px;">${_htmlMedioPagoCards()}</div>
+      </div>`;
+}
+
+window.onCambioMedioPagoCheckout = (tipo) => {
+  medioPagoContado = tipo;
+  _guardarEstadoLS();
+  const cont = document.getElementById('cf-medio-pago-cards');
+  if (cont) { cont.innerHTML = _htmlMedioPagoCards(); cont.style.outline = ''; }
+  const envio = document.getElementById('cf-envio-extra');
+  if (envio) envio.innerHTML = _htmlCamposEnvioExtra();
+  const label = document.getElementById('pago-activo-label');
+  if (label) {
+    const listaLabel = listaActiva === 'p1' ? 'Contado (10% off)' : 'Tarjeta — 1 pago';
+    label.innerHTML = `Forma de pago: <b>${listaLabel}</b>`;
+  }
 };
 
 function _htmlAvisosLlegadosBanner(){
@@ -3201,15 +3247,14 @@ function renderPrincipal(){
   if (typeof _renderCarruselBanners === 'function') _renderCarruselBanners();
   const mapSec = document.querySelector('.map-footer-section');
   if (mapSec) mapSec.style.display = 'block';
-  let listaLabel = listaActiva === 'p1' ? 'Contado (10% off)' : 'Tarjeta — 1 pago';
-  if (listaActiva === 'p1' && medioPagoContado) listaLabel += ' — ' + MEDIO_CONTADO_LABEL[medioPagoContado];
+  const listaLabel = listaActiva === 'p1' ? 'Contado (10% off)' : 'Tarjeta — 1 pago';
   app.innerHTML = `
     <h1 class="page-title">Armá tu pedido</h1>
     ${_htmlBienvenida()}
     ${_htmlAvisosLlegadosBanner()}
     ${_pedidoRestauradoDeLS ? `<div class="banner-info-suave" style="border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600;margin-bottom:12px;">🔄 Recuperamos el pedido que tenías armado.</div>` : ''}
     <div class="pago-activo pago-activo-pago" style="${listaActiva === 'p1' ? 'flex-wrap:wrap;row-gap:4px;' : ''}">
-      <span>Forma de pago: <b>${listaLabel}</b></span>
+      <span id="pago-activo-label">Forma de pago: <b>${listaLabel}</b></span>
       <button onclick="cambiarPago()">Cambiar</button>
       ${listaActiva === 'p1' ? `<div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--green);">✓ Los precios que ves ya tienen el 10% off aplicado</div>` : ''}
     </div>
@@ -3275,7 +3320,10 @@ function renderPrincipal(){
         <div id="cf-entrega-cards" class="pago-opciones" style="margin-top:6px;">${_htmlEntregaCards()}</div>
       </div>
       <div id="cf-envio-extra">${_htmlCamposEnvioExtra()}</div>
-      <div class="field" style="margin-top:10px;"><label>Observaciones (opcional)</label><textarea id="cf-obs" placeholder="Alguna aclaración para tu pedido…"></textarea></div>
+      <div class="datos-seccion" id="cf-medio-pago-wrap">${_htmlMedioPagoBlock()}</div>
+      <div class="datos-seccion">
+        <div class="field"><label>Observaciones (opcional)</label><textarea id="cf-obs" placeholder="Alguna aclaración para tu pedido…"></textarea></div>
+      </div>
     </div>
 
     <button class="btn-enviar" id="btn-enviar" onclick="enviarPedido()" disabled>✓ Enviar pedido a Dentalab</button>
@@ -3377,6 +3425,17 @@ window.enviarPedido = async () => {
     campoEntrega.style.outlineOffset = '4px';
     campoEntrega.style.borderRadius = '12px';
     campoEntrega.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  if (listaActiva === 'p1' && !medioPagoContado) {
+    alert('Elegí cómo preferís abonar (efectivo, transferencia o Mercado Pago) antes de enviar el pedido.');
+    const campoMedio = document.getElementById('cf-medio-pago-cards');
+    if (campoMedio) {
+      campoMedio.style.outline = '2px solid var(--red)';
+      campoMedio.style.outlineOffset = '4px';
+      campoMedio.style.borderRadius = '12px';
+      campoMedio.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
     return;
   }
 
