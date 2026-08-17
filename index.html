@@ -466,23 +466,39 @@
   @media (min-width:640px){ .pwfin-backdrop{align-items:center;} }
   .pwfin-panel{background:#fff;width:100%;max-width:440px;max-height:85vh;border-radius:16px 16px 0 0;overflow:hidden;display:flex;flex-direction:column;animation:pwfinSlideUp .25s ease-out;}
   @media (min-width:640px){ .pwfin-panel{border-radius:16px;} }
-  .presu-panel{background:#fff;width:100%;max-width:720px;max-height:88vh;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;}
-  .presu-body{overflow-y:auto;padding:0;}
-  .presu-doc{padding:26px 28px;font-family:Arial,Helvetica,sans-serif;color:#111;}
-  .presu-doc-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0f172a;padding-bottom:14px;margin-bottom:14px;}
+  .presu-panel{background:#fff;width:100%;max-width:760px;max-height:88vh;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;}
+  .presu-body{overflow-y:auto;padding:0;background:#e9edf3;}
+  .presu-doc{background:#fff;margin:18px;padding:26px 28px;font-family:Arial,Helvetica,sans-serif;color:#111;box-shadow:0 1px 4px rgba(15,23,42,.12);}
+  .presu-doc-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #1e1e1e;padding-bottom:14px;margin-bottom:14px;}
   .presu-doc-logo{height:44px;width:auto;}
-  .presu-doc-empresa{font-size:11px;color:#475569;line-height:1.5;margin-top:6px;}
+  .presu-doc-empresa{font-size:10.5px;color:#6e6e6e;line-height:1.6;margin-top:6px;}
+  .presu-doc-empresa b{color:#333;font-weight:700;}
   .presu-doc-title{text-align:right;}
-  .presu-doc-title .n{font-size:18px;font-weight:800;color:#0f172a;}
-  .presu-doc-title .f{font-size:12px;color:#64748b;margin-top:2px;}
-  .presu-doc-aviso{color:#dc2626;font-size:11.5px;font-weight:700;margin-top:2px;}
-  .presu-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px;}
-  .presu-table th{background:#f1f5f9;text-align:left;padding:8px 8px;font-size:11px;color:#475569;text-transform:uppercase;border-bottom:1px solid #e2e8f0;}
-  .presu-table td{padding:9px 8px;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
+  .presu-doc-title .n{font-size:18px;font-weight:800;color:#141414;letter-spacing:.2px;}
+  .presu-doc-title .f{font-size:11.5px;color:#666;margin-top:3px;}
+  .presu-doc-aviso{color:#b43c3c;font-size:10px;font-weight:800;margin-top:3px;letter-spacing:.2px;}
+  .presu-cliente-card{display:flex;background:#f8f8f8;border:1px solid #d8d8d8;border-radius:6px;padding:10px 14px;margin-bottom:16px;}
+  .presu-cliente-card > div{flex:1;}
+  .presu-cliente-card .lbl{font-size:9.5px;font-weight:800;color:#8a8a8a;letter-spacing:.3px;text-transform:uppercase;margin-bottom:5px;}
+  .presu-cliente-card .val{font-size:14px;font-weight:800;color:#141414;}
+  .presu-table{width:100%;border-collapse:collapse;font-size:12px;}
+  .presu-table th{background:#dcdcdc;text-align:left;padding:8px 9px;font-size:10.5px;color:#232323;text-transform:uppercase;font-weight:800;border:1px solid #c8c8c8;}
+  .presu-table th.num{text-align:right;}
+  .presu-table th.center{text-align:center;}
+  .presu-table td{padding:9px;border:1px solid #d8d8d8;vertical-align:middle;color:#141414;}
+  .presu-table tbody tr:nth-child(even){background:#f8f8f8;}
   .presu-table .foto-cell img{width:38px;height:38px;object-fit:cover;border-radius:6px;background:#f1f5f9;}
   .presu-table .num{text-align:right;white-space:nowrap;}
-  .presu-total-row td{font-weight:800;font-size:14px;border-top:2px solid #0f172a;border-bottom:none;}
-  .presu-doc-footer{margin-top:16px;font-size:10.5px;color:#94a3b8;text-align:center;}
+  .presu-table .center{text-align:center;color:#555;}
+  .presu-table .sku-cell{color:#666;font-size:11.5px;}
+  .presu-table .lista-cell{font-size:10.5px;color:#555;line-height:1.35;text-align:center;}
+  .presu-table .subtotal-cell{font-weight:800;}
+  .presu-totales{display:flex;justify-content:flex-end;margin-top:14px;}
+  .presu-totales-box{width:260px;}
+  .presu-totales-row{display:flex;justify-content:space-between;padding:8px 12px;background:#f8f8f8;border:1px solid #d8d8d8;font-size:12.5px;color:#1e1e1e;}
+  .presu-totales-row + .presu-totales-row{border-top:none;}
+  .presu-totales-row.total{background:#1e1e1e;color:#fff;font-weight:800;font-size:14px;border-color:#1e1e1e;border-radius:0 0 4px 4px;padding:10px 12px;}
+  .presu-doc-footer{margin-top:18px;font-size:10.5px;color:#94a3b8;text-align:center;}
   @keyframes pwfinSlideUp{ from{transform:translateY(24px);opacity:0;} to{transform:translateY(0);opacity:1;} }
   .pwfin-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border);}
   .pwfin-title{font-size:15px;font-weight:800;color:var(--text);}
@@ -989,20 +1005,32 @@ function _presuItems(){
     const it = catalogoBySku.get(sku);
     if (!it) return null;
     const precio = precioDe(it);
-    return { sku, nombre: it.n, qty, precio: precio || 0, img: it.img || null, subtotal: (precio || 0) * qty };
+    return { sku, nombre: it.n, qty, precio: precio || 0, subtotal: (precio || 0) * qty };
   }).filter(Boolean);
+}
+
+// Texto de la columna "Lista" — igual criterio que usa el CRM (contado vs tarjeta).
+function _presuListaLabel(){
+  return listaActiva === 'p1'
+    ? 'Precio c/dto.<br>Efectivo, transferencia<br>o Mercado Pago'
+    : 'Tarjeta<br>1 pago';
 }
 
 function _presuDocHtml(items){
   const logoSrc = document.getElementById('brand-logo-admin-trigger')?.src || '';
-  const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const listaLabel = _presuListaLabel();
+  const nombreCliente = document.getElementById('cf-nombre')?.value.trim() || '';
+  const dniCliente = document.getElementById('cf-dni')?.value.trim() || '';
   const filas = items.map(it => `
     <tr>
-      <td style="color:#64748b;">${escHtml(it.sku)}</td>
+      <td class="sku-cell">${escHtml(it.sku)}</td>
       <td>${escHtml(it.nombre)}</td>
-      <td class="num">${it.qty}</td>
+      <td class="lista-cell">${listaLabel}</td>
+      <td class="center">${it.qty}</td>
       <td class="num">${fmtMoney(it.precio)}</td>
-      <td class="num">${fmtMoney(it.subtotal)}</td>
+      <td class="center">—</td>
+      <td class="num subtotal-cell">${fmtMoney(it.subtotal)}</td>
     </tr>`).join('');
   const total = items.reduce((a, it) => a + it.subtotal, 0);
   return `
@@ -1011,9 +1039,10 @@ function _presuDocHtml(items){
         <div>
           <img class="presu-doc-logo" src="${logoSrc}" alt="Dentalab">
           <div class="presu-doc-empresa">
-            AGRA DENTAL SRL<br>
+            <b>AGRA DENTAL SRL</b><br>
             Marcelo T. de Alvear 2085 · Capital Federal · CP. 1122<br>
-            E-Mail: ventas@dentalab.com.ar · Resp. I.V.A.: Responsable Inscripto<br>
+            E-Mail: ventas@dentalab.com.ar<br>
+            Resp. I.V.A.: Responsable Inscripto<br>
             CUIT: 30-71502151-6 · Ing. Brutos: 30-71502151-6
           </div>
         </div>
@@ -1023,14 +1052,24 @@ function _presuDocHtml(items){
           <div class="presu-doc-aviso">DOCUMENTO NO VÁLIDO COMO PEDIDO</div>
         </div>
       </div>
+      <div class="presu-cliente-card">
+        <div><div class="lbl">Cliente</div><div class="val">${escHtml(nombreCliente) || '—'}</div></div>
+        <div><div class="lbl">Cuit / DNI</div><div class="val">${escHtml(dniCliente) || '—'}</div></div>
+      </div>
       <table class="presu-table">
-        <thead><tr><th>SKU</th><th>Producto</th><th class="num">Cant.</th><th class="num">P. Unit.</th><th class="num">Subtotal</th></tr></thead>
-        <tbody>
-          ${filas}
-          <tr class="presu-total-row"><td colspan="4" class="num">Total</td><td class="num">${fmtMoney(total)}</td></tr>
-        </tbody>
+        <thead><tr>
+          <th>SKU</th><th>Producto</th><th class="center">Lista</th><th class="center">Cant.</th>
+          <th class="num">P. Unit.</th><th class="center">Desc.</th><th class="num">Subtotal</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
       </table>
-      <div class="presu-doc-footer">Este presupuesto es informativo — para confirmarlo, completá tus datos y enviá el pedido más abajo.</div>
+      <div class="presu-totales">
+        <div class="presu-totales-box">
+          <div class="presu-totales-row"><span>Subtotal</span><span>${fmtMoney(total)}</span></div>
+          <div class="presu-totales-row total"><span>TOTAL</span><span>${fmtMoney(total)}</span></div>
+        </div>
+      </div>
+      <div class="presu-doc-footer">Este presupuesto es informativo — para confirmarlo, completá tus datos y enviá el pedido más abajo.<br>Generado a través de <a href="https://dentalabcrm.github.io/pedidos/" target="_blank" style="color:#2563eb;">dentalabcrm.github.io/pedidos</a></div>
     </div>`;
 }
 
@@ -1065,34 +1104,101 @@ window.descargarPresupuestoPDF = async () => {
   btn.textContent = 'Generando…'; btn.disabled = true;
   try {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 18;
+    const contentW = pageW - margin * 2;
+    let y = margin;
+
     const logoSrc = document.getElementById('brand-logo-admin-trigger')?.src || '';
-    if (logoSrc) { try { doc.addImage(logoSrc, 'PNG', 14, 12, 30, 10.5); } catch (e) {} }
-    doc.setFontSize(9); doc.setTextColor(90);
-    doc.text('AGRA DENTAL SRL', 14, 28);
-    doc.text('Marcelo T. de Alvear 2085 · Capital Federal · CP. 1122', 14, 32.5);
-    doc.text('CUIT: 30-71502151-6 · ventas@dentalab.com.ar', 14, 37);
-    doc.setFontSize(16); doc.setTextColor(15, 23, 42); doc.setFont(undefined, 'bold');
-    doc.text('PRESUPUESTO', 196, 18, { align: 'right' });
-    doc.setFont(undefined, 'normal'); doc.setFontSize(10); doc.setTextColor(100);
-    const fecha = new Date().toLocaleDateString('es-AR');
-    doc.text(`Fecha: ${fecha}`, 196, 24, { align: 'right' });
-    doc.setTextColor(220, 38, 38); doc.setFont(undefined, 'bold'); doc.setFontSize(9);
-    doc.text('DOCUMENTO NO VÁLIDO COMO PEDIDO', 196, 29, { align: 'right' });
+    if (logoSrc) { try { doc.addImage(logoSrc, 'PNG', margin, 2, 47, 14); } catch (e) {} }
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
+    doc.text('AGRA DENTAL SRL', margin, 21);
+    doc.setFontSize(6.5); doc.setTextColor(110, 110, 110);
+    doc.text('Marcelo T. de Alvear 2085  ·  Capital Federal  ·  CP. 1122', margin, 25.5);
+    doc.text('E-Mail: ventas@dentalab.com.ar', margin, 29.5);
+    doc.text('Resp. I.V.A.: Responsable Inscripto', margin, 33.5);
+    doc.text('CUIT: 30-71502151-6  ·  Ing. Brutos: 30-71502151-6', margin, 37.5);
+
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 20, 20);
+    doc.text('PRESUPUESTO', pageW - margin, 12, { align: 'right' });
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
+    const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    doc.text(`Fecha: ${fecha}`, pageW - margin, 18, { align: 'right' });
+    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(180, 60, 60);
+    doc.text('DOCUMENTO NO VÁLIDO COMO PEDIDO', pageW - margin, 23, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
+
+    y = 44;
+
+    // ── Cliente card ──
+    const nombreCliente = document.getElementById('cf-nombre')?.value.trim() || '';
+    const dniCliente = document.getElementById('cf-dni')?.value.trim() || '';
+    doc.setFillColor(248, 248, 248); doc.setDrawColor(200, 200, 200);
+    doc.roundedRect(margin, y, contentW, 18, 2, 2, 'FD');
+    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(120, 120, 120);
+    doc.text('CLIENTE', margin + 5, y + 5);
+    doc.text('CUIT / DNI', margin + contentW / 2 + 5, y + 5);
+    doc.setFontSize(10); doc.setTextColor(20, 20, 20);
+    doc.text(nombreCliente || '—', margin + 5, y + 12);
+    doc.text(dniCliente || '—', margin + contentW / 2 + 5, y + 12);
+
+    y += 24;
+
+    const listaLabelPdf = listaActiva === 'p1'
+      ? 'Precio c/dto.\nEfectivo, transferencia\no Mercado Pago'
+      : 'Tarjeta\n1 pago';
 
     doc.autoTable({
-      startY: 44,
-      head: [['SKU', 'Producto', 'Cant.', 'P. Unit.', 'Subtotal']],
-      body: items.map(it => [it.sku, it.nombre, String(it.qty), it.precio.toLocaleString('es-AR'), it.subtotal.toLocaleString('es-AR')]),
-      columnStyles: { 0: { cellWidth: 26 }, 2: { cellWidth: 18, halign: 'center' }, 3: { cellWidth: 30, halign: 'right' }, 4: { cellWidth: 32, halign: 'right' } },
-      styles: { fontSize: 9, cellPadding: 3 },
-      headStyles: { fillColor: [241, 245, 249], textColor: [71, 85, 105] }
+      startY: y,
+      head: [['SKU', 'PRODUCTO', 'LISTA', 'CANT.', 'P. UNIT.', 'DESC.', 'SUBTOTAL']],
+      body: items.map(it => [it.sku, it.nombre, listaLabelPdf, String(it.qty), fmtMoney(it.precio), '—', fmtMoney(it.subtotal)]),
+      theme: 'grid',
+      margin: { left: margin, right: margin },
+      headStyles: { fillColor: [220, 220, 220], textColor: [20, 20, 20], fontSize: 8, fontStyle: 'bold', cellPadding: 3 },
+      columnStyles: {
+        0: { cellWidth: 23, fontSize: 8, textColor: [100, 100, 100], halign: 'center' },
+        1: { cellWidth: 'auto', fontSize: 9 },
+        2: { cellWidth: 24, fontSize: 7.5, halign: 'center', textColor: [60, 60, 60] },
+        3: { cellWidth: 16, halign: 'center', fontSize: 9 },
+        4: { cellWidth: 26, halign: 'right', fontSize: 9 },
+        5: { cellWidth: 16, halign: 'center', fontSize: 9, textColor: [80, 80, 80] },
+        6: { cellWidth: 26, halign: 'right', fontSize: 9, fontStyle: 'bold' },
+      },
+      alternateRowStyles: { fillColor: [248, 248, 248] },
+      styles: { overflow: 'linebreak', cellPadding: 2.5, lineColor: [200, 200, 200], lineWidth: 0.1, textColor: [20, 20, 20] },
+      rowPageBreak: 'avoid',
+      didParseCell: (data) => {
+        if (data.section === 'head' && data.column.index !== 1) data.cell.styles.halign = (data.column.index === 4 || data.column.index === 6) ? 'right' : 'center';
+      },
     });
 
     const total = items.reduce((a, it) => a + it.subtotal, 0);
-    const finalY = doc.lastAutoTable.finalY + 8;
-    doc.setFontSize(12); doc.setTextColor(15, 23, 42); doc.setFont(undefined, 'bold');
-    doc.text(`Total: ${fmtMoney(total)}`, 196, finalY, { align: 'right' });
+    y = doc.lastAutoTable.finalY + 6;
+
+    const totalsX = pageW - margin - 72;
+    const totalsW = 72;
+    doc.setFillColor(248, 248, 248); doc.setDrawColor(200, 200, 200);
+    doc.rect(totalsX, y, totalsW, 8, 'FD');
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+    doc.text('Subtotal', totalsX + 3, y + 5.5);
+    doc.text(fmtMoney(total) || '', totalsX + totalsW - 3, y + 5.5, { align: 'right' });
+    y += 8;
+
+    doc.setFillColor(30, 30, 30);
+    doc.roundedRect(totalsX, y, totalsW, 11, 2, 2, 'F');
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text('TOTAL', totalsX + 3, y + 7.5);
+    doc.text(fmtMoney(total) || '', totalsX + totalsW - 3, y + 7.5, { align: 'right' });
+
+    const footerY = pageH - 10;
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
+    const footerTxt = 'Generado a través de dentalabcrm.github.io/pedidos';
+    doc.text(footerTxt, pageW / 2, footerY, { align: 'center' });
+    // Link clickeable sobre el texto (funciona en lectores de PDF que soportan enlaces).
+    const footerTxtW = doc.getStringUnitWidth(footerTxt) * 7 * 0.352778;
+    doc.link(pageW / 2 - footerTxtW / 2, footerY - 3, footerTxtW, 4, { url: 'https://dentalabcrm.github.io/pedidos/' });
 
     doc.save('Presupuesto_pedido.pdf');
   } catch (e) {
