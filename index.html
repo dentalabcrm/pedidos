@@ -811,6 +811,26 @@ function _limpiarPedidoLS(){
   } catch(e) {}
 }
 
+// ── "Última vez" (persiste entre pedidos, a diferencia de LS_KEY_ESTADO) ──
+// LS_KEY_ESTADO es el pedido EN CURSO y se borra al enviarlo (arriba). Esta otra clave
+// guarda la última entrega/forma de pago que el cliente eligió, para poder mostrarle el
+// cartelito "✓ Última vez" en su próxima visita aunque ya haya completado un pedido antes.
+// Solo se actualiza cuando el cliente elige algo activamente (no con valores por defecto).
+const LS_KEY_ULTIMA_PREF = 'dentalab_ultima_pref_pago_v1';
+function _guardarUltimaPrefLS(){
+  try {
+    const prev = _restaurarUltimaPrefLS() || {};
+    const actualizado = Object.assign({}, prev, { modalidadEntrega, listaActiva, medioPagoContado });
+    localStorage.setItem(LS_KEY_ULTIMA_PREF, JSON.stringify(actualizado));
+  } catch(e) {}
+}
+function _restaurarUltimaPrefLS(){
+  try {
+    const raw = localStorage.getItem(LS_KEY_ULTIMA_PREF);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
 // ── Lista de espera personal ("Avisarme cuando vuelva a ingresar") ──
 // Vive en el localStorage de este navegador/dispositivo — no es una cuenta de cliente,
 // así que si cambia de celular o borra datos del sitio, se pierde el seguimiento.
@@ -2352,7 +2372,7 @@ function renderSeleccionPago(){
   // y siempre tiene que ser una decisión consciente, aunque sea la misma de siempre.
   let _ultima = null;
   try {
-    const prev = _restaurarEstadoLS();
+    const prev = _restaurarUltimaPrefLS();
     if (prev) _ultima = prev.listaActiva === 'p2' ? 'tarjeta' : (prev.listaActiva === 'p1' ? 'contado' : null);
   } catch (e) {}
 
@@ -2385,6 +2405,7 @@ window.elegirPago = (lista) => {
   listaActiva = lista;
   if (lista !== 'p1') medioPagoContado = null;
   _guardarEstadoLS();
+  _guardarUltimaPrefLS();
   renderPrincipal();
   _initBarrasFlotantes();
 };
@@ -3154,7 +3175,7 @@ function _htmlCamposEnvioExtra(){
 function _htmlEntregaCards(){
   let _ultimaEntrega = null;
   try {
-    const prev = _restaurarEstadoLS();
+    const prev = _restaurarUltimaPrefLS();
     if (prev && prev.modalidadEntrega) _ultimaEntrega = prev.modalidadEntrega;
   } catch (e) {}
   const opciones = [
@@ -3176,6 +3197,7 @@ function _htmlEntregaCards(){
 window.onCambioEntregaCheckout = (tipo) => {
   modalidadEntrega = tipo;
   _guardarEstadoLS();
+  _guardarUltimaPrefLS();
   const contCards = document.getElementById('cf-entrega-cards');
   if (contCards) { contCards.innerHTML = _htmlEntregaCards(); contCards.style.outline = ''; }
   const cont = document.getElementById('cf-envio-extra');
@@ -3191,7 +3213,7 @@ window.onCambioEntregaCheckout = (tipo) => {
 function _htmlMedioPagoCards(){
   let _ultimoMedio = null;
   try {
-    const prev = _restaurarEstadoLS();
+    const prev = _restaurarUltimaPrefLS();
     if (prev && prev.listaActiva === 'p1' && prev.medioPagoContado) _ultimoMedio = prev.medioPagoContado;
   } catch (e) {}
   const opciones = [
@@ -3221,6 +3243,7 @@ function _htmlMedioPagoBlock(){
 window.onCambioMedioPagoCheckout = (tipo) => {
   medioPagoContado = tipo;
   _guardarEstadoLS();
+  _guardarUltimaPrefLS();
   const cont = document.getElementById('cf-medio-pago-cards');
   if (cont) { cont.innerHTML = _htmlMedioPagoCards(); cont.style.outline = ''; }
   const envio = document.getElementById('cf-envio-extra');
