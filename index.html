@@ -733,7 +733,7 @@ let _bienvenidaMsg = (() => {
     const anterior = localStorage.getItem(LS_ULTIMA_VISITA);
     let msg = null;
     if (!anterior) {
-      msg = '👋 <b>¡Bienvenido a Dentalab!</b> Elegí tu forma de pago para ver los precios, armá tu pedido, y te lo confirmamos por WhatsApp.';
+      msg = '👋 <b>¡Bienvenido a Dentalab!</b> Ya estás viendo los precios con 10% off (pago Contado). Armá tu pedido y te lo confirmamos por WhatsApp.';
     } else {
       const dias = (ahora - Number(anterior)) / 86400000;
       if (dias >= DIAS_PARA_REGRESO) {
@@ -3949,7 +3949,7 @@ if (_avisosGetLista().length) {
       sugerencia:'Cómo hacer un pedido',
       claves:['como hago un pedido','como hago para pedir','como hacer un pedido','hacer un pedido','como pido','como compro','como se compra','como se hace un pedido','como funciona la pagina','como funciona el sitio','como funciona esto','como armo el pedido','no se como pedir','no se como comprar','ayuda para pedir','ayuda para comprar','tutorial','instrucciones','paso a paso','como usar','como me registro','registrarme','como puedo registrarme','no me deja registrarme','no puedo comprar','como puedo comprar','como funciona','como se pide','como se compra aca','como comprar'],
       chip:'❓ Cómo hacer un pedido',
-      respuesta: () => `¡Así de fácil! Acá en este catálogo no hace falta registrarse. 🛒\n\n1️⃣ Elegís la forma de pago: Efectivo, Transferencia o Mercado Pago (10% off) — o Tarjeta de crédito en 1 pago. Según lo que elijas vas a ver los precios correspondientes.\n\n2️⃣ Buscás los productos por nombre o SKU y los agregás al carrito con el botón "+".\n\n3️⃣ Cuando terminás, tocás "Ver pedido ▾", completás tus datos y elegís cómo querés recibirlo: retiro por el local, envío, o "todavía no lo sé".\n\n4️⃣ Le das a "Enviar pedido a Dentalab". Se abre WhatsApp con todo el pedido armado para que lo confirmemos.\n\n¡Y listo! 🦷`
+      respuesta: () => `¡Así de fácil! Acá en este catálogo no hace falta registrarse. 🛒\n\n1️⃣ Arrancás viendo los precios con Contado (10% off) ya aplicado — es la opción por defecto. Si preferís pagar con Tarjeta en 1 pago, lo cambiás con el botón "Cambiar" arriba de los productos.\n\n2️⃣ Buscás los productos por nombre o SKU y los agregás al carrito con el botón "+".\n\n3️⃣ Cuando terminás, tocás "Ver pedido ▾", completás tus datos y elegís cómo querés recibirlo: retiro por el local, envío, o "todavía no lo sé".\n\n4️⃣ Si tu forma de pago es Contado, te preguntamos si preferís Efectivo, Transferencia bancaria o Mercado Pago.\n\n5️⃣ Le das a "Enviar pedido a Dentalab". Se abre WhatsApp con todo el pedido armado para que lo confirmemos.\n\n¡Y listo! 🦷`
     },
     {
       id:'pagina_web',
