@@ -314,9 +314,12 @@
       flex-direction:column;overflow-x:visible;overflow-y:auto;max-height:560px;
       padding:2px;border-right:1px solid var(--border);padding-right:14px;
     }
-    .cat-tab{width:100%;}
+    /* Nombres largos ("Composites y Adhesivos", "Equipos Odontológicos y Periféricos")
+       no entran en una línea dentro de los 190px de la barra lateral — antes se cortaban
+       (heredaban white-space:nowrap). Acá dejamos que pasen a una segunda línea. */
+    .cat-tab{width:100%;white-space:normal;line-height:1.3;overflow-wrap:break-word;border-radius:10px;}
     .cat-subtabs{flex-direction:column;overflow-x:visible;}
-    .cat-tab-sub{width:100%;text-align:left;}
+    .cat-tab-sub{width:100%;text-align:left;white-space:normal;line-height:1.3;overflow-wrap:break-word;}
   }
 
   /* ── Pantallas anchas (PC/notebook): aprovechar el ancho — el buscador con su sidebar
