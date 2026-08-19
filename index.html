@@ -143,10 +143,26 @@
   .promo-marquee{background:#0f172a;color:#fff;overflow:hidden;white-space:nowrap;padding:9px 0;margin:-18px -14px 0;}
   .horarios-bar{background:#eef1f6;color:var(--text2);text-align:center;padding:8px 14px;font-size:12.5px;margin:0 -14px 18px;}
   .horarios-bar strong{color:var(--text);}
-  .carrusel-banners{position:relative;border-radius:14px;overflow:hidden;margin-bottom:16px;background:var(--panel2);}
+  .carrusel-banners{position:relative;overflow:hidden;margin-bottom:16px;background:var(--panel2);}
+  /* En escritorio ancho, el banner "rompe" el contenedor centrado y llega de punta a
+     punta de la pantalla (full-bleed) — el resto del contenido (buscador, carrito, etc.)
+     sigue con el ancho normal del .wrap. Es el mismo efecto que tiene dentalab.com.ar. */
+  @media (min-width:1300px){
+    .carrusel-banners{
+      width:100vw;border-radius:0;
+      margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);
+    }
+  }
   .carrusel-track{display:flex;transition:transform .45s ease;}
   .carrusel-slide{flex-shrink:0;}
   .carrusel-slide img{width:100%;height:100%;display:block;aspect-ratio:16/7;object-fit:cover;}
+  /* A todo el ancho de pantalla, seguir con la proporción 16:7 pondría la imagen
+     demasiado alta en monitores anchos. Usamos una altura acotada en su lugar, así
+     queda como una franja horizontal (igual que en dentalab.com.ar). Esta regla va
+     DESPUÉS de la base de arriba a propósito, para que la pise. */
+  @media (min-width:1300px){
+    .carrusel-slide img{aspect-ratio:auto;height:clamp(260px, 26vw, 460px);}
+  }
   .carrusel-arrow{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.4);color:#fff;border:none;width:30px;height:30px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;}
   .carrusel-arrow.left{left:8px;}
   .carrusel-arrow.right{right:8px;}
@@ -178,6 +194,7 @@
   body{
     font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text);
     min-height:100vh; padding:18px 14px 90px; -webkit-font-smoothing:antialiased;
+    overflow-x:hidden; /* evita un scroll horizontal de unos pocos px por el banner full-bleed (100vw) */
   }
   .wrap{max-width:760px;margin:0 auto;}
   .brand{display:flex;align-items:center;gap:10px;margin-bottom:16px;justify-content:space-between;}
@@ -310,7 +327,7 @@
      scrollea buscando productos. El resto (mobile) queda exactamente igual que antes. ── */
   .desktop-search-cart{display:flex;flex-direction:column;}
   @media (min-width:1300px){
-    .wrap{max-width:1360px;}
+    .wrap{max-width:1600px;width:94%;}
     .desktop-search-cart{flex-direction:row;align-items:flex-start;gap:24px;}
     .desktop-search-cart #card-buscar{flex:1;min-width:0;}
     .desktop-search-cart #card-pedido{
@@ -321,6 +338,13 @@
        propia fila (en vez de amontonarse todos en una sola fila muy angosta). */
     .desktop-search-cart #card-pedido .carrito-item{flex-direction:column;align-items:stretch;gap:8px;}
     .desktop-search-cart #card-pedido .ci-bottom{justify-content:space-between;padding-left:54px;}
+    /* Probando 4 columnas de productos en vez de las 3 que salían solas con auto-fill. */
+    .desktop-search-cart #card-buscar .resultados:not(.vista-lista){grid-template-columns:repeat(4,1fr);}
+  }
+  /* Pantallas muy anchas (monitores grandes): que siga creciendo en vez de quedarse
+     fija con espacio en blanco de sobra a los costados. */
+  @media (min-width:1750px){
+    .wrap{max-width:2000px;}
   }
 
   /* ── Grilla de productos (tarjetas verticales, tipo catálogo) ── */
@@ -1642,7 +1666,7 @@ function _renderCarruselBanners() {
   cont.innerHTML = `
     <div class="carrusel-banners">
       <div class="carrusel-track" id="carrusel-track" style="width:${_bannersCarrusel.length * 100}%;">
-        ${_bannersCarrusel.map(b => `<div class="carrusel-slide" style="width:${100 / _bannersCarrusel.length}%;"><img src="https://drive.google.com/thumbnail?id=${b.fileId}&sz=w1000" loading="lazy" alt=""></div>`).join('')}
+        ${_bannersCarrusel.map(b => `<div class="carrusel-slide" style="width:${100 / _bannersCarrusel.length}%;"><img src="https://drive.google.com/thumbnail?id=${b.fileId}&sz=w1400" loading="lazy" alt=""></div>`).join('')}
       </div>
       ${_bannersCarrusel.length > 1 ? `
       <button class="carrusel-arrow left" onclick="_moverCarrusel(-1)">‹</button>
