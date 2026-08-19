@@ -205,6 +205,14 @@
   .brand-sub svg{flex-shrink:0;}
   .page-title{font-size:24px;font-weight:800;color:var(--text);letter-spacing:-.3px;margin:0 0 16px;}
   @media (max-width:420px){ .page-title{font-size:20px;} }
+  /* ── Numeritos de paso (1, 2, 3a, 3b, 3c) que guían al cliente en el flujo del pedido ── */
+  .paso-badge{
+    display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
+    width:22px;height:22px;border-radius:50%;background:var(--blue);color:#fff;
+    font-size:11.5px;font-weight:800;font-family:'DM Mono',monospace;line-height:1;
+    margin-right:8px;vertical-align:middle;
+  }
+  .paso-badge-chica{width:19px;height:19px;font-size:10px;background:var(--panel2);color:var(--blue);border:1.5px solid var(--blue);}
 
   .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 1px 3px rgba(15,23,42,.05);}
   .card-pedido{border-top:4px solid var(--green);box-shadow:0 2px 10px rgba(14,169,104,.12);}
@@ -249,6 +257,7 @@
     box-shadow:0 1px 3px rgba(15,23,42,.06);
   }
   .pago-activo span{font-weight:700;color:var(--text2);}
+  .pago-activo .paso-badge{color:#fff;font-weight:800;background:var(--blue);}
   .pago-activo b{color:var(--text);font-weight:800;font-size:14.5px;}
   .pago-activo button{background:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:11.5px;font-weight:700;color:var(--text2);cursor:pointer;white-space:nowrap;}
   .pago-activo.pago-activo-pago{border-left-color:var(--green);}
@@ -3423,7 +3432,7 @@ function _htmlMedioPagoBlock(){
   if (!modalidadEntrega) return '';
   return `
       <div class="field">
-        <label>¿Cómo preferís abonar? *</label>
+        <label><span class="paso-badge paso-badge-chica">3c</span>¿Cómo preferís abonar? *</label>
         <div id="cf-medio-pago-cards" class="pago-opciones" style="margin-top:6px;">${_htmlMedioPagoCards()}</div>
       </div>`;
 }
@@ -3439,7 +3448,7 @@ window.onCambioMedioPagoCheckout = (tipo) => {
   const label = document.getElementById('pago-activo-label');
   if (label) {
     const listaLabel = listaActiva === 'p1' ? 'Contado (10% off)' : 'Tarjeta — 1 pago';
-    label.innerHTML = `Forma de pago: <b>${listaLabel}</b>`;
+    label.innerHTML = `<span class="paso-badge">1</span>Forma de pago: <b>${listaLabel}</b>`;
   }
 };
 
@@ -3470,14 +3479,14 @@ function renderPrincipal(){
     ${_htmlAvisosLlegadosBanner()}
     ${_pedidoRestauradoDeLS ? `<div class="banner-info-suave" style="border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600;margin-bottom:12px;">🔄 Recuperamos el pedido que tenías armado.</div>` : ''}
     <div class="pago-activo pago-activo-pago" style="${listaActiva === 'p1' ? 'flex-wrap:wrap;row-gap:4px;' : ''}">
-      <span id="pago-activo-label">Forma de pago: <b>${listaLabel}</b></span>
+      <span id="pago-activo-label"><span class="paso-badge">1</span>Forma de pago: <b>${listaLabel}</b></span>
       <button onclick="cambiarPago()">Cambiar</button>
       ${listaActiva === 'p1' ? `<div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--green);">✓ Los precios que ves ya tienen el 10% off aplicado</div>` : ''}
     </div>
 
     <div class="desktop-search-cart">
     <div class="card" id="card-buscar">
-      <h1>Buscar productos</h1>
+      <h1><span class="paso-badge">2</span>Buscar productos</h1>
       <div class="buscador-row">
         <div class="buscador-input-wrap">
           <input type="text" id="input-busqueda" placeholder="Nombre o SKU… (o dejá vacío para ver todo el catálogo)" oninput="onBusquedaInput(this.value)">
@@ -3526,7 +3535,8 @@ function renderPrincipal(){
     </div>
 
     <div class="card card-datos">
-      <h1>📝 Completá tus datos</h1>
+      <h1><span class="paso-badge">3</span>📝 Completá tus datos</h1>
+      <div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px;display:flex;align-items:center;"><span class="paso-badge paso-badge-chica">3a</span>Tus datos</div>
       <div class="cliente-fields">
         <div class="field"><label>Cliente *</label><input id="cf-nombre" type="text" placeholder="Nombre y apellido" required oninput="this.style.outline=''"></div>
         <div class="field"><label>DNI / CUIT</label><input id="cf-dni" type="text" inputmode="numeric" placeholder="Sin puntos ni guiones"></div>
@@ -3534,7 +3544,7 @@ function renderPrincipal(){
         <div class="field"><label>Teléfono</label><input id="cf-tel" type="tel" placeholder="11 1234-5678"></div>
       </div>
       <div class="field" style="margin-top:10px;">
-        <label>¿Cómo querés recibir tu pedido? *</label>
+        <label><span class="paso-badge paso-badge-chica">3b</span>¿Cómo querés recibir tu pedido? *</label>
         <div id="cf-entrega-cards" class="pago-opciones" style="margin-top:6px;">${_htmlEntregaCards()}</div>
       </div>
       <div id="cf-envio-extra">${_htmlCamposEnvioExtra()}</div>
