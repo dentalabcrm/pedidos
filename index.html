@@ -157,11 +157,12 @@
   .carrusel-slide{flex-shrink:0;}
   .carrusel-slide img{width:100%;height:100%;display:block;aspect-ratio:16/7;object-fit:cover;}
   /* A todo el ancho de pantalla, seguir con la proporción 16:7 pondría la imagen
-     demasiado alta en monitores anchos. Usamos una altura acotada en su lugar, así
-     queda como una franja horizontal (igual que en dentalab.com.ar). Esta regla va
-     DESPUÉS de la base de arriba a propósito, para que la pise. */
+     demasiado alta en monitores anchos. Usamos la proporción real de los banners
+     panorámicos que se suben (ej. 3810×860 ≈ 4,43:1), así queda como una franja
+     horizontal prolija en vez de un cuadrado gigante. Esta regla va DESPUÉS de la
+     base de arriba a propósito, para que la pise. */
   @media (min-width:1300px){
-    .carrusel-slide img{aspect-ratio:auto;height:clamp(260px, 26vw, 460px);}
+    .carrusel-slide img{aspect-ratio:3810/860;height:auto;}
   }
   .carrusel-arrow{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.4);color:#fff;border:none;width:30px;height:30px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;}
   .carrusel-arrow.left{left:8px;}
