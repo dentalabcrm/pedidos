@@ -156,7 +156,7 @@
       margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);
     }
     .carrusel-banners .carrusel-track, .carrusel-banners .carrusel-slide{height:100%;}
-    .carrusel-banners .carrusel-slide img{height:100%;aspect-ratio:auto;}
+    .carrusel-banners .carrusel-slide img{height:100%;aspect-ratio:auto;object-fit:contain;}
   }
   .carrusel-track{display:flex;transition:transform .45s ease;}
   .carrusel-slide{flex-shrink:0;}
@@ -326,18 +326,28 @@
   .desktop-search-cart{display:flex;flex-direction:column;}
   @media (min-width:1300px){
     .wrap{max-width:1600px;width:94%;}
-    .desktop-search-cart{flex-direction:row;align-items:flex-start;gap:24px;}
-    .desktop-search-cart #card-buscar{flex:1;min-width:0;}
+    .desktop-search-cart{flex-direction:row;align-items:flex-start;justify-content:center;gap:24px;}
+    .desktop-search-cart #card-buscar{flex:0 1 auto;min-width:0;}
     .desktop-search-cart #card-pedido{
       width:360px;flex-shrink:0;position:sticky;top:16px;
       max-height:calc(100vh - 32px);overflow-y:auto;
     }
+    /* El buscador ahora es angosto (se achica al contenido), pero el título "Armá tu
+       pedido" y la barra de "Forma de pago" seguían ocupando todo el ancho de la pantalla,
+       quedando desalineados. Los acotamos al mismo ancho aproximado y los centramos, y
+       además achicamos un poco el padding de la barra de forma de pago. */
+    .page-title, .pago-activo-pago, .banner-info-suave, #avisos-llegados-banner{
+      max-width:1584px;margin-left:auto;margin-right:auto;
+    }
+    .pago-activo-pago{padding:9px 14px;font-size:12.5px;}
+    .pago-activo-pago b{font-size:13.5px;}
     /* Carrito angosto: la foto+nombre van arriba, y cantidad/precio/quitar abajo en su
        propia fila (en vez de amontonarse todos en una sola fila muy angosta). */
     .desktop-search-cart #card-pedido .carrito-item{flex-direction:column;align-items:stretch;gap:8px;}
     .desktop-search-cart #card-pedido .ci-bottom{justify-content:space-between;padding-left:54px;}
-    /* Probando 4 columnas de productos en vez de las 3 que salían solas con auto-fill. */
-    .desktop-search-cart #card-buscar .resultados:not(.vista-lista){grid-template-columns:repeat(4,1fr);}
+    /* 4 columnas angostas y fijas (230px), pegadas entre sí — en vez de 4 columnas
+       anchas con la tarjeta chica flotando centrada adentro (dejaba huecos). */
+    .desktop-search-cart #card-buscar .resultados:not(.vista-lista){grid-template-columns:repeat(4,230px);justify-content:start;}
   }
   /* Pantallas muy anchas (monitores grandes): que siga creciendo en vez de quedarse
      fija con espacio en blanco de sobra a los costados. */
