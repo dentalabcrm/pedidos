@@ -388,6 +388,12 @@
 
   /* ── Vista LISTA: filas horizontales compactas (estilos .prod-row más abajo) ── */
   .resultados.vista-lista{display:flex;flex-direction:column;gap:8px;}
+  /* En celular, "auto-fill" a veces calculaba 1 sola columna (justo no entraban 2 de
+     150px) dejando tarjetas gigantes con mucho aire. Forzamos 2 columnas fijas en mobile,
+     que es lo que se espera de una "grilla". */
+  @media (max-width:639px){
+    .resultados:not(.vista-lista){grid-template-columns:repeat(2,1fr);}
+  }
   @media (min-width:640px){
     .resultados:not(.vista-lista){grid-template-columns:repeat(auto-fill,minmax(175px,1fr));}
   }
