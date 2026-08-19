@@ -938,8 +938,10 @@ let vistaProductos = (() => {
     const guardada = localStorage.getItem('dentalab_vista_productos');
     if (guardada === 'grilla' || guardada === 'lista') return guardada;
   } catch (e) {}
-  const _esMobileDefault = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '') || window.innerWidth < 720;
-  return _esMobileDefault ? 'lista' : 'grilla';
+  // Antes en mobile arrancaba en "lista" porque la grilla mostraba 1 sola tarjeta gigante
+  // por fila. Ahora que la grilla se ve en 2 columnas prolijas en mobile, arranca en
+  // "grilla" en todos los tamaños de pantalla (el cliente igual puede cambiarla).
+  return 'grilla';
 })();
 
 const MODALIDAD_LABEL = {
