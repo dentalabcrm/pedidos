@@ -694,6 +694,7 @@
       </div>
       <button class="btn-instalar" id="btn-instalar-app" onclick="abrirModalInstalar()" title="Instalar la app" style="display:none;">📲 Instalar app</button>
       <button class="btn-instalar" id="btn-qr-app" onclick="abrirModalQR()" title="Instalar en tu celular escaneando un QR" style="display:none;">📷 QR</button>
+      <button class="btn-instalar" id="btn-historial-pedidos" onclick="abrirHistorialPedidos()" title="Ver mis pedidos anteriores">🕐 Mis pedidos</button>
       <button class="btn-tema" id="btn-tema" onclick="toggleTemaOscuro()" title="Cambiar a modo nocturno">🌙</button>
     </div>
     <!-- ══ Modal: cómo instalar la app ══ -->
@@ -1164,6 +1165,134 @@ function _presuDocHtml(items){
       <div class="presu-doc-footer">Este presupuesto es informativo — para confirmarlo, completá tus datos y enviá el pedido más abajo.<br>Generado a través de <a href="https://dentalabcrm.github.io/pedidos/" target="_blank" style="color:#2563eb;">dentalabcrm.github.io/pedidos</a></div>
     </div>`;
 }
+
+// ── Historial de pedidos del cliente (guardado en su navegador, localStorage) ──
+// Cada vez que se envía un pedido con éxito, se guarda una copia acá: fecha, total y
+// productos. El cliente puede volver a verlo, "repetirlo" (se cargan esos productos al
+// carrito de nuevo, para modificar o sumar más) y borrar pedidos uno por uno o todos.
+const LS_HISTORIAL_PEDIDOS = 'dentalab_historial_pedidos';
+const HISTORIAL_MAX = 50; // tope de seguridad, para no dejar crecer el localStorage sin límite
+
+function _leerHistorialPedidos(){
+  try { return JSON.parse(localStorage.getItem(LS_HISTORIAL_PEDIDOS) || '[]'); }
+  catch (e) { return []; }
+}
+function _guardarPedidoEnHistorial(items, total, payload){
+  try {
+    const historial = _leerHistorialPedidos();
+    historial.unshift({
+      fecha: Date.now(),
+      total,
+      items: items.map(it => ({ sku: it.sku, nombre: it.nombre, precio: it.precio, qty: it.qty })),
+      formaPago: payload?.formaPago || '',
+      modalidadEntrega: payload?.modalidadEntrega || '',
+    });
+    if (historial.length > HISTORIAL_MAX) historial.length = HISTORIAL_MAX;
+    localStorage.setItem(LS_HISTORIAL_PEDIDOS, JSON.stringify(historial));
+  } catch (e) { /* si falla el guardado (ej. localStorage lleno), no cortar el flujo del pedido */ }
+}
+
+function _htmlHistorialLista(){
+  const historial = _leerHistorialPedidos();
+  if (!historial.length) {
+    return `<div style="text-align:center;padding:40px 20px;color:var(--text3);">
+      <div style="font-size:40px;margin-bottom:10px;">🕐</div>
+      <div style="font-size:14px;">Todavía no hiciste ningún pedido desde este celular/navegador.</div>
+    </div>`;
+  }
+  return historial.map((pedido, idx) => {
+    const fechaTxt = new Date(pedido.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const preview = pedido.items.slice(0, 2).map(it => escHtml(it.nombre)).join(', ');
+    const resto = pedido.items.length > 2 ? ` y ${pedido.items.length - 2} más` : '';
+    return `
+      <div class="card" style="margin-bottom:12px;padding:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+          <div>
+            <div style="font-size:12.5px;color:var(--text3);font-weight:600;">${fechaTxt}</div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);margin-top:3px;">${pedido.items.length} producto${pedido.items.length === 1 ? '' : 's'} — ${fmtMoney(pedido.total)}</div>
+            <div style="font-size:12.5px;color:var(--text2);margin-top:3px;">${preview}${resto}</div>
+          </div>
+          <button onclick="_historialBorrarUno(${idx})" title="Borrar este pedido" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:2px 4px;flex-shrink:0;">🗑️</button>
+        </div>
+        <button onclick="_historialRepetirPedido(${idx})" style="width:100%;margin-top:12px;background:var(--blue);border:none;border-radius:9px;padding:10px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">🔁 Volver a pedir esto</button>
+      </div>`;
+  }).join('');
+}
+
+window.abrirHistorialPedidos = () => {
+  document.getElementById('historial-backdrop')?.remove();
+  const bd = document.createElement('div');
+  bd.id = 'historial-backdrop';
+  bd.className = 'pwfin-backdrop';
+  const historial = _leerHistorialPedidos();
+  bd.innerHTML = `
+    <div class="pwfin-panel" style="max-width:520px;">
+      <div class="pwfin-header">
+        <div class="pwfin-title">🕐 Mis pedidos anteriores</div>
+        <button class="pwfin-close" onclick="document.getElementById('historial-backdrop')?.remove()">✕</button>
+      </div>
+      <div class="pwfin-body" style="max-height:70vh;overflow-y:auto;">
+        ${_htmlHistorialLista()}
+      </div>
+      ${historial.length ? `<div style="padding:14px 20px;border-top:1px solid var(--border);">
+        <button onclick="_historialBorrarTodo()" style="width:100%;background:transparent;border:1px solid var(--red);border-radius:10px;padding:10px;color:var(--red);font-size:13px;font-weight:700;cursor:pointer;">🗑️ Borrar todo el historial</button>
+      </div>` : ''}
+    </div>`;
+  document.body.appendChild(bd);
+  bd.addEventListener('click', e => { if (e.target === bd) bd.remove(); });
+};
+
+window._historialBorrarUno = (idx) => {
+  if (!confirm('¿Borrar este pedido del historial? Esto no borra el pedido ya enviado a Dentalab, solo el registro en tu navegador.')) return;
+  const historial = _leerHistorialPedidos();
+  historial.splice(idx, 1);
+  localStorage.setItem(LS_HISTORIAL_PEDIDOS, JSON.stringify(historial));
+  abrirHistorialPedidos(); // re-render
+};
+window._historialBorrarTodo = () => {
+  if (!confirm('¿Borrar TODO tu historial de pedidos? Esta acción no se puede deshacer.')) return;
+  localStorage.removeItem(LS_HISTORIAL_PEDIDOS);
+  abrirHistorialPedidos(); // re-render (queda vacío)
+};
+
+// "Volver a pedir": revisa cada producto del pedido guardado contra el catálogo actual.
+// Si sigue existiendo y tiene precio, lo suma al carrito actual (no lo reemplaza, así el
+// cliente puede combinarlo con lo que ya tenía armado). Si no existe más o está agotado,
+// se lo salta y le avisa al final con el detalle.
+window._historialRepetirPedido = (idx) => {
+  const historial = _leerHistorialPedidos();
+  const pedido = historial[idx];
+  if (!pedido) return;
+
+  const agregados = [];
+  const agotados = [];
+  const yaNoExisten = [];
+
+  pedido.items.forEach(it => {
+    const prod = catalogoBySku.get(it.sku);
+    if (!prod) { yaNoExisten.push(it.nombre); return; }
+    if (prod.st) { agotados.push(prod.n); return; }
+    const actual = carrito.get(prod.s) || 0;
+    carrito.set(prod.s, actual + it.qty);
+    agregados.push(prod.n);
+  });
+
+  _guardarCarritoLS();
+  renderCarrito();
+  if (typeof renderResultados === 'function') renderResultados();
+  document.getElementById('historial-backdrop')?.remove();
+
+  if (agregados.length) {
+    document.getElementById('card-pedido')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  if (agotados.length || yaNoExisten.length) {
+    let aviso = '';
+    if (agotados.length) aviso += `⚠️ Sin stock ahora mismo, no se agregaron:\n• ${agotados.join('\n• ')}\n\n`;
+    if (yaNoExisten.length) aviso += `⚠️ Ya no están en el catálogo:\n• ${yaNoExisten.join('\n• ')}\n\n`;
+    if (agregados.length) aviso += `✓ Se agregaron ${agregados.length} producto${agregados.length === 1 ? '' : 's'} al carrito.`;
+    alert(aviso.trim());
+  }
+};
 
 window.abrirVistaPresupuesto = () => {
   const items = _presuItems();
@@ -4004,6 +4133,7 @@ window.enviarPedido = async () => {
 
   try {
     await db.ref('dentalab/pedidos_web/' + id).set(payload);
+    _guardarPedidoEnHistorial(items, total, payload);
     _limpiarPedidoLS();
     const avisoRetiro = modalidadEntrega === 'retiro'
       ? `<div class="estado-msg" style="background:rgba(217,119,6,.08);border:1px solid rgba(217,119,6,.3);color:#92400e;margin-top:10px;text-align:left;">
