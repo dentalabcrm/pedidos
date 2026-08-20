@@ -3239,7 +3239,7 @@ function renderResultados(){
     // cliente). Se ve aunque la tarjeta diga "Agotado" o "Stock a confirmar", para que el
     // admin sepa exactamente cuánto hay en cada lado sin tener que ir al CRM.
     const stockAdminHtml = esAdminCatalogo() && (it.d1 !== undefined || it.dc !== undefined)
-      ? `<div class="prod-stock-admin" title="Solo vos ves esto — stock real por depósito">📦 Dep. 1: <b>${it.d1 ?? 0}</b> · Central: <b>${it.dc ?? 0}</b></div>`
+      ? `<div class="prod-stock-admin" title="Solo vos ves esto — stock real por depósito">📦 Local: <b>${it.d1 ?? 0}</b> · Dep. C: <b>${it.dc ?? 0}</b></div>`
       : '';
     const cuotasHtml = (listaActiva === 'p2' && precio && !it.cp && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}')">💳 Ver cuotas</button>` : '';
     const categoriaHtml = it.g
