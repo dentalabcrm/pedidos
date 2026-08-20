@@ -4150,6 +4150,7 @@ window.enviarPedido = async () => {
     renderCarrito();
     if (typeof renderResultados === 'function') renderResultados();
     btn.style.display = ''; // vuelve a mostrarse (quedará deshabilitado hasta que agregue algo nuevo)
+    btn.textContent = '✓ Enviar pedido a Dentalab'; // si no, quedaba diciendo "Enviando…" para siempre
 
     const WA_NUM = '5491168714595';
     let msg = `Hola!${nombre ? ' Soy ' + nombre + '.' : ''} Armé mi pedido por el link de WhatsApp — ${payload.modalidadEntrega}, ${payload.formaPago}, por un total de ${fmtMoney(total)}.`;
