@@ -1316,6 +1316,11 @@ window.abrirZoomProducto = (sku) => {
         background:rgba(15,23,42,.55);color:#fff;border:none;font-size:16px;cursor:pointer;
         display:flex;align-items:center;justify-content:center;
       ">✕</button>
+      <button id="zoom-prod-copy" onclick="_zoomCopiarTarjeta('${escHtml(it.s)}')" title="Copiar foto + nombre + precio (Ctrl+C) para pegar en WhatsApp" style="
+        position:absolute;top:12px;left:12px;z-index:2;height:34px;padding:0 14px;border-radius:17px;
+        background:rgba(15,23,42,.55);color:#fff;border:none;font-size:12.5px;font-weight:700;cursor:pointer;
+        display:flex;align-items:center;gap:6px;
+      ">📋 Copiar</button>
       <div id="zoom-prod-carrusel" class="prod-carrusel" style="position:relative;background:#f4f6fa;border-radius:18px 18px 0 0;overflow:hidden;">
         ${imgsArr.length
           ? `<div class="prod-carrusel-track" id="zoom-prod-track" onscroll="_carruselOnScroll(this)" style="display:flex;overflow-x:auto;scroll-snap-type:x mandatory;">
@@ -1349,6 +1354,116 @@ window.abrirZoomProducto = (sku) => {
     </div>`;
   document.body.appendChild(bd);
   bd.addEventListener('click', e => { if (e.target === bd) bd.remove(); });
+
+  // Ctrl+C mientras el modal está abierto = copiar la tarjeta (igual que tocar "📋 Copiar").
+  // Si el foco está en un campo de texto, se deja el copiar normal del navegador.
+  document.addEventListener('keydown', function onCtrlC(e) {
+    if (!document.body.contains(bd)) { document.removeEventListener('keydown', onCtrlC); return; }
+    const enCampoDeTexto = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
+    if (enCampoDeTexto) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+      e.preventDefault();
+      document.getElementById('zoom-prod-copy')?.click();
+    }
+  });
+};
+
+// Arma una imagen (foto + SKU + nombre + categoría + precio + aclaración de pago), igual a
+// como se ve la tarjeta del modal grande, y la copia al portapapeles — para pegarla directo
+// en WhatsApp, mail, etc. con Ctrl+V, sin tener que sacar captura de pantalla a mano.
+window._zoomCopiarTarjeta = async (sku) => {
+  const it = catalogoBySku.get(sku);
+  const btn = document.getElementById('zoom-prod-copy');
+  if (!it || !btn) return;
+  const original = btn.innerHTML;
+  btn.innerHTML = 'Copiando…'; btn.disabled = true;
+  try {
+    if (!navigator.clipboard || !window.ClipboardItem) throw new Error('Este navegador no admite copiar imágenes al portapapeles');
+
+    const precio = precioDe(it);
+    const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
+    const notaPago = it.cp ? '' : (listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago');
+
+    // Cargar la foto (si tiene) como imagen "cargable en canvas" antes de medir el alto total.
+    let imgEl = null;
+    if (imgsArr.length) {
+      imgEl = await new Promise((resolve) => {
+        const im = new Image();
+        im.crossOrigin = 'anonymous';
+        im.onload = () => resolve(im);
+        im.onerror = () => resolve(null); // sin foto disponible → seguimos igual, solo con el texto
+        im.src = `https://drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w900`;
+      });
+    }
+
+    const W = 640, PAD = 26;
+    const medidor = document.createElement('canvas').getContext('2d');
+    const _wrap = (texto, fuente, maxWidth) => {
+      medidor.font = fuente;
+      const palabras = texto.split(' ');
+      const lineas = []; let linea = '';
+      palabras.forEach(p => {
+        const prueba = linea ? linea + ' ' + p : p;
+        if (medidor.measureText(prueba).width > maxWidth && linea) { lineas.push(linea); linea = p; }
+        else linea = prueba;
+      });
+      if (linea) lineas.push(linea);
+      return lineas;
+    };
+
+    const lineasNombre = _wrap(it.n, '800 21px DM Sans, sans-serif', W - PAD * 2);
+    const imgH = imgEl ? W : 0; // la foto se muestra cuadrada (1:1), igual que en el modal
+    let alto = imgH + PAD * 1.4 + 16 /*sku*/ + lineasNombre.length * 27 + (it.g ? 20 : 0) + 14 + 40 /*precio*/ + (notaPago ? 20 : 0) + PAD;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = Math.ceil(alto);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    let y = 0;
+    if (imgEl) {
+      // "object-fit:contain" a mano, centrado, sobre un fondo clarito como en el modal
+      ctx.fillStyle = '#f4f6fa'; ctx.fillRect(0, 0, W, W);
+      const ratio = Math.min(W / imgEl.width, W / imgEl.height);
+      const iw = imgEl.width * ratio, ih = imgEl.height * ratio;
+      ctx.drawImage(imgEl, (W - iw) / 2, (W - ih) / 2, iw, ih);
+      y = W + PAD * 0.9;
+    } else {
+      y = PAD;
+    }
+
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#8592a6'; ctx.font = '12px DM Mono, monospace';
+    ctx.fillText(it.s, PAD, y); y += 24;
+
+    ctx.fillStyle = '#0f172a'; ctx.font = '800 21px DM Sans, sans-serif';
+    lineasNombre.forEach(l => { ctx.fillText(l, PAD, y); y += 27; });
+
+    if (it.g) {
+      y += 2;
+      ctx.fillStyle = '#0284c7'; ctx.font = '600 13px DM Sans, sans-serif';
+      ctx.fillText(it.g + (it.sg ? ' › ' + it.sg : ''), PAD, y); y += 20;
+    }
+    y += 16;
+
+    ctx.fillStyle = '#0f172a'; ctx.font = '800 30px DM Sans, sans-serif';
+    ctx.fillText(it.cp ? 'Consultar precio' : fmtMoney(precio), PAD, y);
+    if (notaPago) {
+      y += 20;
+      ctx.fillStyle = '#8592a6'; ctx.font = '11.5px DM Sans, sans-serif';
+      ctx.fillText(notaPago, PAD, y);
+    }
+
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    if (!blob) throw new Error('No se pudo generar la imagen');
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    btn.innerHTML = '✓ Copiado';
+    setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 1500);
+  } catch (e) {
+    console.error('[Copiar tarjeta] Error:', e);
+    alert('No se pudo copiar la imagen: ' + (e.message || e));
+    btn.innerHTML = original; btn.disabled = false;
+  }
 };
 
 // ── "Avisarme cuando vuelva a ingresar" (producto agotado) ──
