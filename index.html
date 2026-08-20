@@ -1342,7 +1342,6 @@ window.abrirZoomProducto = (sku) => {
         <div class="prod-sku" style="margin-bottom:4px;">${escHtml(it.s)}</div>
         <div style="font-size:19px;font-weight:800;color:var(--text);line-height:1.35;margin-bottom:10px;">${escHtml(it.n)}</div>
         ${it.g ? `<div class="prod-categoria" style="margin-bottom:10px;">${escHtml(it.g)}${it.sg ? ` › ${escHtml(it.sg)}` : ''}</div>` : ''}
-        ${esAdminCatalogo() && (it.d1 !== undefined || it.dc !== undefined) ? `<div class="prod-stock-admin" title="Solo vos ves esto — stock real por depósito" style="margin-bottom:10px;">📦 Dep. 1: <b>${it.d1 ?? 0}</b> · Central: <b>${it.dc ?? 0}</b></div>` : ''}
         <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:16px;">
           <div>
             <div style="font-size:26px;font-weight:800;color:var(--text);">${it.cp ? '<span class="prod-consultar">Consultar precio</span>' : fmtMoney(precio)}</div>
