@@ -1384,16 +1384,26 @@ window._zoomCopiarTarjeta = async (sku) => {
     const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
     const notaPago = it.cp ? '' : (listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago');
 
-    // Cargar la foto (si tiene) como imagen "cargable en canvas" antes de medir el alto total.
+    // Cargar la foto (si tiene) antes de medir el alto total. Se baja primero con fetch()
+    // y se convierte a blob local — cargarla directo como <img crossOrigin> a veces falla
+    // por los redireccionamientos internos que hace Google Drive.
     let imgEl = null;
     if (imgsArr.length) {
-      imgEl = await new Promise((resolve) => {
-        const im = new Image();
-        im.crossOrigin = 'anonymous';
-        im.onload = () => resolve(im);
-        im.onerror = () => resolve(null); // sin foto disponible → seguimos igual, solo con el texto
-        im.src = `https://drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w900`;
-      });
+      try {
+        const resp = await fetch(`https://drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w900`);
+        if (resp.ok) {
+          const blobFoto = await resp.blob();
+          const urlFoto = URL.createObjectURL(blobFoto);
+          imgEl = await new Promise((resolve) => {
+            const im = new Image();
+            im.onload = () => resolve(im);
+            im.onerror = () => resolve(null);
+            im.src = urlFoto;
+          });
+        }
+      } catch (e) {
+        console.warn('[Copiar tarjeta] No se pudo bajar la foto, se copia solo el texto:', e.message);
+      }
     }
 
     const W = 640, PAD = 26;
@@ -1457,8 +1467,13 @@ window._zoomCopiarTarjeta = async (sku) => {
     const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
     if (!blob) throw new Error('No se pudo generar la imagen');
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-    btn.innerHTML = '✓ Copiado';
-    setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 1500);
+    if (imgsArr.length && !imgEl) {
+      btn.innerHTML = '⚠ Copiado sin la foto';
+      setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 2200);
+    } else {
+      btn.innerHTML = '✓ Copiado';
+      setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 1500);
+    }
   } catch (e) {
     console.error('[Copiar tarjeta] Error:', e);
     alert('No se pudo copiar la imagen: ' + (e.message || e));
