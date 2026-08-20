@@ -470,6 +470,11 @@
   .prod-avisar-link{background:none;border:none;color:var(--blue);font-size:10.5px;font-weight:700;cursor:pointer;padding:0;margin-top:3px;text-align:left;text-decoration:underline;text-underline-offset:2px;}
   .prod-avisar-link:hover{opacity:.75;}
   .prod-stock-en{font-size:10px;color:var(--green);font-weight:600;margin-top:2px;}
+  .prod-stock-admin{
+    font-size:9.5px;color:#7c3aed;font-weight:700;margin-top:3px;
+    background:#7c3aed12;border:1px solid #7c3aed30;border-radius:5px;padding:2px 6px;
+    display:inline-block;font-family:'DM Mono',monospace;
+  }
   .prod-restock-badge{
     display:inline-flex;align-items:center;font-size:10px;font-weight:800;color:var(--blue);
     background:rgba(2,132,199,.12);border:1px solid rgba(2,132,199,.4);border-radius:5px;
@@ -1337,6 +1342,7 @@ window.abrirZoomProducto = (sku) => {
         <div class="prod-sku" style="margin-bottom:4px;">${escHtml(it.s)}</div>
         <div style="font-size:19px;font-weight:800;color:var(--text);line-height:1.35;margin-bottom:10px;">${escHtml(it.n)}</div>
         ${it.g ? `<div class="prod-categoria" style="margin-bottom:10px;">${escHtml(it.g)}${it.sg ? ` › ${escHtml(it.sg)}` : ''}</div>` : ''}
+        ${esAdminCatalogo() && (it.d1 !== undefined || it.dc !== undefined) ? `<div class="prod-stock-admin" title="Solo vos ves esto — stock real por depósito" style="margin-bottom:10px;">📦 Dep. 1: <b>${it.d1 ?? 0}</b> · Central: <b>${it.dc ?? 0}</b></div>` : ''}
         <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:16px;">
           <div>
             <div style="font-size:26px;font-weight:800;color:var(--text);">${it.cp ? '<span class="prod-consultar">Consultar precio</span>' : fmtMoney(precio)}</div>
@@ -3165,6 +3171,12 @@ function renderResultados(){
       : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>`
       : it.restockedAt ? `<div class="prod-stock-en">En stock</div><div class="prod-restock-badge">🎉 ¡Disponible${vistaProductos === 'grilla' ? '!' : ' otra vez!'}</div>`
       : `<div class="prod-stock-en">En stock</div>`;
+    // Solo para admin: el desglose real de stock por depósito (nunca se le muestra al
+    // cliente). Se ve aunque la tarjeta diga "Agotado" o "Stock a confirmar", para que el
+    // admin sepa exactamente cuánto hay en cada lado sin tener que ir al CRM.
+    const stockAdminHtml = esAdminCatalogo() && (it.d1 !== undefined || it.dc !== undefined)
+      ? `<div class="prod-stock-admin" title="Solo vos ves esto — stock real por depósito">📦 Dep. 1: <b>${it.d1 ?? 0}</b> · Central: <b>${it.dc ?? 0}</b></div>`
+      : '';
     const cuotasHtml = (listaActiva === 'p2' && precio && !it.cp && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}')">💳 Ver cuotas</button>` : '';
     const categoriaHtml = it.g
       ? `<div class="prod-categoria">
@@ -3194,6 +3206,7 @@ function renderResultados(){
             ${categoriaHtml}
             ${it.of ? `<div class="prod-oferta">🏷️ Oferta</div>` : ''}
             ${stockHtml}
+            ${stockAdminHtml}
           </div>
           <div class="prod-precio-col">
             <div class="prod-precio">${it.cp ? '<span class="prod-consultar">Consultar precio</span>' : fmtMoney(precio)}</div>
@@ -3234,6 +3247,7 @@ function renderResultados(){
           ${categoriaHtml}
           ${it.of ? `<div class="prod-oferta">🏷️ Oferta</div>` : ''}
           ${stockHtml}
+          ${stockAdminHtml}
           <div class="prod-card-precio-row">
             <div class="prod-precio">${it.cp ? '<span class="prod-consultar">Consultar precio</span>' : fmtMoney(precio)}</div>
             ${qtyEnCarrito === 0 ? control : ''}
