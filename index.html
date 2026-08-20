@@ -415,6 +415,13 @@
     outline:2px dashed var(--blue,#0284c7);outline-offset:2px;background:rgba(2,132,199,.06);
   }
   .prod-card-admin{position:absolute;top:6px;right:6px;display:flex;gap:4px;z-index:2;}
+  .prod-card-zoom{
+    position:absolute;top:6px;left:6px;z-index:2;width:30px;height:30px;border-radius:50%;
+    background:rgba(15,23,42,.55);color:#fff;border:none;font-size:15px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px);
+    transition:background .15s,transform .15s;
+  }
+  .prod-card-zoom:hover{background:rgba(2,132,199,.85);transform:scale(1.08);}
   .prod-card-admin button, .prod-card-admin input{background:var(--panel);border:1px solid var(--border);border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.25);}
   .prod-card-admin button{font-size:12px;cursor:pointer;padding:3px 5px;line-height:1;}
   .prod-card-body{flex:1;display:flex;flex-direction:column;}
@@ -1284,6 +1291,57 @@ window.descargarPresupuestoPDF = async () => {
   } finally {
     btn.textContent = orig; btn.disabled = false;
   }
+};
+
+// ── Ver producto en grande (lupa sobre la foto) ──
+// Muestra la foto a pantalla completa junto con el nombre completo (sin cortar) y el
+// precio, para que el cliente pueda ver bien el detalle antes de agregarlo.
+window.abrirZoomProducto = (sku) => {
+  const it = catalogoBySku.get(sku);
+  if (!it) return;
+  document.getElementById('zoom-prod-backdrop')?.remove();
+
+  const precio = precioDe(it);
+  const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
+  const qtyEnCarrito = carrito.get(it.s) || 0;
+  const puedeAgregar = !!precio && !it.st;
+
+  const bd = document.createElement('div');
+  bd.id = 'zoom-prod-backdrop';
+  bd.className = 'pwfin-backdrop';
+  bd.innerHTML = `
+    <div style="background:#fff;border-radius:18px;width:100%;max-width:640px;max-height:92vh;overflow-y:auto;position:relative;">
+      <button onclick="document.getElementById('zoom-prod-backdrop')?.remove()" style="
+        position:absolute;top:12px;right:12px;z-index:2;width:34px;height:34px;border-radius:50%;
+        background:rgba(15,23,42,.55);color:#fff;border:none;font-size:16px;cursor:pointer;
+        display:flex;align-items:center;justify-content:center;
+      ">✕</button>
+      <div id="zoom-prod-carrusel" style="position:relative;background:#f4f6fa;border-radius:18px 18px 0 0;overflow:hidden;">
+        ${imgsArr.length
+          ? `<div style="display:flex;overflow-x:auto;scroll-snap-type:x mandatory;" id="zoom-prod-track">
+              ${imgsArr.map(id => `<img src="https://drive.google.com/thumbnail?id=${id}&sz=w900" style="width:100%;flex-shrink:0;scroll-snap-align:start;aspect-ratio:1/1;object-fit:contain;background:#fff;" alt="">`).join('')}
+             </div>`
+          : `<div style="aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;font-size:64px;opacity:.3;">🦷</div>`}
+        ${imgsArr.length > 1 ? `<div style="text-align:center;font-size:11.5px;color:var(--text3);padding:6px;">⟷ Deslizá para ver más fotos (${imgsArr.length})</div>` : ''}
+      </div>
+      <div style="padding:20px 22px 24px;">
+        <div class="prod-sku" style="margin-bottom:4px;">${escHtml(it.s)}</div>
+        <div style="font-size:19px;font-weight:800;color:var(--text);line-height:1.35;margin-bottom:10px;">${escHtml(it.n)}</div>
+        ${it.g ? `<div class="prod-categoria" style="margin-bottom:10px;">${escHtml(it.g)}${it.sg ? ` › ${escHtml(it.sg)}` : ''}</div>` : ''}
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:16px;">
+          <div style="font-size:26px;font-weight:800;color:var(--text);">${it.cp ? '<span class="prod-consultar">Consultar precio</span>' : fmtMoney(precio)}</div>
+          ${qtyEnCarrito > 0
+            ? `<div class="qty-stepper prod-qty" style="transform:scale(1.15);transform-origin:right;">
+                 <button onclick="cambiarQtyCarrito('${it.s}', -1); abrirZoomProducto('${it.s}')">−</button>
+                 <input type="number" class="qty-val" min="1" step="1" value="${qtyEnCarrito}" onchange="setQtyCarrito('${it.s}', this.value); abrirZoomProducto('${it.s}')" onclick="this.select()">
+                 <button onclick="cambiarQtyCarrito('${it.s}', 1); abrirZoomProducto('${it.s}')">+</button>
+               </div>`
+            : `<button class="prod-add" style="width:44px;height:44px;font-size:22px;" onclick="agregarAlCarrito('${it.s}'); abrirZoomProducto('${it.s}')" ${!puedeAgregar ? `disabled title="${it.st ? 'Sin stock disponible' : (it.cp ? 'Consultar precio por WhatsApp' : 'Sin precio en esta lista')}"` : ''}>+</button>`}
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(bd);
+  bd.addEventListener('click', e => { if (e.target === bd) bd.remove(); });
 };
 
 // ── "Avisarme cuando vuelva a ingresar" (producto agotado) ──
@@ -3021,9 +3079,10 @@ function renderResultados(){
           ${imgsArr.length ? `<button onclick="event.stopPropagation(); adminBorrarFotoProducto('${escHtml(it.s)}')" title="Borrar foto${imgsArr.length > 1 ? ' (elegir cuál)' : ''}">🗑️</button>` : ''}
          </div>`;
     const claseTarjeta = `prod-card${(puedeAgregar || qtyEnCarrito > 0) ? ' prod-card-clickeable' : ''}${qtyEnCarrito > 0 ? ' prod-card-en-carrito' : ''}${it.st ? ' prod-card-agotado' : ''}`;
+    const zoomBtn = (imgsArr.length ? `<button class="prod-card-zoom" onclick="event.stopPropagation(); abrirZoomProducto('${escHtml(it.s)}')" title="Ver más grande">🔍</button>` : '');
     return `
       <div class="${claseTarjeta}"${clickeable} ondragover="_fotoDragOver(event, this)" ondragleave="_fotoDragLeave(this)" ondrop="_fotoDrop(event, '${escHtml(it.s)}', this)" onmouseenter="_fotoHoverSet('${escHtml(it.s)}')" onmouseleave="_fotoHoverClear('${escHtml(it.s)}')">
-        <div style="position:relative;">${foto}${adminIcons}</div>
+        <div style="position:relative;">${foto}${adminIcons}${zoomBtn}</div>
         <div class="prod-card-body">
           <div class="prod-sku">${escHtml(it.s)}</div>
           <div class="prod-nombre">${escHtml(it.n)}</div>
