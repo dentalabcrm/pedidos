@@ -1384,13 +1384,16 @@ window._zoomCopiarTarjeta = async (sku) => {
     const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
     const notaPago = it.cp ? '' : (listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago');
 
-    // Cargar la foto (si tiene) antes de medir el alto total. Se baja primero con fetch()
-    // y se convierte a blob local — cargarla directo como <img crossOrigin> a veces falla
-    // por los redireccionamientos internos que hace Google Drive.
+    // Cargar la foto (si tiene) antes de medir el alto total. Google Drive no da permiso
+    // (CORS) para "leer" la imagen directo desde el navegador, así que la pasamos por un
+    // servicio intermedio (images.weserv.nl) que sí lo permite — es lo mismo que usan
+    // muchas apps para poder dibujar imágenes externas en un canvas.
     let imgEl = null;
     if (imgsArr.length) {
       try {
-        const resp = await fetch(`https://drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w900`);
+        const original = `drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w900`;
+        const proxiedUrl = `https://images.weserv.nl/?url=${encodeURIComponent(original)}`;
+        const resp = await fetch(proxiedUrl);
         if (resp.ok) {
           const blobFoto = await resp.blob();
           const urlFoto = URL.createObjectURL(blobFoto);
