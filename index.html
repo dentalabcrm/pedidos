@@ -1329,7 +1329,10 @@ window.abrirZoomProducto = (sku) => {
         <div style="font-size:19px;font-weight:800;color:var(--text);line-height:1.35;margin-bottom:10px;">${escHtml(it.n)}</div>
         ${it.g ? `<div class="prod-categoria" style="margin-bottom:10px;">${escHtml(it.g)}${it.sg ? ` › ${escHtml(it.sg)}` : ''}</div>` : ''}
         <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:16px;">
-          <div style="font-size:26px;font-weight:800;color:var(--text);">${it.cp ? '<span class="prod-consultar">Consultar precio</span>' : fmtMoney(precio)}</div>
+          <div>
+            <div style="font-size:26px;font-weight:800;color:var(--text);">${it.cp ? '<span class="prod-consultar">Consultar precio</span>' : fmtMoney(precio)}</div>
+            ${!it.cp ? `<div style="font-size:11.5px;color:var(--text3);margin-top:2px;">${listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago'}</div>` : ''}
+          </div>
           ${qtyEnCarrito > 0
             ? `<div class="qty-stepper prod-qty" style="transform:scale(1.15);transform-origin:right;">
                  <button onclick="cambiarQtyCarrito('${it.s}', -1); abrirZoomProducto('${it.s}')">−</button>
@@ -3031,7 +3034,7 @@ function renderResultados(){
     if (vistaProductos === 'lista') {
       // ── Vista LISTA: fila horizontal compacta (formato original) ──
       const foto = it.img
-        ? `<img class="prod-foto" src="https://drive.google.com/thumbnail?id=${it.img}&sz=w150" alt="" loading="lazy" title="Ver foto completa" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); window.open('https://drive.google.com/file/d/${it.img}/view', '_blank')" onerror="manejarErrorFotoProducto(this)">`
+        ? `<img class="prod-foto" src="https://drive.google.com/thumbnail?id=${it.img}&sz=w150" alt="" loading="lazy" title="Ver más grande" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirZoomProducto('${escHtml(it.s)}')" onerror="manejarErrorFotoProducto(this)">`
         : `<div class="prod-foto prod-foto-vacia" style="cursor:pointer;" title="Buscar foto en Drive" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirFotoProducto(this)">🦷</div>`;
       const adminIcons = !esAdminCatalogo() ? '' : _modoSeleccionFotos
         ? (it.img ? `<div style="display:flex;align-items:center;margin-right:4px;"><input type="checkbox" ${_fotosSeleccionadas.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionFoto('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>` : '')
