@@ -4142,7 +4142,14 @@ window.enviarPedido = async () => {
       : '';
     document.getElementById('estado-msg').innerHTML =
       `<div class="estado-msg ok">✓ ¡Listo! Te llevamos a WhatsApp para avisarle a Dentalab…</div>${avisoRetiro}`;
-    btn.style.display = 'none';
+
+    // Vaciar el carrito EN MEMORIA (no solo el localStorage) para que el cliente pueda
+    // armar un pedido nuevo de inmediato, sin quedar trabado viendo el pedido que ya
+    // mandó. El mensaje de confirmación de arriba se mantiene igual.
+    carrito.clear();
+    renderCarrito();
+    if (typeof renderResultados === 'function') renderResultados();
+    btn.style.display = ''; // vuelve a mostrarse (quedará deshabilitado hasta que agregue algo nuevo)
 
     const WA_NUM = '5491168714595';
     let msg = `Hola!${nombre ? ' Soy ' + nombre + '.' : ''} Armé mi pedido por el link de WhatsApp — ${payload.modalidadEntrega}, ${payload.formaPago}, por un total de ${fmtMoney(total)}.`;
