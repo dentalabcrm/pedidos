@@ -378,6 +378,9 @@
   .prod-card-clickeable{cursor:pointer;transition:background .12s,border-color .12s;}
   .prod-card-clickeable:active{background:#bfdbfe;}
   .prod-card-en-carrito{background:#dbeafe;border-color:var(--blue);border-width:2px;}
+  /* Cursor de navegación con teclado (solo admin) — distinto del resaltado de "ya está en
+     el carrito", para que se note cuál es el que se mueve con las flechas. */
+  .prod-nav-cursor{outline:3px solid #7c3aed !important;outline-offset:-1px;box-shadow:0 0 0 5px #7c3aed26 !important;}
   .prod-card-agotado{background:#fef2f2;border-color:#fecaca;}
   .prod-card-agotado .prod-nombre{text-decoration:line-through;text-decoration-color:var(--text3);color:var(--text3);}
   .prod-card-agotado .prod-precio{text-decoration:line-through;text-decoration-color:var(--text3);color:var(--text3);}
@@ -2935,6 +2938,68 @@ function _buscarGrupoEspecial(tokens){
   return null;
 }
 
+// ── Navegación con teclado en modo administrador (igual que en la Lista de Precios del
+// CRM): ↑/↓ para moverte entre productos visibles, Enter para agregar/quitar del pedido,
+// y Tab para abrir la Vista previa del presupuesto — todo esto solo corre si esAdminCatalogo().
+let _adminNavSkus = [];   // SKUs en el orden en que se ven en pantalla ahora mismo
+let _adminNavIdx = -1;    // índice del "cursor" actual dentro de _adminNavSkus
+
+function _adminNavActualizarLista(){
+  _adminNavSkus = Array.from(document.querySelectorAll('#resultados [data-sku]')).map(el => el.dataset.sku);
+  if (_adminNavIdx >= _adminNavSkus.length) _adminNavIdx = _adminNavSkus.length - 1;
+}
+function _adminNavPintar(){
+  document.querySelectorAll('.prod-nav-cursor').forEach(el => el.classList.remove('prod-nav-cursor'));
+  if (_adminNavIdx < 0 || _adminNavIdx >= _adminNavSkus.length) return;
+  const sku = _adminNavSkus[_adminNavIdx];
+  const el = document.querySelector(`#resultados [data-sku="${CSS.escape(sku)}"]`);
+  if (el) { el.classList.add('prod-nav-cursor'); el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+}
+function _adminNavHayModalAbierto(){
+  return !!document.querySelector(
+    '#zoom-prod-backdrop, #presu-backdrop, #avisarme-backdrop, .pwfin-backdrop, #cuotas-backdrop'
+  );
+}
+document.addEventListener('keydown', (e) => {
+  if (!esAdminCatalogo()) return;
+  if (_adminNavHayModalAbierto()) return; // no interferir con un modal ya abierto
+
+  const activeEl = document.activeElement;
+  const activeTag = activeEl?.tagName;
+  const enBuscador = activeEl?.id === 'input-busqueda';
+  const enInputGenerico = ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag) && !enBuscador;
+
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (enInputGenerico) return; // dejar que las flechas funcionen normal en otros campos
+    e.preventDefault();
+    _adminNavActualizarLista();
+    if (!_adminNavSkus.length) return;
+    if (_adminNavIdx === -1) _adminNavIdx = 0;
+    else if (e.key === 'ArrowDown') _adminNavIdx = Math.min(_adminNavIdx + 1, _adminNavSkus.length - 1);
+    else _adminNavIdx = Math.max(_adminNavIdx - 1, 0);
+    _adminNavPintar();
+    return;
+  }
+
+  if (e.key === 'Enter') {
+    if (enInputGenerico) return;
+    if (_adminNavIdx < 0 || _adminNavIdx >= _adminNavSkus.length) return;
+    e.preventDefault();
+    const sku = _adminNavSkus[_adminNavIdx];
+    if (carrito.get(sku) > 0) quitarDelCarrito(sku);
+    else agregarAlCarrito(sku);
+    return;
+  }
+
+  if (e.key === 'Tab') {
+    if (enInputGenerico) return; // dejar Tab normal en campos de texto (nombre, DNI, etc.)
+    if (!carrito.size) return;   // nada que ver como presupuesto
+    e.preventDefault();
+    activeEl?.blur?.();
+    abrirVistaPresupuesto();
+  }
+});
+
 function buscarProductos(){
   const q = busqueda.trim().toLowerCase();
   let base = catalogo;
@@ -3197,7 +3262,7 @@ function renderResultados(){
            </div>`;
       const claseFila = `prod-row${(puedeAgregar || qtyEnCarrito > 0) ? ' prod-row-clickeable' : ''}${qtyEnCarrito > 0 ? ' prod-row-en-carrito' : ''}${it.st ? ' prod-row-agotado' : ''}`;
       return `
-        <div class="${claseFila}"${clickeable}>
+        <div class="${claseFila}" data-sku="${escHtml(it.s)}"${clickeable}>
           ${adminIcons}${foto}
           <div class="prod-info">
             <div class="prod-sku">${escHtml(it.s)}</div>
@@ -3238,7 +3303,7 @@ function renderResultados(){
     const claseTarjeta = `prod-card${(puedeAgregar || qtyEnCarrito > 0) ? ' prod-card-clickeable' : ''}${qtyEnCarrito > 0 ? ' prod-card-en-carrito' : ''}${it.st ? ' prod-card-agotado' : ''}`;
     const zoomBtn = (imgsArr.length ? `<button class="prod-card-zoom" onclick="event.stopPropagation(); abrirZoomProducto('${escHtml(it.s)}')" title="Ver más grande">🔍</button>` : '');
     return `
-      <div class="${claseTarjeta}"${clickeable} ondragover="_fotoDragOver(event, this)" ondragleave="_fotoDragLeave(this)" ondrop="_fotoDrop(event, '${escHtml(it.s)}', this)" onmouseenter="_fotoHoverSet('${escHtml(it.s)}')" onmouseleave="_fotoHoverClear('${escHtml(it.s)}')">
+      <div class="${claseTarjeta}" data-sku="${escHtml(it.s)}"${clickeable} ondragover="_fotoDragOver(event, this)" ondragleave="_fotoDragLeave(this)" ondrop="_fotoDrop(event, '${escHtml(it.s)}', this)" onmouseenter="_fotoHoverSet('${escHtml(it.s)}')" onmouseleave="_fotoHoverClear('${escHtml(it.s)}')">
         <div style="position:relative;">${foto}${adminIcons}${zoomBtn}</div>
         <div class="prod-card-body">
           <div class="prod-sku">${escHtml(it.s)}</div>
@@ -3280,6 +3345,18 @@ function renderResultados(){
     </div>`;
 
   cont.innerHTML = filas + paginacion;
+
+  // Si el admin ya estaba navegando con el teclado, mantener el cursor sobre el mismo
+  // producto después de redibujar (por ejemplo, tras agregarlo al pedido con Enter).
+  if (esAdminCatalogo()) {
+    const skuPrevio = _adminNavIdx >= 0 ? _adminNavSkus[_adminNavIdx] : null;
+    _adminNavActualizarLista();
+    if (skuPrevio) {
+      const nuevoIdx = _adminNavSkus.indexOf(skuPrevio);
+      _adminNavIdx = nuevoIdx !== -1 ? nuevoIdx : Math.min(_adminNavIdx, _adminNavSkus.length - 1);
+    }
+    _adminNavPintar();
+  }
 }
 
 window.cambiarPorPagina = (valor) => {
