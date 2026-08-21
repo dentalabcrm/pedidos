@@ -868,6 +868,29 @@ const LS_KEY_ESTADO  = 'dentalab_pedido_estado_v1';
 const LS_KEY_DATOS   = 'dentalab_pedido_datos_v1';
 const LS_CAMPOS_DATOS = ['cf-nombre','cf-dni','cf-email','cf-tel','cf-direccion','cf-cp','cf-ciudad','cf-provincia','cf-obs'];
 
+// ── Datos personales del cliente (nombre, DNI, email, teléfono) — a diferencia de
+// LS_KEY_DATOS de arriba (que es solo para recuperar un pedido EN CURSO y se borra al
+// enviarlo), esto queda guardado siempre, para no tener que volver a tipear los datos en
+// el próximo pedido. No incluye dirección/observaciones porque esas sí suelen cambiar
+// pedido a pedido.
+const LS_KEY_DATOS_PERM = 'dentalab_datos_personales_v1';
+const LS_CAMPOS_DATOS_PERM = ['cf-nombre', 'cf-dni', 'cf-email', 'cf-tel'];
+function _guardarDatosPermLS(){
+  try {
+    const datos = {};
+    LS_CAMPOS_DATOS_PERM.forEach(id => { const el = document.getElementById(id); if (el) datos[id] = el.value; });
+    localStorage.setItem(LS_KEY_DATOS_PERM, JSON.stringify(datos));
+  } catch(e) {}
+}
+function _restaurarDatosPermLS(){
+  try {
+    const raw = localStorage.getItem(LS_KEY_DATOS_PERM);
+    if (!raw) return;
+    const datos = JSON.parse(raw);
+    LS_CAMPOS_DATOS_PERM.forEach(id => { const el = document.getElementById(id); if (el && datos[id] && !el.value) el.value = datos[id]; });
+  } catch(e) {}
+}
+
 function _guardarCarritoLS(){
   try {
     if (carrito.size) localStorage.setItem(LS_KEY_CARRITO, JSON.stringify(Array.from(carrito.entries())));
@@ -3068,21 +3091,41 @@ function _buscarGrupoEspecial(tokens){
 }
 
 // ── Navegación con teclado en modo administrador (igual que en la Lista de Precios del
-// CRM): ↑/↓ para moverte entre productos visibles, Enter para agregar/quitar del pedido,
-// y Tab para abrir la Vista previa del presupuesto — todo esto solo corre si esAdminCatalogo().
+// CRM): flechas para moverte entre productos visibles, Enter para agregar/quitar del
+// pedido, y Tab para abrir la Vista previa del presupuesto — solo si esAdminCatalogo().
+//
+// La grilla tiene varias columnas, así que ↑/↓ saltan una fila entera (para moverse
+// realmente arriba/abajo) y ←/→ se mueven de a un producto dentro de la misma fila. En
+// la vista lista (1 columna) da lo mismo, ahí todas las flechas mueven de a uno.
 let _adminNavSkus = [];   // SKUs en el orden en que se ven en pantalla ahora mismo
 let _adminNavIdx = -1;    // índice del "cursor" actual dentro de _adminNavSkus
+let _adminNavCols = 1;    // cantidad de columnas detectadas en el layout actual
 
 function _adminNavActualizarLista(){
-  _adminNavSkus = Array.from(document.querySelectorAll('#resultados [data-sku]')).map(el => el.dataset.sku);
+  const items = Array.from(document.querySelectorAll('#resultados [data-sku]'));
+  _adminNavSkus = items.map(el => el.dataset.sku);
   if (_adminNavIdx >= _adminNavSkus.length) _adminNavIdx = _adminNavSkus.length - 1;
+  // Detectar columnas: contar cuántos elementos seguidos comparten la misma posición
+  // vertical (offsetTop) que el primero — esos son los que están en su misma fila.
+  _adminNavCols = 1;
+  if (items.length > 1) {
+    const primerTop = items[0].offsetTop;
+    let cols = 0;
+    for (const el of items) {
+      if (Math.abs(el.offsetTop - primerTop) < 2) cols++;
+      else break;
+    }
+    _adminNavCols = Math.max(1, cols);
+  }
 }
 function _adminNavPintar(){
   document.querySelectorAll('.prod-nav-cursor').forEach(el => el.classList.remove('prod-nav-cursor'));
   if (_adminNavIdx < 0 || _adminNavIdx >= _adminNavSkus.length) return;
   const sku = _adminNavSkus[_adminNavIdx];
   const el = document.querySelector(`#resultados [data-sku="${CSS.escape(sku)}"]`);
-  if (el) { el.classList.add('prod-nav-cursor'); el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  // "auto" en vez de "smooth": con "smooth" cada tecla dispara una animación nueva que se
+  // pisa con la anterior si mantenés la flecha apretada, y se siente lento/con delay.
+  if (el) { el.classList.add('prod-nav-cursor'); el.scrollIntoView({ block: 'nearest', behavior: 'auto' }); }
 }
 function _adminNavHayModalAbierto(){
   return !!document.querySelector(
@@ -3098,14 +3141,22 @@ document.addEventListener('keydown', (e) => {
   const enBuscador = activeEl?.id === 'input-busqueda';
   const enInputGenerico = ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag) && !enBuscador;
 
-  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+  const esFlecha = ['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(e.key);
+  if (esFlecha) {
     if (enInputGenerico) return; // dejar que las flechas funcionen normal en otros campos
     e.preventDefault();
-    _adminNavActualizarLista();
-    if (!_adminNavSkus.length) return;
-    if (_adminNavIdx === -1) _adminNavIdx = 0;
-    else if (e.key === 'ArrowDown') _adminNavIdx = Math.min(_adminNavIdx + 1, _adminNavSkus.length - 1);
-    else _adminNavIdx = Math.max(_adminNavIdx - 1, 0);
+    if (!_adminNavSkus.length) return; // ya se calcula al renderizar, no hace falta recalcular en cada tecla
+    if (_adminNavIdx === -1) {
+      _adminNavIdx = 0;
+    } else if (e.key === 'ArrowDown') {
+      _adminNavIdx = Math.min(_adminNavIdx + _adminNavCols, _adminNavSkus.length - 1);
+    } else if (e.key === 'ArrowUp') {
+      _adminNavIdx = Math.max(_adminNavIdx - _adminNavCols, 0);
+    } else if (e.key === 'ArrowRight') {
+      _adminNavIdx = Math.min(_adminNavIdx + 1, _adminNavSkus.length - 1);
+    } else if (e.key === 'ArrowLeft') {
+      _adminNavIdx = Math.max(_adminNavIdx - 1, 0);
+    }
     _adminNavPintar();
     return;
   }
@@ -3961,10 +4012,10 @@ function renderPrincipal(){
       <h1><span class="paso-badge">3</span>📝 Completá tus datos</h1>
       <div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px;display:flex;align-items:center;"><span class="paso-badge paso-badge-chica">3a</span>Tus datos</div>
       <div class="cliente-fields">
-        <div class="field"><label>Cliente *</label><input id="cf-nombre" type="text" placeholder="Nombre y apellido" required oninput="this.style.outline=''"></div>
-        <div class="field"><label>DNI / CUIT</label><input id="cf-dni" type="text" inputmode="numeric" placeholder="Sin puntos ni guiones"></div>
-        <div class="field"><label>E-mail</label><input id="cf-email" type="email" placeholder="tu@mail.com"></div>
-        <div class="field"><label>Teléfono</label><input id="cf-tel" type="tel" placeholder="11 1234-5678"></div>
+        <div class="field"><label>Cliente *</label><input id="cf-nombre" type="text" placeholder="Nombre y apellido" required oninput="this.style.outline=''; _guardarDatosPermLS()"></div>
+        <div class="field"><label>DNI / CUIT</label><input id="cf-dni" type="text" inputmode="numeric" placeholder="Sin puntos ni guiones" oninput="_guardarDatosPermLS()"></div>
+        <div class="field"><label>E-mail</label><input id="cf-email" type="email" placeholder="tu@mail.com" oninput="_guardarDatosPermLS()"></div>
+        <div class="field"><label>Teléfono</label><input id="cf-tel" type="tel" placeholder="11 1234-5678" oninput="_guardarDatosPermLS()"></div>
       </div>
       <div class="field" style="margin-top:10px;">
         <label><span class="paso-badge paso-badge-chica">3b</span>¿Cómo querés recibir tu pedido? *</label>
@@ -3987,6 +4038,7 @@ function renderPrincipal(){
   renderCarrito();
   _cargarCarruselMarcas();
   _restaurarDatosLS();
+  _restaurarDatosPermLS(); // completa nombre/DNI/mail/tel guardados de un pedido anterior, si el campo quedó vacío
   _pedidoRestauradoDeLS = false;
   app.oninput = () => { clearTimeout(_datosGuardarTimer); _datosGuardarTimer = setTimeout(_guardarDatosLS, 400); };
   app.onchange = _guardarDatosLS;
