@@ -1461,6 +1461,7 @@ window.abrirZoomProducto = (sku) => {
   if (!it) return;
   document.getElementById('zoom-prod-backdrop')?.remove();
   _zoomRecorteActivo = false; // por si quedó activado de un producto anterior
+  _zoomProductoActual = it;
 
   const precio = precioDe(it);
   const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
@@ -1483,17 +1484,17 @@ window.abrirZoomProducto = (sku) => {
         display:flex;align-items:center;gap:6px;
       ">📋 Copiar</button>
       ${esAdminCatalogo() && imgsArr.length ? `
-      <button id="zoom-prod-recortar-btn" onclick="_zoomToggleRecorte()" title="Recortar una parte de la foto y copiarla (solo admin)" style="
+      <button id="zoom-prod-recortar-btn" onclick="_zoomToggleRecorte()" title="Recortar una parte (foto o texto) y copiarla — solo admin" style="
         position:absolute;top:52px;left:12px;z-index:2;height:34px;padding:0 14px;border-radius:17px;
         background:rgba(15,23,42,.55);color:#fff;border:none;font-size:12.5px;font-weight:700;cursor:pointer;
         display:flex;align-items:center;gap:6px;
       ">✂️ Recortar</button>` : ''}
+      <div id="zoom-prod-body">
       <div id="zoom-prod-carrusel" class="prod-carrusel" style="position:relative;background:#f4f6fa;border-radius:18px 18px 0 0;overflow:hidden;">
         ${imgsArr.length
           ? `<div class="prod-carrusel-track" id="zoom-prod-track" onscroll="_carruselOnScroll(this)" style="display:flex;overflow-x:auto;scroll-snap-type:x mandatory;">
               ${imgsArr.map(id => `<img src="https://drive.google.com/thumbnail?id=${id}&sz=w900" style="width:100%;flex-shrink:0;scroll-snap-align:start;aspect-ratio:1/1;object-fit:contain;background:#fff;" alt="">`).join('')}
              </div>
-             ${esAdminCatalogo() ? `<canvas id="zoom-prod-recorte-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;display:none;touch-action:none;"></canvas>` : ''}
              ${imgsArr.length > 1 ? `
                <button class="prod-carrusel-arrow prod-carrusel-prev" onclick="_carruselMover(this,-1)">‹</button>
                <button class="prod-carrusel-arrow prod-carrusel-next" onclick="_carruselMover(this,1)">›</button>
@@ -1520,6 +1521,7 @@ window.abrirZoomProducto = (sku) => {
             : `<button class="prod-add" style="width:44px;height:44px;font-size:22px;" onclick="agregarAlCarrito('${it.s}'); abrirZoomProducto('${it.s}')" ${!puedeAgregar ? `disabled title="${it.st ? 'Sin stock disponible' : (it.cp ? 'Consultar precio por WhatsApp' : 'Sin precio en esta lista')}"` : ''}>+</button>`}
         </div>
       </div>
+      </div>
     </div>`;
   document.body.appendChild(bd);
   bd.addEventListener('click', e => { if (e.target === bd) bd.remove(); });
@@ -1540,30 +1542,67 @@ window.abrirZoomProducto = (sku) => {
 // Arma una imagen (foto + SKU + nombre + categoría + precio + aclaración de pago), igual a
 // como se ve la tarjeta del modal grande, y la copia al portapapeles — para pegarla directo
 // en WhatsApp, mail, etc. con Ctrl+V, sin tener que sacar captura de pantalla a mano.
-// ── Recortar una parte de la foto y copiarla (solo admin) — igual idea que la herramienta
-// de recorte del CRM: arrastrás un rectángulo sobre la foto y, al soltar, se copia solo
-// esa parte al portapapeles. Funciona sobre la foto que esté visible en ese momento del
-// carrusel (si el producto tiene varias).
+// ── Recortar una parte de la tarjeta (foto Y texto) y copiarla (solo admin) — igual idea
+// que la Herramienta Recortes de Windows. Para que se pueda elegir cualquier parte —
+// incluido el texto, no solo la foto — el recorte trabaja sobre la MISMA imagen compuesta
+// (foto+texto ya armados juntos) que usa "Copiar tarjeta", mostrada como vista previa.
 let _zoomRecorteActivo = false;
+let _zoomProductoActual = null;       // producto que está mostrando el modal ahora mismo
+let _zoomTarjetaCanvasCache = null;   // la tarjeta compuesta (foto+texto) ya armada, mientras se recorta
 
-window._zoomToggleRecorte = () => {
-  _zoomRecorteActivo = !_zoomRecorteActivo;
-  const canvas = document.getElementById('zoom-prod-recorte-canvas');
+function _zoomMostrarAviso(msg){
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:9px 18px;border-radius:20px;font-size:12.5px;font-weight:600;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,.25);';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1800);
+}
+
+window._zoomToggleRecorte = async () => {
   const btn = document.getElementById('zoom-prod-recortar-btn');
-  if (!canvas || !btn) return;
+  const btnCopiar = document.getElementById('zoom-prod-copy');
+  const body = document.getElementById('zoom-prod-body');
+  if (!btn || !body || !_zoomProductoActual) return;
+
   if (_zoomRecorteActivo) {
-    btn.style.background = '#7c3aed';
-    canvas.style.display = 'block';
-    _zoomInicializarRecorteCanvas(canvas);
-  } else {
-    btn.style.background = 'rgba(15,23,42,.55)';
-    canvas.style.display = 'none';
+    // Salir del modo recorte: reconstruir el modal normal desde cero (más simple y
+    // confiable que tratar de "deshacer" el reemplazo a mano).
+    abrirZoomProducto(_zoomProductoActual.s);
+    return;
   }
+
+  _zoomRecorteActivo = true;
+  const original = btn.innerHTML;
+  btn.innerHTML = 'Cargando…'; btn.disabled = true;
+  try {
+    _zoomTarjetaCanvasCache = await _zoomConstruirTarjetaCanvas(_zoomProductoActual);
+  } catch (e) {
+    alert('No se pudo preparar la vista de recorte: ' + (e.message || e));
+    _zoomRecorteActivo = false;
+    btn.innerHTML = original; btn.disabled = false;
+    return;
+  }
+
+  btn.innerHTML = '✕ Salir de recorte';
+  btn.disabled = false;
+  btn.style.background = '#7c3aed';
+  if (btnCopiar) btnCopiar.style.display = 'none';
+
+  // Reemplaza la foto + el texto por una vista previa de la tarjeta ya armada (lo mismo
+  // que se copiaría con "Copiar tarjeta"), con un lienzo de selección encima — así el
+  // recorte puede tomar cualquier parte, sea la foto, el nombre, el precio, etc.
+  body.innerHTML = `
+    <div style="position:relative;">
+      <img src="${_zoomTarjetaCanvasCache.toDataURL('image/png')}" style="width:100%;display:block;" draggable="false" alt="">
+      <canvas id="zoom-prod-recorte-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;cursor:crosshair;touch-action:none;"></canvas>
+    </div>
+    <div style="padding:10px 22px;font-size:11.5px;color:#8592a6;text-align:center;">✂️ Arrastrá para elegir qué copiar (foto y/o texto) — "✕ Salir de recorte" para volver</div>
+  `;
+  _zoomInicializarRecorteCanvas(document.getElementById('zoom-prod-recorte-canvas'));
 };
 
 function _zoomInicializarRecorteCanvas(canvas){
-  if (canvas.dataset.wired) return; // ya tiene los eventos puestos (se crea de cero cada vez que se abre el modal)
-  canvas.dataset.wired = '1';
+  if (!canvas) return;
   let dibujando = false, p1 = null, p2 = null;
 
   function ajustarTamano(){
@@ -1595,12 +1634,6 @@ function _zoomInicializarRecorteCanvas(canvas){
     dibujando = true;
     p1 = coords(e); p2 = p1;
     redibujar();
-    // Ocultar los botones mientras se arrastra, para que no estorben visualmente al elegir
-    // la zona (el recorte de todos modos se saca de la foto original, no de la pantalla).
-    const btnCopiar = document.getElementById('zoom-prod-copy');
-    const btnRecortar = document.getElementById('zoom-prod-recortar-btn');
-    if (btnCopiar) btnCopiar.style.display = 'none';
-    if (btnRecortar) btnRecortar.style.display = 'none';
   });
   canvas.addEventListener('pointermove', (e) => {
     if (!dibujando) return;
@@ -1611,14 +1644,8 @@ function _zoomInicializarRecorteCanvas(canvas){
     if (!dibujando) return;
     dibujando = false;
     const _p1 = p1, _p2 = p2;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height); // borrar el recuadro ANTES de recortar
     p1 = null; p2 = null;
-    // Volver a mostrar los botones ahora que ya se terminó de elegir la zona.
-    const btnCopiar = document.getElementById('zoom-prod-copy');
-    const btnRecortar = document.getElementById('zoom-prod-recortar-btn');
-    if (btnCopiar) btnCopiar.style.display = 'flex';
-    if (btnRecortar) btnRecortar.style.display = 'flex';
+    redibujar(); // borra el recuadro de selección
     if (_p1 && _p2 && Math.abs(_p2.x - _p1.x) > 6 && Math.abs(_p2.y - _p1.y) > 6) {
       await _zoomRecortarYCopiar(_p1, _p2, canvas.width, canvas.height);
     }
@@ -1628,64 +1655,128 @@ function _zoomInicializarRecorteCanvas(canvas){
 }
 
 async function _zoomRecortarYCopiar(p1, p2, cw, ch){
-  const btn = document.getElementById('zoom-prod-recortar-btn');
-  const original = btn?.innerHTML;
   try {
     if (!navigator.clipboard || !window.ClipboardItem) throw new Error('Este navegador no admite copiar imágenes al portapapeles');
-    const track = document.getElementById('zoom-prod-track');
-    if (!track) throw new Error('No se encontró la imagen');
-
-    // Cuál foto está visible ahora mismo (si el producto tiene varias) — mismo cálculo que
-    // usa el carrusel para saber en qué foto estás parado.
-    const idx = track.clientWidth ? Math.round(track.scrollLeft / track.clientWidth) : 0;
-    const imgVisible = track.querySelectorAll('img')[idx];
-    if (!imgVisible) throw new Error('No se encontró la imagen');
-
-    // Bajarla en limpio (evita el problema de CORS de Google Drive) para poder leer sus
-    // píxeles — mismo mecanismo que ya usa "Copiar tarjeta".
-    const original2 = `drive.google.com/thumbnail?id=${imgVisible.src.match(/[?&]id=([^&]+)/)?.[1] || ''}&sz=w1400`;
-    const resp = await fetch(`https://images.weserv.nl/?url=${encodeURIComponent(original2)}`);
-    if (!resp.ok) throw new Error('No se pudo leer la foto');
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const imgEl = await new Promise((resolve, reject) => {
-      const im = new Image();
-      im.onload = () => resolve(im);
-      im.onerror = () => reject(new Error('No se pudo cargar la foto'));
-      im.src = url;
-    });
-
-    // La foto se ve con "object-fit:contain" dentro de un cuadro — hay que calcular qué
-    // parte de ese cuadro ocupa la imagen de verdad (puede haber franjas vacías arriba/abajo
-    // o a los costados) para convertir la selección en pantalla a píxeles reales de la foto.
-    const escala = Math.min(cw / imgEl.naturalWidth, ch / imgEl.naturalHeight);
-    const dispW = imgEl.naturalWidth * escala, dispH = imgEl.naturalHeight * escala;
-    const offX = (cw - dispW) / 2, offY = (ch - dispH) / 2;
-
-    const bx1 = Math.min(p1.x, p2.x), by1 = Math.min(p1.y, p2.y);
-    const bx2 = Math.max(p1.x, p2.x), by2 = Math.max(p1.y, p2.y);
-    const ix1 = Math.max(0, (bx1 - offX) / escala);
-    const iy1 = Math.max(0, (by1 - offY) / escala);
-    const ix2 = Math.min(imgEl.naturalWidth, (bx2 - offX) / escala);
-    const iy2 = Math.min(imgEl.naturalHeight, (by2 - offY) / escala);
-    const iw = ix2 - ix1, ih = iy2 - iy1;
-    if (iw < 2 || ih < 2) throw new Error('La selección cae afuera de la foto');
+    if (!_zoomTarjetaCanvasCache) throw new Error('No se encontró la tarjeta');
+    const src = _zoomTarjetaCanvasCache;
+    // El lienzo que se ve en pantalla puede estar mostrado más chico/grande que la
+    // resolución real de la tarjeta compuesta — un solo factor de escala alcanza, porque
+    // ahora la selección y la fuente son la MISMA imagen (a diferencia de antes, que había
+    // que calcular por separado dónde caía la foto dentro de su recuadro).
+    const escala = src.width / cw;
+    const bx1 = Math.min(p1.x, p2.x) * escala, by1 = Math.min(p1.y, p2.y) * escala;
+    const bx2 = Math.max(p1.x, p2.x) * escala, by2 = Math.max(p1.y, p2.y) * escala;
+    const iw = bx2 - bx1, ih = by2 - by1;
+    if (iw < 2 || ih < 2) return;
 
     const recorte = document.createElement('canvas');
     recorte.width = Math.round(iw); recorte.height = Math.round(ih);
-    recorte.getContext('2d').drawImage(imgEl, ix1, iy1, iw, ih, 0, 0, recorte.width, recorte.height);
+    recorte.getContext('2d').drawImage(src, bx1, by1, iw, ih, 0, 0, recorte.width, recorte.height);
 
-    const blobFinal = await new Promise(res => recorte.toBlob(res, 'image/png'));
-    if (!blobFinal) throw new Error('No se pudo generar el recorte');
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobFinal })]);
-    URL.revokeObjectURL(url);
-
-    if (btn) { btn.innerHTML = '✓ Copiado'; setTimeout(() => { btn.innerHTML = original; }, 1500); }
+    const blob = await new Promise(res => recorte.toBlob(res, 'image/png'));
+    if (!blob) throw new Error('No se pudo generar el recorte');
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    _zoomMostrarAviso('✂️ Recorte copiado al portapapeles');
   } catch (e) {
     console.error('[Recortar producto] Error:', e);
     alert('No se pudo copiar el recorte: ' + (e.message || e));
-    if (btn && original) btn.innerHTML = original;
   }
+}
+
+
+// Arma la tarjeta compuesta (foto + SKU + nombre + categoría + precio + aclaración de
+// pago) en un solo canvas — la usan tanto "Copiar tarjeta" como la herramienta de recorte,
+// así las dos ven exactamente la misma imagen.
+async function _zoomConstruirTarjetaCanvas(it){
+  const precio = precioDe(it);
+  const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
+  const notaPago = it.cp ? '' : (listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago');
+
+  // Cargar la foto (si tiene) antes de medir el alto total. Google Drive no da permiso
+  // (CORS) para "leer" la imagen directo desde el navegador, así que la pasamos por un
+  // servicio intermedio (images.weserv.nl) que sí lo permite — es lo mismo que usan
+  // muchas apps para poder dibujar imágenes externas en un canvas.
+  let imgEl = null;
+  if (imgsArr.length) {
+    try {
+      const original = `drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w900`;
+      const proxiedUrl = `https://images.weserv.nl/?url=${encodeURIComponent(original)}`;
+      const resp = await fetch(proxiedUrl);
+      if (resp.ok) {
+        const blobFoto = await resp.blob();
+        const urlFoto = URL.createObjectURL(blobFoto);
+        imgEl = await new Promise((resolve) => {
+          const im = new Image();
+          im.onload = () => resolve(im);
+          im.onerror = () => resolve(null);
+          im.src = urlFoto;
+        });
+      }
+    } catch (e) {
+      console.warn('[Tarjeta producto] No se pudo bajar la foto, se arma solo con el texto:', e.message);
+    }
+  }
+
+  const W = 640, PAD = 26;
+  const medidor = document.createElement('canvas').getContext('2d');
+  const _wrap = (texto, fuente, maxWidth) => {
+    medidor.font = fuente;
+    const palabras = texto.split(' ');
+    const lineas = []; let linea = '';
+    palabras.forEach(p => {
+      const prueba = linea ? linea + ' ' + p : p;
+      if (medidor.measureText(prueba).width > maxWidth && linea) { lineas.push(linea); linea = p; }
+      else linea = prueba;
+    });
+    if (linea) lineas.push(linea);
+    return lineas;
+  };
+
+  const lineasNombre = _wrap(it.n, '800 21px DM Sans, sans-serif', W - PAD * 2);
+  const imgH = imgEl ? W : 0; // la foto se muestra cuadrada (1:1), igual que en el modal
+  let alto = imgH + PAD * 1.4 + 16 /*sku*/ + lineasNombre.length * 27 + (it.g ? 20 : 0) + 14 + 40 /*precio*/ + (notaPago ? 20 : 0) + PAD;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = Math.ceil(alto);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  let y = 0;
+  if (imgEl) {
+    // "object-fit:contain" a mano, centrado, sobre un fondo clarito como en el modal
+    ctx.fillStyle = '#f4f6fa'; ctx.fillRect(0, 0, W, W);
+    const ratio = Math.min(W / imgEl.width, W / imgEl.height);
+    const iw = imgEl.width * ratio, ih = imgEl.height * ratio;
+    ctx.drawImage(imgEl, (W - iw) / 2, (W - ih) / 2, iw, ih);
+    y = W + PAD * 0.9;
+  } else {
+    y = PAD;
+  }
+
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#8592a6'; ctx.font = '12px DM Mono, monospace';
+  ctx.fillText(it.s, PAD, y); y += 24;
+
+  ctx.fillStyle = '#0f172a'; ctx.font = '800 21px DM Sans, sans-serif';
+  lineasNombre.forEach(l => { ctx.fillText(l, PAD, y); y += 27; });
+
+  if (it.g) {
+    y += 2;
+    ctx.fillStyle = '#0284c7'; ctx.font = '600 13px DM Sans, sans-serif';
+    ctx.fillText(it.g + (it.sg ? ' › ' + it.sg : ''), PAD, y); y += 20;
+  }
+  y += 16;
+
+  ctx.fillStyle = '#0f172a'; ctx.font = '800 30px DM Sans, sans-serif';
+  ctx.fillText(it.cp ? 'Consultar precio' : fmtMoney(precio), PAD, y);
+  if (notaPago) {
+    y += 20;
+    ctx.fillStyle = '#8592a6'; ctx.font = '11.5px DM Sans, sans-serif';
+    ctx.fillText(notaPago, PAD, y);
+  }
+
+  canvas._tuvoFoto = imgsArr.length ? !!imgEl : true; // marca si la foto se pudo bajar bien (para el aviso de "Copiado sin la foto")
+  return canvas;
 }
 
 window._zoomCopiarTarjeta = async (sku) => {
@@ -1696,98 +1787,11 @@ window._zoomCopiarTarjeta = async (sku) => {
   btn.innerHTML = 'Copiando…'; btn.disabled = true;
   try {
     if (!navigator.clipboard || !window.ClipboardItem) throw new Error('Este navegador no admite copiar imágenes al portapapeles');
-
-    const precio = precioDe(it);
-    const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
-    const notaPago = it.cp ? '' : (listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago');
-
-    // Cargar la foto (si tiene) antes de medir el alto total. Google Drive no da permiso
-    // (CORS) para "leer" la imagen directo desde el navegador, así que la pasamos por un
-    // servicio intermedio (images.weserv.nl) que sí lo permite — es lo mismo que usan
-    // muchas apps para poder dibujar imágenes externas en un canvas.
-    let imgEl = null;
-    if (imgsArr.length) {
-      try {
-        const original = `drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w900`;
-        const proxiedUrl = `https://images.weserv.nl/?url=${encodeURIComponent(original)}`;
-        const resp = await fetch(proxiedUrl);
-        if (resp.ok) {
-          const blobFoto = await resp.blob();
-          const urlFoto = URL.createObjectURL(blobFoto);
-          imgEl = await new Promise((resolve) => {
-            const im = new Image();
-            im.onload = () => resolve(im);
-            im.onerror = () => resolve(null);
-            im.src = urlFoto;
-          });
-        }
-      } catch (e) {
-        console.warn('[Copiar tarjeta] No se pudo bajar la foto, se copia solo el texto:', e.message);
-      }
-    }
-
-    const W = 640, PAD = 26;
-    const medidor = document.createElement('canvas').getContext('2d');
-    const _wrap = (texto, fuente, maxWidth) => {
-      medidor.font = fuente;
-      const palabras = texto.split(' ');
-      const lineas = []; let linea = '';
-      palabras.forEach(p => {
-        const prueba = linea ? linea + ' ' + p : p;
-        if (medidor.measureText(prueba).width > maxWidth && linea) { lineas.push(linea); linea = p; }
-        else linea = prueba;
-      });
-      if (linea) lineas.push(linea);
-      return lineas;
-    };
-
-    const lineasNombre = _wrap(it.n, '800 21px DM Sans, sans-serif', W - PAD * 2);
-    const imgH = imgEl ? W : 0; // la foto se muestra cuadrada (1:1), igual que en el modal
-    let alto = imgH + PAD * 1.4 + 16 /*sku*/ + lineasNombre.length * 27 + (it.g ? 20 : 0) + 14 + 40 /*precio*/ + (notaPago ? 20 : 0) + PAD;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = Math.ceil(alto);
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    let y = 0;
-    if (imgEl) {
-      // "object-fit:contain" a mano, centrado, sobre un fondo clarito como en el modal
-      ctx.fillStyle = '#f4f6fa'; ctx.fillRect(0, 0, W, W);
-      const ratio = Math.min(W / imgEl.width, W / imgEl.height);
-      const iw = imgEl.width * ratio, ih = imgEl.height * ratio;
-      ctx.drawImage(imgEl, (W - iw) / 2, (W - ih) / 2, iw, ih);
-      y = W + PAD * 0.9;
-    } else {
-      y = PAD;
-    }
-
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = '#8592a6'; ctx.font = '12px DM Mono, monospace';
-    ctx.fillText(it.s, PAD, y); y += 24;
-
-    ctx.fillStyle = '#0f172a'; ctx.font = '800 21px DM Sans, sans-serif';
-    lineasNombre.forEach(l => { ctx.fillText(l, PAD, y); y += 27; });
-
-    if (it.g) {
-      y += 2;
-      ctx.fillStyle = '#0284c7'; ctx.font = '600 13px DM Sans, sans-serif';
-      ctx.fillText(it.g + (it.sg ? ' › ' + it.sg : ''), PAD, y); y += 20;
-    }
-    y += 16;
-
-    ctx.fillStyle = '#0f172a'; ctx.font = '800 30px DM Sans, sans-serif';
-    ctx.fillText(it.cp ? 'Consultar precio' : fmtMoney(precio), PAD, y);
-    if (notaPago) {
-      y += 20;
-      ctx.fillStyle = '#8592a6'; ctx.font = '11.5px DM Sans, sans-serif';
-      ctx.fillText(notaPago, PAD, y);
-    }
-
+    const canvas = await _zoomConstruirTarjetaCanvas(it);
     const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
     if (!blob) throw new Error('No se pudo generar la imagen');
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-    if (imgsArr.length && !imgEl) {
+    if (!canvas._tuvoFoto) {
       btn.innerHTML = '⚠ Copiado sin la foto';
       setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 2200);
     } else {
