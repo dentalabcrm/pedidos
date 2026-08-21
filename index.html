@@ -1043,7 +1043,17 @@ function escHtml(s){
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function fmtMoney(n){ return '$' + Math.round(n || 0).toLocaleString('es-AR'); }
-function precioDe(item){ return listaActiva === 'p1' ? item.p1 : item.p2; }
+let _adminVistaPrecio = 'normal'; // 'normal' | 'reventa' | 'mayorista' — solo cambia lo que ve el ADMIN, no la lista real del cliente
+window._cambiarVistaPrecioAdmin = (valor) => {
+  _adminVistaPrecio = valor;
+  renderPrincipal(); // re-dibuja todo (banner incluido) para que se note el cambio de vista
+};
+function precioDe(item){
+  if (esAdminCatalogo() && _adminVistaPrecio !== 'normal') {
+    return _adminVistaPrecio === 'reventa' ? (item.p3 || 0) : (item.p4 || 0);
+  }
+  return listaActiva === 'p1' ? item.p1 : item.p2;
+}
 
 // ── Financiamiento en cuotas (solo aplica pagando con Tarjeta — 1 pago) ──
 function _pwFinRound(v){ return Math.ceil(v / 100) * 100; } // redondeo prolijo, igual que el CRM
@@ -4016,6 +4026,17 @@ function renderPrincipal(){
       <button onclick="cambiarPago()">Cambiar</button>
       ${listaActiva === 'p1' ? `<div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--green);">✓ Los precios que ves ya tienen el 10% off aplicado</div>` : ''}
     </div>
+
+    ${esAdminCatalogo() ? `
+    <div style="background:#7c3aed12;border:1px solid #7c3aed40;border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span style="font-size:12px;font-weight:700;color:#7c3aed;white-space:nowrap;">👁 Vista de precios (solo admin):</span>
+      <select onchange="_cambiarVistaPrecioAdmin(this.value)" style="border:1px solid #7c3aed40;border-radius:8px;padding:6px 10px;font-size:12.5px;background:#fff;color:var(--text);">
+        <option value="normal" ${_adminVistaPrecio === 'normal' ? 'selected' : ''}>Normal (Contado/Tarjeta, la que ve el cliente)</option>
+        <option value="reventa" ${_adminVistaPrecio === 'reventa' ? 'selected' : ''}>Lista Reventa</option>
+        <option value="mayorista" ${_adminVistaPrecio === 'mayorista' ? 'selected' : ''}>Lista Mayorista</option>
+      </select>
+      ${_adminVistaPrecio !== 'normal' ? `<span style="font-size:11.5px;font-weight:700;color:#dc2626;">⚠ Estás viendo precios de ${_adminVistaPrecio === 'reventa' ? 'Reventa' : 'Mayorista'} — el cliente NO ve esto</span>` : ''}
+    </div>` : ''}
 
     <div class="desktop-search-cart">
     <div class="card" id="card-buscar">
