@@ -378,9 +378,6 @@
   .prod-card-clickeable{cursor:pointer;transition:background .12s,border-color .12s;}
   .prod-card-clickeable:active{background:#bfdbfe;}
   .prod-card-en-carrito{background:#dbeafe;border-color:var(--blue);border-width:2px;}
-  /* Cursor de navegación con teclado (solo admin) — distinto del resaltado de "ya está en
-     el carrito", para que se note cuál es el que se mueve con las flechas. */
-  .prod-nav-cursor{outline:3px solid #7c3aed !important;outline-offset:-1px;box-shadow:0 0 0 5px #7c3aed26 !important;}
   .prod-card-agotado{background:#fef2f2;border-color:#fecaca;}
   .prod-card-agotado .prod-nombre{text-decoration:line-through;text-decoration-color:var(--text3);color:var(--text3);}
   .prod-card-agotado .prod-precio{text-decoration:line-through;text-decoration-color:var(--text3);color:var(--text3);}
@@ -477,6 +474,9 @@
     font-size:9.5px;color:#7c3aed;font-weight:700;margin-top:3px;
     background:#7c3aed12;border:1px solid #7c3aed30;border-radius:5px;padding:2px 6px;
     display:inline-block;font-family:'DM Mono',monospace;
+  }
+  html[data-theme="dark"] .prod-stock-admin{
+    color:#c4b5fd;background:#7c3aed26;border-color:#7c3aed55;
   }
   .prod-restock-badge{
     display:inline-flex;align-items:center;font-size:10px;font-weight:800;color:var(--blue);
@@ -1494,13 +1494,14 @@ window.abrirZoomProducto = (sku) => {
           : `<div style="aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;font-size:64px;opacity:.3;">🦷</div>`}
       </div>
       <div style="padding:20px 22px 24px;">
-        <div class="prod-sku" style="margin-bottom:4px;">${escHtml(it.s)}</div>
-        <div style="font-size:19px;font-weight:800;color:var(--text);line-height:1.35;margin-bottom:10px;">${escHtml(it.n)}</div>
-        ${it.g ? `<div class="prod-categoria" style="margin-bottom:10px;">${escHtml(it.g)}${it.sg ? ` › ${escHtml(it.sg)}` : ''}</div>` : ''}
+        <div style="font-family:'DM Mono',monospace;font-size:10.5px;color:#8592a6;margin-bottom:4px;">${escHtml(it.s)}</div>
+        <div style="font-size:19px;font-weight:800;color:#0f172a;line-height:1.35;margin-bottom:10px;">${escHtml(it.n)}</div>
+        ${it.g ? `<div style="font-size:10.5px;color:#8592a6;margin-bottom:10px;">${escHtml(it.g)}${it.sg ? ` › ${escHtml(it.sg)}` : ''}</div>` : ''}
         <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:16px;">
           <div>
-            <div style="font-size:26px;font-weight:800;color:var(--text);">${it.cp ? '<span class="prod-consultar">Consultar precio</span>' : fmtMoney(precio)}</div>
-            ${!it.cp ? `<div style="font-size:11.5px;color:var(--text3);margin-top:2px;">${listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago'}</div>` : ''}
+            <div style="font-size:26px;font-weight:800;color:#0f172a;">${it.cp ? '<span style="font-size:12px;color:#8592a6;font-style:italic;font-weight:500;">Consultar precio</span>' : fmtMoney(precio)}</div>
+            ${!it.cp && listaActiva === 'p1' ? `<div style="font-size:11px;font-weight:700;color:#0ea968;margin-top:4px;">✓ Precios ya con 10% off</div>` : ''}
+            ${!it.cp ? `<div style="font-size:11.5px;color:#8592a6;margin-top:2px;">${listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago'}</div>` : ''}
           </div>
           ${qtyEnCarrito > 0
             ? `<div class="qty-stepper prod-qty" style="transform:scale(1.15);transform-origin:right;">
@@ -3090,96 +3091,6 @@ function _buscarGrupoEspecial(tokens){
   return null;
 }
 
-// ── Navegación con teclado en modo administrador (igual que en la Lista de Precios del
-// CRM): flechas para moverte entre productos visibles, Enter para agregar/quitar del
-// pedido, y Tab para abrir la Vista previa del presupuesto — solo si esAdminCatalogo().
-//
-// La grilla tiene varias columnas, así que ↑/↓ saltan una fila entera (para moverse
-// realmente arriba/abajo) y ←/→ se mueven de a un producto dentro de la misma fila. En
-// la vista lista (1 columna) da lo mismo, ahí todas las flechas mueven de a uno.
-let _adminNavSkus = [];   // SKUs en el orden en que se ven en pantalla ahora mismo
-let _adminNavIdx = -1;    // índice del "cursor" actual dentro de _adminNavSkus
-let _adminNavCols = 1;    // cantidad de columnas detectadas en el layout actual
-
-function _adminNavActualizarLista(){
-  const items = Array.from(document.querySelectorAll('#resultados [data-sku]'));
-  _adminNavSkus = items.map(el => el.dataset.sku);
-  if (_adminNavIdx >= _adminNavSkus.length) _adminNavIdx = _adminNavSkus.length - 1;
-  // Detectar columnas: contar cuántos elementos seguidos comparten la misma posición
-  // vertical (offsetTop) que el primero — esos son los que están en su misma fila.
-  _adminNavCols = 1;
-  if (items.length > 1) {
-    const primerTop = items[0].offsetTop;
-    let cols = 0;
-    for (const el of items) {
-      if (Math.abs(el.offsetTop - primerTop) < 2) cols++;
-      else break;
-    }
-    _adminNavCols = Math.max(1, cols);
-  }
-}
-function _adminNavPintar(){
-  document.querySelectorAll('.prod-nav-cursor').forEach(el => el.classList.remove('prod-nav-cursor'));
-  if (_adminNavIdx < 0 || _adminNavIdx >= _adminNavSkus.length) return;
-  const sku = _adminNavSkus[_adminNavIdx];
-  const el = document.querySelector(`#resultados [data-sku="${CSS.escape(sku)}"]`);
-  // "auto" en vez de "smooth": con "smooth" cada tecla dispara una animación nueva que se
-  // pisa con la anterior si mantenés la flecha apretada, y se siente lento/con delay.
-  if (el) { el.classList.add('prod-nav-cursor'); el.scrollIntoView({ block: 'nearest', behavior: 'auto' }); }
-}
-function _adminNavHayModalAbierto(){
-  return !!document.querySelector(
-    '#zoom-prod-backdrop, #presu-backdrop, #avisarme-backdrop, .pwfin-backdrop, #cuotas-backdrop'
-  );
-}
-document.addEventListener('keydown', (e) => {
-  if (!esAdminCatalogo()) return;
-  if (_adminNavHayModalAbierto()) return; // no interferir con un modal ya abierto
-
-  const activeEl = document.activeElement;
-  const activeTag = activeEl?.tagName;
-  const enBuscador = activeEl?.id === 'input-busqueda';
-  const enInputGenerico = ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag) && !enBuscador;
-
-  const esFlecha = ['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(e.key);
-  if (esFlecha) {
-    if (enInputGenerico) return; // dejar que las flechas funcionen normal en otros campos
-    e.preventDefault();
-    if (!_adminNavSkus.length) return; // ya se calcula al renderizar, no hace falta recalcular en cada tecla
-    if (_adminNavIdx === -1) {
-      _adminNavIdx = 0;
-    } else if (e.key === 'ArrowDown') {
-      _adminNavIdx = Math.min(_adminNavIdx + _adminNavCols, _adminNavSkus.length - 1);
-    } else if (e.key === 'ArrowUp') {
-      _adminNavIdx = Math.max(_adminNavIdx - _adminNavCols, 0);
-    } else if (e.key === 'ArrowRight') {
-      _adminNavIdx = Math.min(_adminNavIdx + 1, _adminNavSkus.length - 1);
-    } else if (e.key === 'ArrowLeft') {
-      _adminNavIdx = Math.max(_adminNavIdx - 1, 0);
-    }
-    _adminNavPintar();
-    return;
-  }
-
-  if (e.key === 'Enter') {
-    if (enInputGenerico) return;
-    if (_adminNavIdx < 0 || _adminNavIdx >= _adminNavSkus.length) return;
-    e.preventDefault();
-    const sku = _adminNavSkus[_adminNavIdx];
-    if (carrito.get(sku) > 0) quitarDelCarrito(sku);
-    else agregarAlCarrito(sku);
-    return;
-  }
-
-  if (e.key === 'Tab') {
-    if (enInputGenerico) return; // dejar Tab normal en campos de texto (nombre, DNI, etc.)
-    if (!carrito.size) return;   // nada que ver como presupuesto
-    e.preventDefault();
-    activeEl?.blur?.();
-    abrirVistaPresupuesto();
-  }
-});
-
 function buscarProductos(){
   const q = busqueda.trim().toLowerCase();
   let base = catalogo;
@@ -3525,18 +3436,6 @@ function renderResultados(){
     </div>`;
 
   cont.innerHTML = filas + paginacion;
-
-  // Si el admin ya estaba navegando con el teclado, mantener el cursor sobre el mismo
-  // producto después de redibujar (por ejemplo, tras agregarlo al pedido con Enter).
-  if (esAdminCatalogo()) {
-    const skuPrevio = _adminNavIdx >= 0 ? _adminNavSkus[_adminNavIdx] : null;
-    _adminNavActualizarLista();
-    if (skuPrevio) {
-      const nuevoIdx = _adminNavSkus.indexOf(skuPrevio);
-      _adminNavIdx = nuevoIdx !== -1 ? nuevoIdx : Math.min(_adminNavIdx, _adminNavSkus.length - 1);
-    }
-    _adminNavPintar();
-  }
 }
 
 window.cambiarPorPagina = (valor) => {
@@ -3952,7 +3851,7 @@ function renderPrincipal(){
     ${_htmlBienvenida()}
     ${_htmlAvisosLlegadosBanner()}
     ${_pedidoRestauradoDeLS ? `<div class="banner-info-suave" style="border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600;margin-bottom:12px;">🔄 Recuperamos el pedido que tenías armado.</div>` : ''}
-    <div class="pago-activo pago-activo-pago" style="${listaActiva === 'p1' ? 'flex-wrap:wrap;row-gap:4px;' : ''}">
+    <div class="pago-activo pago-activo-pago" onclick="cambiarPago()" style="cursor:pointer;${listaActiva === 'p1' ? 'flex-wrap:wrap;row-gap:4px;' : ''}">
       <span id="pago-activo-label"><span class="paso-badge">1</span>Forma de pago: <b>${listaLabel}</b></span>
       <button onclick="cambiarPago()">Cambiar</button>
       ${listaActiva === 'p1' ? `<div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--green);">✓ Los precios que ves ya tienen el 10% off aplicado</div>` : ''}
