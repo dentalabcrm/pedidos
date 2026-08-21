@@ -1744,7 +1744,8 @@ async function _zoomConstruirTarjetaCanvas(it){
 
   const lineasNombre = _wrap(it.n, '800 21px DM Sans, sans-serif', W - PAD * 2);
   const imgH = imgEl ? W : 0; // la foto se muestra cuadrada (1:1), igual que en el modal
-  let alto = imgH + PAD * 1.4 + 16 /*sku*/ + lineasNombre.length * 27 + (it.g ? 20 : 0) + 14 + 40 /*precio*/ + (notaPago ? 20 : 0) + PAD;
+  const mostrarOffBadge = !it.cp && listaActiva === 'p1';
+  let alto = imgH + PAD * 1.4 + 16 /*sku*/ + lineasNombre.length * 27 + (it.g ? 20 : 0) + 14 + 40 /*precio*/ + (mostrarOffBadge ? 18 : 0) + (notaPago ? 20 : 0) + PAD;
 
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = Math.ceil(alto);
@@ -1779,6 +1780,11 @@ async function _zoomConstruirTarjetaCanvas(it){
 
   ctx.fillStyle = '#0f172a'; ctx.font = '800 30px DM Sans, sans-serif';
   ctx.fillText(it.cp ? 'Consultar precio' : fmtMoney(precio), PAD, y);
+  if (mostrarOffBadge) {
+    y += 18;
+    ctx.fillStyle = '#0ea968'; ctx.font = '700 11px DM Sans, sans-serif';
+    ctx.fillText('✓ Precios ya con 10% off', PAD, y);
+  }
   if (notaPago) {
     y += 20;
     ctx.fillStyle = '#8592a6'; ctx.font = '11.5px DM Sans, sans-serif';
