@@ -1595,6 +1595,12 @@ function _zoomInicializarRecorteCanvas(canvas){
     dibujando = true;
     p1 = coords(e); p2 = p1;
     redibujar();
+    // Ocultar los botones mientras se arrastra, para que no estorben visualmente al elegir
+    // la zona (el recorte de todos modos se saca de la foto original, no de la pantalla).
+    const btnCopiar = document.getElementById('zoom-prod-copy');
+    const btnRecortar = document.getElementById('zoom-prod-recortar-btn');
+    if (btnCopiar) btnCopiar.style.display = 'none';
+    if (btnRecortar) btnRecortar.style.display = 'none';
   });
   canvas.addEventListener('pointermove', (e) => {
     if (!dibujando) return;
@@ -1608,6 +1614,11 @@ function _zoomInicializarRecorteCanvas(canvas){
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height); // borrar el recuadro ANTES de recortar
     p1 = null; p2 = null;
+    // Volver a mostrar los botones ahora que ya se terminó de elegir la zona.
+    const btnCopiar = document.getElementById('zoom-prod-copy');
+    const btnRecortar = document.getElementById('zoom-prod-recortar-btn');
+    if (btnCopiar) btnCopiar.style.display = 'flex';
+    if (btnRecortar) btnRecortar.style.display = 'flex';
     if (_p1 && _p2 && Math.abs(_p2.x - _p1.x) > 6 && Math.abs(_p2.y - _p1.y) > 6) {
       await _zoomRecortarYCopiar(_p1, _p2, canvas.width, canvas.height);
     }
