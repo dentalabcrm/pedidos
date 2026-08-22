@@ -63,11 +63,13 @@
   html[data-theme="dark"] img.marcas-logo-img, html[data-theme="dark"] .marcas-logo img{filter:brightness(.92) contrast(1.05);}
   /* Hover/selección de filas de producto: en claro usan celestes fijos (#dbeafe/#c7e0fd) que
      en oscuro dejan el texto claro ilegible sobre fondo claro. Se pisan con una versión oscura. */
-  html[data-theme="dark"] .prod-row-clickeable:hover{background:#1e3a5f;border-color:var(--blue);}
   html[data-theme="dark"] .prod-row-en-carrito{background:#173049;}
   html[data-theme="dark"] .prod-row-en-carrito:hover{background:#1c3a5a;}
-  html[data-theme="dark"] .prod-card-clickeable:active{background:#1c3a5a;}
   html[data-theme="dark"] .prod-card-en-carrito{background:#173049;}
+  @media (hover: hover) and (pointer: fine) {
+    html[data-theme="dark"] .prod-row-clickeable:hover{background:#1e3a5f;border-color:var(--blue);}
+    html[data-theme="dark"] .prod-card-clickeable:active{background:#1c3a5a;}
+  }
   .banner-info-suave{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;}
   html[data-theme="dark"] .banner-info-suave{background:#1e3a5f;border-color:#2c4f7c;color:#93c5fd;}
   body, .card, .pago-activo, input, select, textarea, button{ transition:background-color .18s ease, color .18s ease, border-color .18s ease; }
@@ -378,7 +380,13 @@
   .prod-card-clickeable{cursor:pointer;transition:background .12s,border-color .12s;}
   .prod-card, .prod-row, .prod-card *, .prod-row *{-webkit-tap-highlight-color:transparent;}
   .prod-card, .prod-row{touch-action:manipulation;}
-  .prod-card-clickeable:active{background:#bfdbfe;}
+  /* El resaltado ":active" al tocar solo se activa en dispositivos con mouse real (hover
+     fino) — en pantallas táctiles el propio sistema dispara ":active" apenas empieza el
+     toque, antes de saber si es un tap o el arranque de un scroll, y eso hacía que la
+     tarjeta se "marcara" mientras el usuario simplemente deslizaba el dedo para scrollear. */
+  @media (hover: hover) and (pointer: fine) {
+    .prod-card-clickeable:active{background:#bfdbfe;}
+  }
   .prod-card-en-carrito{background:#dbeafe;border-color:var(--blue);border-width:2px;}
   .prod-card-agotado{background:#fef2f2;border-color:#fecaca;}
   .prod-card-agotado .prod-nombre{text-decoration:line-through;text-decoration-color:var(--text3);color:var(--text3);}
@@ -448,7 +456,9 @@
     background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;
   }
   .prod-row-clickeable{cursor:pointer;transition:background .12s,border-color .12s;}
-  .prod-row-clickeable:active{background:#bfdbfe;}
+  @media (hover: hover) and (pointer: fine) {
+    .prod-row-clickeable:active{background:#bfdbfe;}
+  }
   .prod-row-en-carrito{background:#dbeafe;border-color:var(--blue);border-width:2px;}
   .prod-row-agotado{background:#fef2f2;border-color:#fecaca;}
   .prod-row-agotado .prod-nombre{text-decoration:line-through;text-decoration-color:var(--text3);color:var(--text3);}
