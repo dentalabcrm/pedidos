@@ -622,7 +622,7 @@
   .field label{display:block;font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;}
   label.paso-titulo{font-size:14px;font-weight:800;color:var(--blue);margin-bottom:8px;display:flex;align-items:center;gap:7px;}
   .paso-titulo{font-size:14px;font-weight:800;color:var(--blue);margin-bottom:8px;display:flex;align-items:center;gap:7px;}
-  .envio-caja{margin-top:12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:14px;}
+  .envio-caja{margin-top:12px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;}
   .envio-subtitulo{font-size:14px;font-weight:800;color:var(--blue);margin:14px 0 8px;}
   .envio-subtitulo:first-child{margin-top:0;}
   .envio-caja .field label, label.obs-label, .cliente-fields .field label{color:var(--blue-soft);}
@@ -4040,14 +4040,14 @@ function _htmlExtraSegunProvincia(provincia){
   if (provincia === 'CABA') {
     const horarioGuardado = _datosGuardadosLS()['cf-horario-envio'] || '';
     return `
-      <div style="margin-top:10px;font-size:12.5px;color:var(--text2);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px;line-height:1.5;">
+      <div style="margin-top:10px;font-size:12.5px;color:var(--text2);background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;line-height:1.5;">
         🕐 Nuestro horario de entrega en CABA suele ser de <strong>12:00 a 18:00 hs</strong> — necesitamos un margen de 4 horas para organizar los repartos, y <strong>no hacemos envíos antes de las 12 hs</strong>. El día del envío te confirmamos el horario por WhatsApp; si preferís un horario en particular, contanoslo.
       </div>
       <div class="field" style="margin-top:10px;"><label>Horario que preferís (opcional)</label><input id="cf-horario-envio" type="text" placeholder="Ej: después de las 15 hs" value="${escHtml(horarioGuardado)}"></div>
     `;
   }
   return `
-    <div style="margin-top:10px;font-size:12.5px;color:var(--text2);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
+    <div style="margin-top:10px;font-size:12.5px;color:var(--text2);background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
       🚚 Fuera de CABA el envío siempre corre por tu cuenta — el costo te lo confirmamos por WhatsApp antes de despachar.
     </div>
     <div class="envio-subtitulo">¿Con qué transportista preferís?</div>
