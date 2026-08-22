@@ -4077,7 +4077,8 @@ function _htmlTransportistaCards(){
     <div class="pago-card entrega${transportistaElegido === o.tipo ? ' pago-card-ultima' : ''}" onclick="onCambioTransportista('${o.tipo}')">
       ${(!transportistaElegido && _ultimoTransportista === o.tipo) ? '<span class="pago-card-ultima-tag">✓ Última vez</span>' : ''}
       <div class="pc-titulo">${o.emoji} ${o.titulo}</div>
-      <div class="pc-desc">${o.desc}</div>
+      <button type="button" class="pc-ver-condiciones" onclick="event.stopPropagation(); _toggleCondicionesEntrega(this)">Ver condiciones ▾</button>
+      <div class="pc-desc pc-desc-colapsable">${o.desc}</div>
     </div>`).join('');
 }
 
@@ -4252,7 +4253,7 @@ function _htmlMedioPagoCards(){
     <div class="pago-card contado${medioPagoContado === o.tipo ? ' pago-card-ultima' : ''}" onclick="onCambioMedioPagoCheckout('${o.tipo}')">
       ${medioPagoContado === o.tipo ? '<span class="pago-card-ultima-tag">✓ Elegido</span>' : ((!medioPagoContado && _ultimoMedio === o.tipo) ? '<span class="pago-card-ultima-tag">✓ Última vez</span>' : '')}
       <div class="pc-titulo">${o.emoji} ${o.titulo}</div>
-      ${o.desc ? `<div class="pc-desc">${o.desc}</div>` : ''}
+      ${o.desc ? `<button type="button" class="pc-ver-condiciones" onclick="event.stopPropagation(); _toggleCondicionesEntrega(this)">Ver condiciones ▾</button><div class="pc-desc pc-desc-colapsable">${o.desc}</div>` : ''}
       <span class="pc-badge">✓ Precios ya con 10% off</span>
     </div>`;
   }).join('');
