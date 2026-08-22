@@ -241,6 +241,9 @@
   }
   .pago-card .pc-titulo{font-size:15px;font-weight:800;color:var(--text);}
   .pago-card .pc-desc{font-size:12px;color:var(--text3);margin-top:3px;line-height:1.5;}
+  .pc-ver-condiciones{display:block;background:none;border:none;color:var(--blue);font-size:11.5px;font-weight:700;padding:0;margin-top:6px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
+  .pc-desc-colapsable{display:none;}
+  .pc-desc-colapsable.abierto{display:block;margin-top:8px;}
   .pago-card .pc-badge{display:inline-block;margin-top:8px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
   .pago-card.contado .pc-badge{background:#0ea96814;color:var(--green);}
   .pago-card.tarjeta .pc-badge{background:#0284c714;color:var(--blue);}
@@ -4186,9 +4189,19 @@ function _htmlEntregaCards(){
     <div class="pago-card entrega${modalidadEntrega === o.tipo ? ' pago-card-ultima' : ''}" onclick="onCambioEntregaCheckout('${o.tipo}')">
       ${(!modalidadEntrega && _ultimaEntrega === o.tipo) ? '<span class="pago-card-ultima-tag">✓ Última vez</span>' : ''}
       <div class="pc-titulo">${o.emoji} ${o.titulo}</div>
-      <div class="pc-desc">${o.desc}</div>
+      <button type="button" class="pc-ver-condiciones" onclick="event.stopPropagation(); _toggleCondicionesEntrega(this)">Ver condiciones ▾</button>
+      <div class="pc-desc pc-desc-colapsable">${o.desc}</div>
     </div>`).join('');
 }
+
+// Muestra/oculta el texto de condiciones dentro de una tarjeta de "¿Cómo querés recibir
+// tu pedido?", sin seleccionar esa opción (el toggle frena el click antes de que le
+// llegue a la tarjeta).
+window._toggleCondicionesEntrega = (btn) => {
+  const desc = btn.nextElementSibling;
+  const abierto = desc.classList.toggle('abierto');
+  btn.textContent = abierto ? 'Ocultar condiciones ▴' : 'Ver condiciones ▾';
+};
 
 // Se llama al elegir una tarjeta de "¿Cómo querés recibir tu pedido?" dentro del checkout.
 // Actualiza solo los bloques de entrega y envío (sin re-renderizar toda la página, para no
