@@ -376,6 +376,8 @@
     border-radius:12px;padding:10px;position:relative;
   }
   .prod-card-clickeable{cursor:pointer;transition:background .12s,border-color .12s;}
+  .prod-card, .prod-row, .prod-card *, .prod-row *{-webkit-tap-highlight-color:transparent;}
+  .prod-card, .prod-row{touch-action:manipulation;}
   .prod-card-clickeable:active{background:#bfdbfe;}
   .prod-card-en-carrito{background:#dbeafe;border-color:var(--blue);border-width:2px;}
   .prod-card-agotado{background:#fef2f2;border-color:#fecaca;}
@@ -3692,12 +3694,60 @@ function _avisarLimiteQty(sku){
   else alert(msg);
 }
 
+// Botón "+" o stepper de cantidad para un SKU, según el estado actual del carrito.
+function _controlHtmlPara(sku){
+  const it = catalogoBySku.get(sku);
+  if (!it) return '';
+  const precio = precioDe(it);
+  const puedeAgregar = !!precio && !it.st;
+  const qtyEnCarrito = carrito.get(sku) || 0;
+  const limite = _limiteQtyPara(sku);
+  const maxQtyAttr = isFinite(limite) ? ` max="${limite}"` : '';
+  return qtyEnCarrito > 0
+    ? `<div class="qty-stepper prod-qty" onclick="event.stopPropagation()">
+         <button onclick="cambiarQtyCarrito('${sku}', -1)">−</button>
+         <input type="number" class="qty-val" min="1" step="1"${maxQtyAttr} value="${qtyEnCarrito}" onchange="setQtyCarrito('${sku}', this.value)" onclick="this.select()">
+         <button onclick="cambiarQtyCarrito('${sku}', 1)">+</button>
+       </div>`
+    : `<button class="prod-add" onclick="event.stopPropagation(); agregarAlCarrito('${sku}')" ${!puedeAgregar ? `disabled title="${it.st ? 'Sin stock disponible' : (it.cp ? 'Consultar precio por WhatsApp' : 'Sin precio en esta lista')}"` : ''}>+</button>`;
+}
+
+// Actualiza EN EL LUGAR la tarjeta/fila de un solo producto (borde, botón/stepper de
+// cantidad) sin volver a dibujar el resto del listado — así las fotos de los demás
+// productos (y la propia) no se recargan ni parpadean al agregar/sacar del carrito, algo
+// que se notaba mucho en celular al reconstruir toda la grilla en cada click.
+function _actualizarTarjetaProducto(sku){
+  const it = catalogoBySku.get(sku);
+  if (!it) return;
+  const precio = precioDe(it);
+  const puedeAgregar = !!precio && !it.st;
+  const qtyEnCarrito = carrito.get(sku) || 0;
+  const controlHtml = _controlHtmlPara(sku);
+  document.querySelectorAll('.prod-card[data-sku], .prod-row[data-sku]').forEach(container => {
+    if (container.dataset.sku !== sku) return;
+    const esGrid = container.classList.contains('prod-card');
+    container.classList.toggle(esGrid ? 'prod-card-clickeable' : 'prod-row-clickeable', puedeAgregar || qtyEnCarrito > 0);
+    container.classList.toggle(esGrid ? 'prod-card-en-carrito' : 'prod-row-en-carrito', qtyEnCarrito > 0);
+    if (qtyEnCarrito > 0) container.setAttribute('onclick', `quitarDelCarrito('${sku}')`);
+    else if (puedeAgregar) container.setAttribute('onclick', `agregarAlCarrito('${sku}')`);
+    else container.removeAttribute('onclick');
+    const controlViejo = container.querySelector('.qty-stepper.prod-qty, .prod-add');
+    if (controlViejo) controlViejo.remove();
+    if (esGrid) {
+      if (qtyEnCarrito === 0) container.querySelector('.prod-card-precio-row')?.insertAdjacentHTML('beforeend', controlHtml);
+      else container.querySelector('.prod-card-body')?.insertAdjacentHTML('beforeend', controlHtml);
+    } else {
+      container.insertAdjacentHTML('beforeend', controlHtml);
+    }
+  });
+}
+
 window.agregarAlCarrito = (sku) => {
   const actual = carrito.get(sku) || 0;
   const limite = _limiteQtyPara(sku);
   if (actual + 1 > limite) { _avisarLimiteQty(sku); return; }
   carrito.set(sku, actual + 1);
-  requestAnimationFrame(() => { renderResultados(); renderCarrito(); });
+  requestAnimationFrame(() => { _actualizarTarjetaProducto(sku); renderCarrito(); });
 };
 
 window.cambiarQtyCarrito = (sku, delta) => {
@@ -3706,7 +3756,7 @@ window.cambiarQtyCarrito = (sku, delta) => {
   const limite = _limiteQtyPara(sku);
   if (delta > 0 && nueva > limite) { _avisarLimiteQty(sku); return; }
   if (nueva <= 0) { carrito.delete(sku); } else { carrito.set(sku, nueva); }
-  requestAnimationFrame(() => { renderCarrito(); renderResultados(); });
+  requestAnimationFrame(() => { renderCarrito(); _actualizarTarjetaProducto(sku); });
 };
 
 window.setQtyCarrito = (sku, valorTexto) => {
@@ -3714,12 +3764,12 @@ window.setQtyCarrito = (sku, valorTexto) => {
   const limite = _limiteQtyPara(sku);
   if (n > limite) { _avisarLimiteQty(sku); n = limite; }
   if (!n || n <= 0 || isNaN(n)) { carrito.delete(sku); } else { carrito.set(sku, n); }
-  requestAnimationFrame(() => { renderCarrito(); renderResultados(); });
+  requestAnimationFrame(() => { renderCarrito(); _actualizarTarjetaProducto(sku); });
 };
 
 window.quitarDelCarrito = (sku) => {
   carrito.delete(sku);
-  requestAnimationFrame(() => { renderCarrito(); renderResultados(); });
+  requestAnimationFrame(() => { renderCarrito(); _actualizarTarjetaProducto(sku); });
 };
 
 function calcularTotal(){
