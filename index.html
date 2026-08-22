@@ -615,6 +615,10 @@
   .cliente-fields{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px;}
   @media(min-width:560px){.cliente-fields{grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));}}
   .field label{display:block;font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;}
+  .paso-titulo{font-size:14px;font-weight:800;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:7px;}
+  .envio-caja{margin-top:12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:14px;}
+  .envio-subtitulo{font-size:12.5px;font-weight:800;color:var(--text);margin:14px 0 8px;}
+  .envio-subtitulo:first-child{margin-top:0;}
   .field input{width:100%;border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13.5px;color:var(--text);background:var(--panel2);}
   .field textarea{width:100%;min-height:64px;resize:vertical;border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13.5px;color:var(--text);background:var(--panel2);}
   .field textarea:focus{outline:2px solid var(--blue);outline-offset:-1px;background:#fff;}
@@ -872,7 +876,7 @@ let _datosGuardarTimer = null;
 const LS_KEY_CARRITO = 'dentalab_pedido_carrito_v1';
 const LS_KEY_ESTADO  = 'dentalab_pedido_estado_v1';
 const LS_KEY_DATOS   = 'dentalab_pedido_datos_v1';
-const LS_CAMPOS_DATOS = ['cf-nombre','cf-dni','cf-email','cf-tel','cf-direccion','cf-cp','cf-ciudad','cf-provincia','cf-obs'];
+const LS_CAMPOS_DATOS = ['cf-nombre','cf-dni','cf-email','cf-tel','cf-direccion','cf-cp','cf-ciudad','cf-provincia','cf-obs','cf-horario-envio','cf-transportista-otro'];
 
 // ── Datos personales del cliente (nombre, DNI, email, teléfono) — a diferencia de
 // LS_KEY_DATOS de arriba (que es solo para recuperar un pedido EN CURSO y se borra al
@@ -916,7 +920,7 @@ function _restaurarCarritoLS(){
   } catch(e) {}
 }
 function _guardarEstadoLS(){
-  try { localStorage.setItem(LS_KEY_ESTADO, JSON.stringify({ modalidadEntrega, listaActiva, medioPagoContado })); } catch(e) {}
+  try { localStorage.setItem(LS_KEY_ESTADO, JSON.stringify({ modalidadEntrega, listaActiva, medioPagoContado, transportistaElegido, recepcionEnvioTipo })); } catch(e) {}
 }
 function _restaurarEstadoLS(){
   try {
@@ -938,6 +942,17 @@ function _restaurarDatosLS(){
     const datos = JSON.parse(raw);
     LS_CAMPOS_DATOS.forEach(id => { const el = document.getElementById(id); if (el && datos[id]) el.value = datos[id]; });
   } catch(e) {}
+}
+// Lectura sincrónica de LS_KEY_DATOS (sin tocar el DOM) — se usa para sembrar el HTML
+// del bloque de envío ya con los valores guardados (dirección, provincia, etc.) desde el
+// primer render, en vez de escribirlos recién después con _restaurarDatosLS(). Así, la
+// provincia restaurada dispara de una el sub-bloque correspondiente (horario en CABA, o
+// transportistas fuera de CABA) sin necesitar que el cliente la vuelva a tocar.
+function _datosGuardadosLS(){
+  try {
+    const raw = localStorage.getItem(LS_KEY_DATOS);
+    return raw ? JSON.parse(raw) : {};
+  } catch(e) { return {}; }
 }
 function _limpiarPedidoLS(){
   try {
@@ -963,6 +978,8 @@ function _guardarUltimaPrefLS(){
     if (modalidadEntrega) actualizado.modalidadEntrega = modalidadEntrega;
     if (listaActiva) actualizado.listaActiva = listaActiva;
     if (medioPagoContado) actualizado.medioPagoContado = medioPagoContado;
+    if (transportistaElegido) actualizado.transportistaElegido = transportistaElegido;
+    if (recepcionEnvioTipo) actualizado.recepcionEnvioTipo = recepcionEnvioTipo;
     localStorage.setItem(LS_KEY_ULTIMA_PREF, JSON.stringify(actualizado));
   } catch(e) {}
 }
@@ -3045,6 +3062,8 @@ async function cargarCatalogo(){
       modalidadEntrega = estadoGuardado.modalidadEntrega || null;
       listaActiva = estadoGuardado.listaActiva;
       medioPagoContado = estadoGuardado.medioPagoContado || null;
+      transportistaElegido = estadoGuardado.transportistaElegido || null;
+      recepcionEnvioTipo = estadoGuardado.recepcionEnvioTipo || null;
       renderPrincipal();
       _initBarrasFlotantes();
     } else {
@@ -3916,44 +3935,27 @@ function _actualizarBarraCarritoFlotante(){
   document.body.style.paddingBottom = '64px';
 }
 
+const PROVINCIAS_AR = ['CABA','Buenos Aires','Catamarca','Chaco','Chubut','Córdoba','Corrientes','Entre Ríos','Formosa','Jujuy','La Pampa','La Rioja','Mendoza','Misiones','Neuquén','Río Negro','Salta','San Juan','San Luis','Santa Cruz','Santa Fe','Santiago del Estero','Tierra del Fuego','Tucumán'];
+
 function _htmlCamposEnvioExtra(){
   if (modalidadEntrega !== 'envio') return '';
+  const datosGuardados = _datosGuardadosLS();
+  const provinciaGuardada = datosGuardados['cf-provincia'] || '';
   return `
-      <div class="field" style="margin-top:10px;"><label>Dirección de envío</label><input id="cf-direccion" type="text" placeholder="Calle, número, piso/depto"></div>
+    <div class="envio-caja">
+      <div class="field"><label>Dirección de envío</label><input id="cf-direccion" type="text" placeholder="Calle, número, piso/depto" value="${escHtml(datosGuardados['cf-direccion'] || '')}"></div>
       <div class="cliente-fields" style="margin-top:10px;">
-        <div class="field"><label>Código postal</label><input id="cf-cp" type="text" placeholder="1425"></div>
-        <div class="field"><label>Ciudad / Localidad</label><input id="cf-ciudad" type="text" placeholder="Ciudad o localidad"></div>
+        <div class="field"><label>Código postal</label><input id="cf-cp" type="text" placeholder="1425" value="${escHtml(datosGuardados['cf-cp'] || '')}"></div>
+        <div class="field"><label>Ciudad / Localidad</label><input id="cf-ciudad" type="text" placeholder="Ciudad o localidad" value="${escHtml(datosGuardados['cf-ciudad'] || '')}"></div>
         <div class="field"><label>Provincia</label>
           <select id="cf-provincia" onchange="_onProvinciaCambio()">
             <option value="">Seleccioná…</option>
-            <option>CABA</option>
-            <option>Buenos Aires</option>
-            <option>Catamarca</option>
-            <option>Chaco</option>
-            <option>Chubut</option>
-            <option>Córdoba</option>
-            <option>Corrientes</option>
-            <option>Entre Ríos</option>
-            <option>Formosa</option>
-            <option>Jujuy</option>
-            <option>La Pampa</option>
-            <option>La Rioja</option>
-            <option>Mendoza</option>
-            <option>Misiones</option>
-            <option>Neuquén</option>
-            <option>Río Negro</option>
-            <option>Salta</option>
-            <option>San Juan</option>
-            <option>San Luis</option>
-            <option>Santa Cruz</option>
-            <option>Santa Fe</option>
-            <option>Santiago del Estero</option>
-            <option>Tierra del Fuego</option>
-            <option>Tucumán</option>
+            ${PROVINCIAS_AR.map(p => `<option${p === provinciaGuardada ? ' selected' : ''}>${p}</option>`).join('')}
           </select>
         </div>
       </div>
-      <div id="cf-envio-provincia-extra">${_htmlExtraSegunProvincia('')}</div>
+      <div id="cf-envio-provincia-extra">${_htmlExtraSegunProvincia(provinciaGuardada)}</div>
+    </div>
   `;
 }
 
@@ -3970,8 +3972,8 @@ window._onProvinciaCambio = () => {
   // los datos que el cliente ya cargó (dirección, CP, ciudad, nombre, etc.).
   if (listaActiva === 'p1' && medioPagoContado === 'efectivo' && provincia && provincia !== 'CABA') {
     medioPagoContado = null;
-    _guardarEstadoLS();
   }
+  _guardarEstadoLS();
   const medioCont = document.getElementById('cf-medio-pago-cards');
   if (medioCont) medioCont.innerHTML = _htmlMedioPagoCards();
   _actualizarResumenEnvio();
@@ -3980,21 +3982,20 @@ window._onProvinciaCambio = () => {
 function _htmlExtraSegunProvincia(provincia){
   if (!provincia) return '';
   if (provincia === 'CABA') {
+    const horarioGuardado = _datosGuardadosLS()['cf-horario-envio'] || '';
     return `
-      <div style="margin-top:10px;font-size:12.5px;color:var(--text2);background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;line-height:1.5;">
+      <div style="margin-top:10px;font-size:12.5px;color:var(--text2);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px;line-height:1.5;">
         🕐 Nuestro horario de entrega en CABA suele ser de <strong>12:00 a 18:00 hs</strong> — necesitamos un margen de 4 horas para organizar los repartos, y <strong>no hacemos envíos antes de las 12 hs</strong>. El día del envío te confirmamos el horario por WhatsApp; si preferís un horario en particular, contanoslo.
       </div>
-      <div class="field" style="margin-top:10px;"><label>Horario que preferís (opcional)</label><input id="cf-horario-envio" type="text" placeholder="Ej: después de las 15 hs"></div>
+      <div class="field" style="margin-top:10px;"><label>Horario que preferís (opcional)</label><input id="cf-horario-envio" type="text" placeholder="Ej: después de las 15 hs" value="${escHtml(horarioGuardado)}"></div>
     `;
   }
   return `
-    <div style="margin-top:10px;font-size:12.5px;color:var(--text2);background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
+    <div style="margin-top:10px;font-size:12.5px;color:var(--text2);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
       🚚 Fuera de CABA el envío siempre corre por tu cuenta — el costo te lo confirmamos por WhatsApp antes de despachar.
     </div>
-    <div class="field" style="margin-top:10px;">
-      <label>¿Con qué transportista preferís?</label>
-      <div id="cf-transportista-cards" class="pago-opciones" style="margin-top:6px;">${_htmlTransportistaCards()}</div>
-    </div>
+    <div class="envio-subtitulo">¿Con qué transportista preferís?</div>
+    <div id="cf-transportista-cards" class="pago-opciones">${_htmlTransportistaCards()}</div>
     <div id="cf-transportista-extra">${_htmlExtraTransportista()}</div>
   `;
 }
@@ -4002,6 +4003,11 @@ function _htmlExtraSegunProvincia(provincia){
 const TRANSPORTISTA_LABEL = { oca: 'OCA', correo: 'Correo Argentino', viacargo: 'Via Cargo' };
 
 function _htmlTransportistaCards(){
+  let _ultimoTransportista = null;
+  try {
+    const prev = _restaurarUltimaPrefLS();
+    if (prev && prev.transportistaElegido) _ultimoTransportista = prev.transportistaElegido;
+  } catch (e) {}
   const opciones = [
     { tipo: 'oca', emoji: '📦', titulo: 'OCA', desc: 'Recomendado. El costo lo confirmamos por WhatsApp y se abona junto al resto del pedido antes de despachar.' },
     { tipo: 'correo', emoji: '📮', titulo: 'Correo Argentino', desc: 'El costo lo confirmamos por WhatsApp y se abona junto al resto del pedido antes de despachar.' },
@@ -4010,6 +4016,7 @@ function _htmlTransportistaCards(){
   ];
   return opciones.map(o => `
     <div class="pago-card entrega${transportistaElegido === o.tipo ? ' pago-card-ultima' : ''}" onclick="onCambioTransportista('${o.tipo}')">
+      ${(!transportistaElegido && _ultimoTransportista === o.tipo) ? '<span class="pago-card-ultima-tag">✓ Última vez</span>' : ''}
       <div class="pc-titulo">${o.emoji} ${o.titulo}</div>
       <div class="pc-desc">${o.desc}</div>
     </div>`).join('');
@@ -4018,6 +4025,8 @@ function _htmlTransportistaCards(){
 window.onCambioTransportista = (tipo) => {
   transportistaElegido = tipo;
   recepcionEnvioTipo = null;
+  _guardarEstadoLS();
+  _guardarUltimaPrefLS();
   const cont = document.getElementById('cf-transportista-cards');
   if (cont) cont.innerHTML = _htmlTransportistaCards();
   const extra = document.getElementById('cf-transportista-extra');
@@ -4027,28 +4036,35 @@ window.onCambioTransportista = (tipo) => {
 function _htmlExtraTransportista(){
   if (!transportistaElegido) return '';
   if (transportistaElegido === 'otro') {
-    return `<div class="field" style="margin-top:10px;"><label>¿Qué transportista preferís?</label><input id="cf-transportista-otro" type="text" placeholder="Nombre del transportista"></div>`;
+    const otroGuardado = _datosGuardadosLS()['cf-transportista-otro'] || '';
+    return `<div class="field" style="margin-top:10px;"><label>¿Qué transportista preferís?</label><input id="cf-transportista-otro" type="text" placeholder="Nombre del transportista" value="${escHtml(otroGuardado)}"></div>`;
   }
   return `
-    <div class="field" style="margin-top:10px;">
-      <label>¿A domicilio o a sucursal?</label>
-      <div id="cf-recepcion-cards" class="pago-opciones" style="margin-top:6px;">${_htmlRecepcionCards()}</div>
-    </div>`;
+    <div class="envio-subtitulo">¿A domicilio o a sucursal?</div>
+    <div id="cf-recepcion-cards" class="pago-opciones">${_htmlRecepcionCards()}</div>`;
 }
 
 function _htmlRecepcionCards(){
+  let _ultimaRecepcion = null;
+  try {
+    const prev = _restaurarUltimaPrefLS();
+    if (prev && prev.recepcionEnvioTipo) _ultimaRecepcion = prev.recepcionEnvioTipo;
+  } catch (e) {}
   const opciones = [
     { tipo: 'domicilio', emoji: '🏠', titulo: 'A domicilio' },
     { tipo: 'sucursal', emoji: '🏬', titulo: 'A sucursal' },
   ];
   return opciones.map(o => `
     <div class="pago-card entrega${recepcionEnvioTipo === o.tipo ? ' pago-card-ultima' : ''}" onclick="onCambioRecepcionEnvio('${o.tipo}')">
+      ${(!recepcionEnvioTipo && _ultimaRecepcion === o.tipo) ? '<span class="pago-card-ultima-tag">✓ Última vez</span>' : ''}
       <div class="pc-titulo">${o.emoji} ${o.titulo}</div>
     </div>`).join('');
 }
 
 window.onCambioRecepcionEnvio = (tipo) => {
   recepcionEnvioTipo = tipo;
+  _guardarEstadoLS();
+  _guardarUltimaPrefLS();
   const cont = document.getElementById('cf-recepcion-cards');
   if (cont) cont.innerHTML = _htmlRecepcionCards();
 };
@@ -4178,7 +4194,7 @@ function _htmlMedioPagoBlock(){
   if (!modalidadEntrega) return '';
   return `
       <div class="field">
-        <label><span class="paso-badge paso-badge-chica">3c</span>¿Cómo preferís abonar? *</label>
+        <label class="paso-titulo" style="margin-bottom:6px;"><span class="paso-badge paso-badge-chica">3c</span>¿Cómo preferís abonar? *</label>
         <div id="cf-medio-pago-cards" class="pago-opciones" style="margin-top:6px;">${_htmlMedioPagoCards()}</div>
       </div>`;
 }
@@ -4295,7 +4311,7 @@ function renderPrincipal(){
 
     <div class="card card-datos">
       <h1><span class="paso-badge">3</span>📝 Completá tus datos</h1>
-      <div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px;display:flex;align-items:center;"><span class="paso-badge paso-badge-chica">3a</span>Tus datos</div>
+      <div class="paso-titulo"><span class="paso-badge paso-badge-chica">3a</span>Tus datos</div>
       <div class="cliente-fields">
         <div class="field"><label>Cliente *</label><input id="cf-nombre" type="text" placeholder="Nombre y apellido" required oninput="this.style.outline=''; _guardarDatosPermLS()"></div>
         <div class="field"><label>DNI / CUIT</label><input id="cf-dni" type="text" inputmode="numeric" placeholder="Sin puntos ni guiones" oninput="_guardarDatosPermLS()"></div>
@@ -4303,7 +4319,7 @@ function renderPrincipal(){
         <div class="field"><label>Teléfono</label><input id="cf-tel" type="tel" placeholder="11 1234-5678" oninput="_guardarDatosPermLS()"></div>
       </div>
       <div class="field" style="margin-top:10px;">
-        <label><span class="paso-badge paso-badge-chica">3b</span>¿Cómo querés recibir tu pedido? *</label>
+        <label class="paso-titulo" style="margin-bottom:6px;"><span class="paso-badge paso-badge-chica">3b</span>¿Cómo querés recibir tu pedido? *</label>
         <div id="cf-entrega-cards" class="pago-opciones" style="margin-top:6px;">${_htmlEntregaCards()}</div>
       </div>
       <div id="cf-envio-extra">${_htmlCamposEnvioExtra()}</div>
