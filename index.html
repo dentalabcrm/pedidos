@@ -815,6 +815,8 @@ let catalogoBySku = new Map();
 let listaActiva = null; // 'p1' (Contado -10%) | 'p2' (Tarjeta 1 pago)
 let medioPagoContado = null; // 'efectivo' | 'debito' | 'transferencia' (solo si listaActiva === 'p1')
 let modalidadEntrega = null; // 'retiro' | 'envio' | 'no_se'
+let transportistaElegido = null; // 'oca' | 'correo' | 'viacargo' | 'otro' — solo para envíos fuera de CABA
+let recepcionEnvioTipo = null; // 'domicilio' | 'sucursal' — solo para envíos fuera de CABA
 
 // ── Mensaje de bienvenida / "hace rato no venías" ──
 // Se calcula UNA sola vez al cargar la página, comparando contra la fecha de la
@@ -3715,6 +3717,36 @@ function calcularTotal(){
   return total;
 }
 
+// ── Reglas de envío (CABA) ──
+// El peso no está cargado como campo propio en cada producto — se intenta extraer del
+// nombre cuando dice algo como "x 25kg" o "25 kg". Los productos sin esa mención en el
+// nombre se cuentan como peso 0 (no disparan el recargo por peso).
+function _pesoProductoKg(nombre){
+  if (!nombre) return 0;
+  const texto = String(nombre);
+  const m = texto.match(/x\s*(\d+(?:[.,]\d+)?)\s*kg\b/i) || texto.match(/(\d+(?:[.,]\d+)?)\s*kg\b/i);
+  if (!m) return 0;
+  const val = parseFloat(m[1].replace(',', '.'));
+  return Number.isFinite(val) ? val : 0;
+}
+function _pesoTotalCarritoKg(){
+  let total = 0;
+  carrito.forEach((qty, sku) => {
+    const it = catalogoBySku.get(sku);
+    if (it) total += _pesoProductoKg(it.n) * qty;
+  });
+  return total;
+}
+// Reglas (en este orden): si pesa más de 20kg → $20.000 siempre, sin importar el monto.
+// Si no, gratis desde $120.000, y si no llega a ese monto → $14.000.
+function calcularCostoEnvioCABA(){
+  const pesoKg = _pesoTotalCarritoKg();
+  if (pesoKg > 20) return 20000;
+  const subtotal = calcularTotal();
+  if (subtotal >= 120000) return 0;
+  return 14000;
+}
+
 const SKUS_DIENTES_SURTIDOS = {
   '30000': { marca: 'Acritone', url: new URL('pedido-dientes-acritone.html', location.href).href },
   '33700': { marca: 'Newcryl', url: new URL('pedido-dientes-newcryl.html', location.href).href }
@@ -3779,6 +3811,7 @@ function renderCarrito(){
     }).join('');
   }
   if (totalEl) totalEl.textContent = fmtMoney(calcularTotal());
+  _actualizarResumenEnvio();
   const finTotalCont = document.getElementById('fin-total-cuotas');
   if (finTotalCont) {
     finTotalCont.innerHTML = (listaActiva === 'p2' && carrito.size && _pwHayFinanciamiento())
@@ -3887,17 +3920,11 @@ function _htmlCamposEnvioExtra(){
   if (modalidadEntrega !== 'envio') return '';
   return `
       <div class="field" style="margin-top:10px;"><label>Dirección de envío</label><input id="cf-direccion" type="text" placeholder="Calle, número, piso/depto"></div>
-      ${(listaActiva === 'p1' && medioPagoContado === 'efectivo') ? `
-      <div style="margin-top:10px;font-size:12.5px;color:#b45309;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);border-radius:8px;padding:8px 10px;">💵 Los pagos en efectivo solo los recibimos para envíos dentro de <strong>CABA</strong>. Si necesitás envío a otra provincia, elegí otro medio de pago.</div>
-      ` : ''}
       <div class="cliente-fields" style="margin-top:10px;">
         <div class="field"><label>Código postal</label><input id="cf-cp" type="text" placeholder="1425"></div>
         <div class="field"><label>Ciudad / Localidad</label><input id="cf-ciudad" type="text" placeholder="Ciudad o localidad"></div>
         <div class="field"><label>Provincia</label>
-          <select id="cf-provincia" ${(listaActiva === 'p1' && medioPagoContado === 'efectivo') ? 'disabled' : ''}>
-            ${(listaActiva === 'p1' && medioPagoContado === 'efectivo') ? `
-            <option value="CABA" selected>CABA</option>
-            ` : `
+          <select id="cf-provincia" onchange="_onProvinciaCambio()">
             <option value="">Seleccioná…</option>
             <option>CABA</option>
             <option>Buenos Aires</option>
@@ -3923,11 +3950,153 @@ function _htmlCamposEnvioExtra(){
             <option>Santiago del Estero</option>
             <option>Tierra del Fuego</option>
             <option>Tucumán</option>
-            `}
           </select>
         </div>
       </div>
+      <div id="cf-envio-provincia-extra">${_htmlExtraSegunProvincia('')}</div>
   `;
+}
+
+// Se llama al cambiar la provincia dentro del checkout: redibuja solo el sub-bloque de
+// envío (CABA con horario, o transportistas fuera de CABA) y recalcula el resumen.
+window._onProvinciaCambio = () => {
+  const provincia = document.getElementById('cf-provincia')?.value.trim() || '';
+  transportistaElegido = null;
+  recepcionEnvioTipo = null;
+  const cont = document.getElementById('cf-envio-provincia-extra');
+  if (cont) cont.innerHTML = _htmlExtraSegunProvincia(provincia);
+  // "Efectivo" solo es válido para envíos dentro de CABA. Si ya estaba elegido y la
+  // provincia deja de ser CABA, se resetea esa elección puntual — sin tocar el resto de
+  // los datos que el cliente ya cargó (dirección, CP, ciudad, nombre, etc.).
+  if (listaActiva === 'p1' && medioPagoContado === 'efectivo' && provincia && provincia !== 'CABA') {
+    medioPagoContado = null;
+    _guardarEstadoLS();
+  }
+  const medioCont = document.getElementById('cf-medio-pago-cards');
+  if (medioCont) medioCont.innerHTML = _htmlMedioPagoCards();
+  _actualizarResumenEnvio();
+};
+
+function _htmlExtraSegunProvincia(provincia){
+  if (!provincia) return '';
+  if (provincia === 'CABA') {
+    return `
+      <div style="margin-top:10px;font-size:12.5px;color:var(--text2);background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;line-height:1.5;">
+        🕐 Nuestro horario de entrega en CABA suele ser de <strong>12:00 a 18:00 hs</strong> — necesitamos un margen de 4 horas para organizar los repartos, y <strong>no hacemos envíos antes de las 12 hs</strong>. El día del envío te confirmamos el horario por WhatsApp; si preferís un horario en particular, contanoslo.
+      </div>
+      <div class="field" style="margin-top:10px;"><label>Horario que preferís (opcional)</label><input id="cf-horario-envio" type="text" placeholder="Ej: después de las 15 hs"></div>
+    `;
+  }
+  return `
+    <div style="margin-top:10px;font-size:12.5px;color:var(--text2);background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
+      🚚 Fuera de CABA el envío siempre corre por tu cuenta — el costo te lo confirmamos por WhatsApp antes de despachar.
+    </div>
+    <div class="field" style="margin-top:10px;">
+      <label>¿Con qué transportista preferís?</label>
+      <div id="cf-transportista-cards" class="pago-opciones" style="margin-top:6px;">${_htmlTransportistaCards()}</div>
+    </div>
+    <div id="cf-transportista-extra">${_htmlExtraTransportista()}</div>
+  `;
+}
+
+const TRANSPORTISTA_LABEL = { oca: 'OCA', correo: 'Correo Argentino', viacargo: 'Via Cargo' };
+
+function _htmlTransportistaCards(){
+  const opciones = [
+    { tipo: 'oca', emoji: '📦', titulo: 'OCA', desc: 'Recomendado. El costo lo confirmamos por WhatsApp y se abona junto al resto del pedido antes de despachar.' },
+    { tipo: 'correo', emoji: '📮', titulo: 'Correo Argentino', desc: 'El costo lo confirmamos por WhatsApp y se abona junto al resto del pedido antes de despachar.' },
+    { tipo: 'viacargo', emoji: '🚛', titulo: 'Via Cargo', desc: 'El costo lo pagás vos directamente al recibir el pedido.' },
+    { tipo: 'otro', emoji: '✍️', titulo: 'Prefiero sugerir otro', desc: 'Contanos cuál y lo vemos por WhatsApp.' },
+  ];
+  return opciones.map(o => `
+    <div class="pago-card entrega${transportistaElegido === o.tipo ? ' pago-card-ultima' : ''}" onclick="onCambioTransportista('${o.tipo}')">
+      <div class="pc-titulo">${o.emoji} ${o.titulo}</div>
+      <div class="pc-desc">${o.desc}</div>
+    </div>`).join('');
+}
+
+window.onCambioTransportista = (tipo) => {
+  transportistaElegido = tipo;
+  recepcionEnvioTipo = null;
+  const cont = document.getElementById('cf-transportista-cards');
+  if (cont) cont.innerHTML = _htmlTransportistaCards();
+  const extra = document.getElementById('cf-transportista-extra');
+  if (extra) extra.innerHTML = _htmlExtraTransportista();
+};
+
+function _htmlExtraTransportista(){
+  if (!transportistaElegido) return '';
+  if (transportistaElegido === 'otro') {
+    return `<div class="field" style="margin-top:10px;"><label>¿Qué transportista preferís?</label><input id="cf-transportista-otro" type="text" placeholder="Nombre del transportista"></div>`;
+  }
+  return `
+    <div class="field" style="margin-top:10px;">
+      <label>¿A domicilio o a sucursal?</label>
+      <div id="cf-recepcion-cards" class="pago-opciones" style="margin-top:6px;">${_htmlRecepcionCards()}</div>
+    </div>`;
+}
+
+function _htmlRecepcionCards(){
+  const opciones = [
+    { tipo: 'domicilio', emoji: '🏠', titulo: 'A domicilio' },
+    { tipo: 'sucursal', emoji: '🏬', titulo: 'A sucursal' },
+  ];
+  return opciones.map(o => `
+    <div class="pago-card entrega${recepcionEnvioTipo === o.tipo ? ' pago-card-ultima' : ''}" onclick="onCambioRecepcionEnvio('${o.tipo}')">
+      <div class="pc-titulo">${o.emoji} ${o.titulo}</div>
+    </div>`).join('');
+}
+
+window.onCambioRecepcionEnvio = (tipo) => {
+  recepcionEnvioTipo = tipo;
+  const cont = document.getElementById('cf-recepcion-cards');
+  if (cont) cont.innerHTML = _htmlRecepcionCards();
+};
+
+// Actualiza las filas de "Envío" / "Total con envío" en el resumen del carrito, según
+// la provincia elegida (o las oculta si todavía no corresponde mostrarlas).
+function _actualizarResumenEnvio(){
+  const filaCaba = document.getElementById('fila-envio-caba');
+  const filaTransportista = document.getElementById('fila-envio-transportista');
+  const filaTotalConEnvio = document.getElementById('fila-total-con-envio');
+  if (!filaCaba || !filaTransportista) return;
+  const provincia = document.getElementById('cf-provincia')?.value.trim() || '';
+  if (modalidadEntrega === 'envio' && provincia === 'CABA' && carrito.size) {
+    const costo = calcularCostoEnvioCABA();
+    filaCaba.style.display = '';
+    filaTransportista.style.display = 'none';
+    const montoEl = document.getElementById('envio-caba-monto');
+    if (montoEl) montoEl.textContent = costo === 0 ? 'Sin cargo' : fmtMoney(costo);
+    if (filaTotalConEnvio) {
+      filaTotalConEnvio.style.display = '';
+      const totalEl2 = document.getElementById('total-con-envio-monto');
+      if (totalEl2) totalEl2.textContent = fmtMoney(calcularTotal() + costo);
+    }
+  } else if (modalidadEntrega === 'envio' && provincia && provincia !== 'CABA' && carrito.size) {
+    filaCaba.style.display = 'none';
+    filaTransportista.style.display = '';
+    if (filaTotalConEnvio) filaTotalConEnvio.style.display = 'none';
+  } else {
+    filaCaba.style.display = 'none';
+    filaTransportista.style.display = 'none';
+    if (filaTotalConEnvio) filaTotalConEnvio.style.display = 'none';
+  }
+}
+
+// Texto que se usa como nombre del ítem de envío en el mensaje de WhatsApp / presupuesto.
+function _labelEnvioParaPresupuesto(){
+  const provincia = document.getElementById('cf-provincia')?.value.trim() || '';
+  if (modalidadEntrega !== 'envio' || !provincia) return '';
+  if (provincia === 'CABA') return 'Envíos Dentalab';
+  if (transportistaElegido && TRANSPORTISTA_LABEL[transportistaElegido]) {
+    const recepcion = recepcionEnvioTipo === 'sucursal' ? 'a sucursal' : 'a domicilio';
+    return `Envío estándar ${TRANSPORTISTA_LABEL[transportistaElegido]} ${recepcion}`;
+  }
+  if (transportistaElegido === 'otro') {
+    const otro = document.getElementById('cf-transportista-otro')?.value.trim();
+    return otro ? `Envío estándar ${otro}` : 'Envío a coordinar por WhatsApp';
+  }
+  return 'Envío a coordinar por WhatsApp';
 }
 
 function _htmlEntregaCards(){
@@ -3954,6 +4123,7 @@ function _htmlEntregaCards(){
 // perder lo que el cliente ya tipeó en nombre/tel/etc.).
 window.onCambioEntregaCheckout = (tipo) => {
   modalidadEntrega = tipo;
+  if (tipo !== 'envio') { transportistaElegido = null; recepcionEnvioTipo = null; }
   _guardarEstadoLS();
   _guardarUltimaPrefLS();
   const contCards = document.getElementById('cf-entrega-cards');
@@ -3964,6 +4134,7 @@ window.onCambioEntregaCheckout = (tipo) => {
   // ya eligió cómo recibe el pedido — así no compiten visualmente las dos preguntas.
   const medioWrap = document.getElementById('cf-medio-pago-wrap');
   if (medioWrap) medioWrap.innerHTML = _htmlMedioPagoBlock();
+  _actualizarResumenEnvio();
 };
 
 // "¿Cómo preferís abonar?" (solo cuando la forma de pago activa es Contado -10%off-, y
@@ -3974,18 +4145,32 @@ function _htmlMedioPagoCards(){
     const prev = _restaurarUltimaPrefLS();
     if (prev && prev.listaActiva === 'p1' && prev.medioPagoContado) _ultimoMedio = prev.medioPagoContado;
   } catch (e) {}
+  // "Efectivo" solo se recibe para envíos dentro de CABA. Si el cliente ya eligió envío
+  // a otra provincia, se bloquea esa tarjeta puntual (no toda la pantalla) para no perder
+  // los datos que ya cargó.
+  const provinciaActual = document.getElementById('cf-provincia')?.value.trim() || '';
+  const efectivoBloqueado = modalidadEntrega === 'envio' && provinciaActual && provinciaActual !== 'CABA';
   const opciones = [
     { tipo: 'efectivo', emoji: '💵', titulo: 'Efectivo', desc: _textosCatalogo.medio_efectivo },
     { tipo: 'transferencia', emoji: '🏦', titulo: 'Transferencia bancaria', desc: _textosCatalogo.medio_transferencia },
     { tipo: 'mercadopago', emoji: '📱', titulo: 'Mercado Pago', desc: _textosCatalogo.medio_mercadopago },
   ];
-  return opciones.map(o => `
+  return opciones.map(o => {
+    if (o.tipo === 'efectivo' && efectivoBloqueado) {
+      return `
+    <div class="pago-card contado" style="opacity:.5;cursor:not-allowed;" title="Solo disponible para envíos dentro de CABA">
+      <div class="pc-titulo">${o.emoji} ${o.titulo}</div>
+      <div class="pc-desc">Solo disponible para envíos dentro de CABA.</div>
+    </div>`;
+    }
+    return `
     <div class="pago-card contado${medioPagoContado === o.tipo ? ' pago-card-ultima' : ''}" onclick="onCambioMedioPagoCheckout('${o.tipo}')">
       ${medioPagoContado === o.tipo ? '<span class="pago-card-ultima-tag">✓ Elegido</span>' : ((!medioPagoContado && _ultimoMedio === o.tipo) ? '<span class="pago-card-ultima-tag">✓ Última vez</span>' : '')}
       <div class="pc-titulo">${o.emoji} ${o.titulo}</div>
       ${o.desc ? `<div class="pc-desc">${o.desc}</div>` : ''}
       <span class="pc-badge">✓ Precios ya con 10% off</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function _htmlMedioPagoBlock(){
@@ -4004,13 +4189,12 @@ window.onCambioMedioPagoCheckout = (tipo) => {
   _guardarUltimaPrefLS();
   const cont = document.getElementById('cf-medio-pago-cards');
   if (cont) { cont.innerHTML = _htmlMedioPagoCards(); cont.style.outline = ''; }
-  const envio = document.getElementById('cf-envio-extra');
-  if (envio) envio.innerHTML = _htmlCamposEnvioExtra();
   const label = document.getElementById('pago-activo-label');
   if (label) {
     const listaLabel = listaActiva === 'p1' ? 'Contado (10% off)' : 'Tarjeta — 1 pago';
     label.innerHTML = `<span class="paso-badge">1</span>Forma de pago: <b>${listaLabel}</b>`;
   }
+  _actualizarResumenEnvio();
 };
 
 function _htmlAvisosLlegadosBanner(){
@@ -4100,6 +4284,9 @@ function renderPrincipal(){
       <div id="carrito-items"></div>
       <div class="totales">
         <div class="row"><span>Total</span><span id="carrito-total">$0</span></div>
+        <div class="row" id="fila-envio-caba" style="display:none;font-size:13.5px;font-weight:700;"><span>Envío</span><span id="envio-caba-monto"></span></div>
+        <div class="row" id="fila-envio-transportista" style="display:none;font-size:13.5px;font-weight:700;"><span>Envío</span><span>A confirmar por WhatsApp</span></div>
+        <div class="row" id="fila-total-con-envio" style="display:none;border-top:1px solid var(--border);padding-top:8px;margin-top:4px;"><span>Total con envío</span><span id="total-con-envio-monto"></span></div>
       </div>
       <div id="fin-total-cuotas"></div>
       <button id="btn-ver-presupuesto" onclick="abrirVistaPresupuesto()" style="display:none;width:100%;margin-top:12px;background:transparent;border:1px dashed var(--border);border-radius:10px;padding:10px;color:var(--text2);font-size:13px;font-weight:700;cursor:pointer;">📄 Ver como Presupuesto</button>
@@ -4246,6 +4433,23 @@ window.enviarPedido = async () => {
     }
     return;
   }
+  if (modalidadEntrega === 'envio' && !provincia) {
+    alert('Elegí la provincia a la que enviamos tu pedido antes de continuar.');
+    const campoProvincia = document.getElementById('cf-provincia');
+    if (campoProvincia) { campoProvincia.focus(); campoProvincia.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    return;
+  }
+  if (modalidadEntrega === 'envio' && provincia && provincia !== 'CABA' && !transportistaElegido) {
+    alert('Elegí con qué transportista preferís el envío antes de continuar.');
+    const campoTransportista = document.getElementById('cf-transportista-cards');
+    if (campoTransportista) {
+      campoTransportista.style.outline = '2px solid var(--red)';
+      campoTransportista.style.outlineOffset = '4px';
+      campoTransportista.style.borderRadius = '12px';
+      campoTransportista.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    return;
+  }
 
   btn.disabled = true;
   btn.textContent = 'Enviando…';
@@ -4265,6 +4469,14 @@ window.enviarPedido = async () => {
   let formaPagoTexto = listaActiva === 'p1' ? 'Contado (10% off)' : 'Tarjeta — 1 pago';
   if (listaActiva === 'p1' && medioPagoContado) formaPagoTexto += ' — ' + MEDIO_CONTADO_LABEL[medioPagoContado];
 
+  // ── Detalle del envío según las reglas nuevas (CABA vs. resto del país) ──
+  const esEnvioCABA = modalidadEntrega === 'envio' && provincia === 'CABA';
+  const esEnvioInterior = modalidadEntrega === 'envio' && provincia && provincia !== 'CABA';
+  const costoEnvioCalculado = esEnvioCABA ? calcularCostoEnvioCABA() : null;
+  const horarioSugerido = esEnvioCABA ? (document.getElementById('cf-horario-envio')?.value.trim() || '') : '';
+  const transportistaOtro = (esEnvioInterior && transportistaElegido === 'otro') ? (document.getElementById('cf-transportista-otro')?.value.trim() || '') : '';
+  const labelEnvio = _labelEnvioParaPresupuesto();
+
   const payload = {
     id, cliente: { nombre, dni, email, tel },
     modalidadEntrega: MODALIDAD_LABEL[modalidadEntrega] || '',
@@ -4275,6 +4487,16 @@ window.enviarPedido = async () => {
     listaActivaRaw: listaActiva,
     medioPagoContado: (listaActiva === 'p1' && medioPagoContado) ? MEDIO_CONTADO_LABEL[medioPagoContado] : '',
     medioPagoContadoRaw: (listaActiva === 'p1' && medioPagoContado) ? medioPagoContado : '',
+    // Envío en CABA: costo calculado automáticamente (gratis desde $120.000, $14.000 por
+    // debajo, o $20.000 si el pedido pesa más de 20kg — lo que aplique).
+    envioLabelPresupuesto: labelEnvio,
+    costoEnvioCalculado,
+    horarioSugerido,
+    // Envío al interior: el costo con OCA/Correo Argentino lo carga el vendedor después;
+    // con Via Cargo lo paga el cliente al recibir. Acá solo guardamos la preferencia.
+    transportista: esEnvioInterior ? (transportistaElegido || '') : '',
+    transportistaOtro,
+    recepcionEnvioTipo: (esEnvioInterior && transportistaElegido && transportistaElegido !== 'otro') ? (recepcionEnvioTipo || '') : '',
     observaciones,
     items, total,
     estado: 'pendiente',
@@ -4297,6 +4519,8 @@ window.enviarPedido = async () => {
     // armar un pedido nuevo de inmediato, sin quedar trabado viendo el pedido que ya
     // mandó. El mensaje de confirmación de arriba se mantiene igual.
     carrito.clear();
+    transportistaElegido = null;
+    recepcionEnvioTipo = null;
     renderCarrito();
     if (typeof renderResultados === 'function') renderResultados();
     btn.style.display = ''; // vuelve a mostrarse (quedará deshabilitado hasta que agregue algo nuevo)
@@ -4307,6 +4531,12 @@ window.enviarPedido = async () => {
     if (direccion) {
       const partesDir = [direccion, ciudad, provincia, codigoPostal ? `CP ${codigoPostal}` : ''].filter(Boolean);
       msg += ` Dirección: ${partesDir.join(', ')}.`;
+    }
+    if (esEnvioCABA) {
+      msg += ` ${labelEnvio}: ${costoEnvioCalculado === 0 ? 'sin cargo' : fmtMoney(costoEnvioCalculado)}.`;
+      if (horarioSugerido) msg += ` Horario que prefiero: ${horarioSugerido}.`;
+    } else if (esEnvioInterior) {
+      msg += ` ${labelEnvio} — costo a confirmar.`;
     }
     if (observaciones) msg += ` Observaciones: ${observaciones}.`;
     msg += ' ¿Podrían confirmarme?';
