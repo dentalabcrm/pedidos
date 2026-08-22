@@ -4095,13 +4095,14 @@ window.onCambioTransportista = (tipo) => {
 
 function _htmlExtraTransportista(){
   if (!transportistaElegido) return '';
-  if (transportistaElegido === 'otro') {
-    const otroGuardado = _datosGuardadosLS()['cf-transportista-otro'] || '';
-    return `<div class="field" style="margin-top:10px;"><label>¿Qué transportista preferís?</label><input id="cf-transportista-otro" type="text" placeholder="Nombre del transportista" value="${escHtml(otroGuardado)}"></div>`;
-  }
-  return `
+  const camposRecepcion = `
     <div class="envio-subtitulo">¿A domicilio o a sucursal?</div>
     <div id="cf-recepcion-cards" class="pago-opciones">${_htmlRecepcionCards()}</div>`;
+  if (transportistaElegido === 'otro') {
+    const otroGuardado = _datosGuardadosLS()['cf-transportista-otro'] || '';
+    return `<div class="field" style="margin-top:10px;"><label>¿Qué transportista preferís?</label><input id="cf-transportista-otro" type="text" placeholder="Nombre del transportista" value="${escHtml(otroGuardado)}"></div>${camposRecepcion}`;
+  }
+  return camposRecepcion;
 }
 
 function _htmlRecepcionCards(){
@@ -4170,7 +4171,8 @@ function _labelEnvioParaPresupuesto(){
   }
   if (transportistaElegido === 'otro') {
     const otro = document.getElementById('cf-transportista-otro')?.value.trim();
-    return otro ? `Envío estándar ${otro}` : 'Envío a coordinar por WhatsApp';
+    const recepcion = recepcionEnvioTipo === 'sucursal' ? 'a sucursal' : 'a domicilio';
+    return otro ? `Envío estándar ${otro} ${recepcion}` : 'Envío a coordinar por WhatsApp';
   }
   return 'Envío a coordinar por WhatsApp';
 }
@@ -4582,7 +4584,7 @@ window.enviarPedido = async () => {
     // con Via Cargo lo paga el cliente al recibir. Acá solo guardamos la preferencia.
     transportista: esEnvioInterior ? (transportistaElegido || '') : '',
     transportistaOtro,
-    recepcionEnvioTipo: (esEnvioInterior && transportistaElegido && transportistaElegido !== 'otro') ? (recepcionEnvioTipo || '') : '',
+    recepcionEnvioTipo: (esEnvioInterior && transportistaElegido) ? (recepcionEnvioTipo || '') : '',
     observaciones,
     items, total,
     estado: 'pendiente',
