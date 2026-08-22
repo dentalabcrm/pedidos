@@ -38,12 +38,12 @@
   :root{
     --bg:#f4f6fa; --panel:#ffffff; --panel2:#eef1f6; --border:#e1e6ee;
     --text:#0f172a; --text2:#475569; --text3:#8592a6;
-    --green:#0ea968; --red:#dc2626; --blue:#0284c7; --amber:#d97706;
+    --green:#0ea968; --red:#dc2626; --blue:#0284c7; --amber:#d97706; --blue-soft:#6b9cc2;
   }
   html[data-theme="dark"]{
     --bg:#0f1520; --panel:#1a2231; --panel2:#212b3d; --border:#2e394d;
     --text:#e8ecf3; --text2:#a9b4c5; --text3:#76829a;
-    --green:#22c58a; --red:#f0554a; --blue:#38a5e6; --amber:#e8a63c;
+    --green:#22c58a; --red:#f0554a; --blue:#38a5e6; --amber:#e8a63c; --blue-soft:#5f83a3;
   }
   html[data-theme="dark"] body{ color-scheme:dark; }
   html[data-theme="dark"] .pay-badge,
@@ -615,10 +615,12 @@
   .cliente-fields{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px;}
   @media(min-width:560px){.cliente-fields{grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));}}
   .field label{display:block;font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;}
-  .paso-titulo{font-size:14px;font-weight:800;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:7px;}
+  label.paso-titulo{font-size:14px;font-weight:800;color:var(--blue);margin-bottom:8px;display:flex;align-items:center;gap:7px;}
+  .paso-titulo{font-size:14px;font-weight:800;color:var(--blue);margin-bottom:8px;display:flex;align-items:center;gap:7px;}
   .envio-caja{margin-top:12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:14px;}
-  .envio-subtitulo{font-size:12.5px;font-weight:800;color:var(--text);margin:14px 0 8px;}
+  .envio-subtitulo{font-size:12.5px;font-weight:800;color:var(--blue);margin:14px 0 8px;}
   .envio-subtitulo:first-child{margin-top:0;}
+  .envio-caja .field label, label.obs-label, .cliente-fields .field label{color:var(--blue-soft);}
   .field input{width:100%;border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13.5px;color:var(--text);background:var(--panel2);}
   .field textarea{width:100%;min-height:64px;resize:vertical;border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13.5px;color:var(--text);background:var(--panel2);}
   .field textarea:focus{outline:2px solid var(--blue);outline-offset:-1px;background:#fff;}
@@ -3943,7 +3945,8 @@ function _htmlCamposEnvioExtra(){
   const provinciaGuardada = datosGuardados['cf-provincia'] || '';
   return `
     <div class="envio-caja">
-      <div class="field"><label>Dirección de envío</label><input id="cf-direccion" type="text" placeholder="Calle, número, piso/depto" value="${escHtml(datosGuardados['cf-direccion'] || '')}"></div>
+      <div class="envio-subtitulo" style="margin-top:0;">Dirección de envío</div>
+      <div class="field"><input id="cf-direccion" type="text" placeholder="Calle, número, piso/depto" aria-label="Dirección de envío" value="${escHtml(datosGuardados['cf-direccion'] || '')}"></div>
       <div class="cliente-fields" style="margin-top:10px;">
         <div class="field"><label>Código postal</label><input id="cf-cp" type="text" placeholder="1425" value="${escHtml(datosGuardados['cf-cp'] || '')}"></div>
         <div class="field"><label>Ciudad / Localidad</label><input id="cf-ciudad" type="text" placeholder="Ciudad o localidad" value="${escHtml(datosGuardados['cf-ciudad'] || '')}"></div>
@@ -4325,7 +4328,7 @@ function renderPrincipal(){
       <div id="cf-envio-extra">${_htmlCamposEnvioExtra()}</div>
       <div class="datos-seccion" id="cf-medio-pago-wrap">${_htmlMedioPagoBlock()}</div>
       <div class="datos-seccion">
-        <div class="field"><label>Observaciones (opcional)</label><textarea id="cf-obs" placeholder="Alguna aclaración para tu pedido…"></textarea></div>
+        <div class="field"><label class="obs-label">Observaciones (opcional)</label><textarea id="cf-obs" placeholder="Alguna aclaración para tu pedido…"></textarea></div>
       </div>
     </div>
 
