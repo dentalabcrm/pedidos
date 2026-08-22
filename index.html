@@ -415,13 +415,6 @@
     outline:2px dashed var(--blue,#0284c7);outline-offset:2px;background:rgba(2,132,199,.06);
   }
   .prod-card-admin{position:absolute;top:6px;right:6px;display:flex;gap:4px;z-index:2;}
-  .prod-card-zoom{
-    position:absolute;top:6px;left:6px;z-index:2;width:30px;height:30px;border-radius:50%;
-    background:rgba(15,23,42,.55);color:#fff;border:none;font-size:15px;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px);
-    transition:background .15s,transform .15s;
-  }
-  .prod-card-zoom:hover{background:rgba(2,132,199,.85);transform:scale(1.08);}
   .prod-card-admin button, .prod-card-admin input{background:var(--panel);border:1px solid var(--border);border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.25);}
   .prod-card-admin button{font-size:12px;cursor:pointer;padding:3px 5px;line-height:1;}
   .prod-card-body{flex:1;display:flex;flex-direction:column;}
@@ -3576,17 +3569,18 @@ function renderResultados(){
 
     // ── Vista GRILLA: tarjeta vertical con foto grande ──
     const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
+    const zoomAttr = `onclick="event.stopPropagation(); abrirZoomProducto('${escHtml(it.s)}')" style="cursor:pointer;"`;
     const foto = imgsArr.length > 1
       ? `<div class="prod-carrusel">
           <div class="prod-carrusel-track" onscroll="_carruselOnScroll(this)">
-            ${imgsArr.map(id => `<img class="prod-card-foto" src="https://drive.google.com/thumbnail?id=${id}&sz=w300" alt="" loading="lazy" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onerror="manejarErrorFotoProducto(this)">`).join('')}
+            ${imgsArr.map(id => `<img class="prod-card-foto" src="https://drive.google.com/thumbnail?id=${id}&sz=w300" alt="" loading="lazy" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" ${zoomAttr} onerror="manejarErrorFotoProducto(this)">`).join('')}
           </div>
           <button class="prod-carrusel-arrow prod-carrusel-prev" onclick="event.stopPropagation(); _carruselMover(this,-1)">‹</button>
           <button class="prod-carrusel-arrow prod-carrusel-next" onclick="event.stopPropagation(); _carruselMover(this,1)">›</button>
           <div class="prod-carrusel-dots">${imgsArr.map((_, i) => `<span class="prod-carrusel-dot${i===0?' active':''}"></span>`).join('')}</div>
          </div>`
       : imgsArr.length === 1
-      ? `<img class="prod-card-foto" src="https://drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w300" alt="" loading="lazy" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onerror="manejarErrorFotoProducto(this)">`
+      ? `<img class="prod-card-foto" src="https://drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w300" alt="" loading="lazy" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" ${zoomAttr} onerror="manejarErrorFotoProducto(this)">`
       : `<div class="prod-card-foto prod-card-foto-vacia" style="cursor:pointer;" title="Buscar foto en Drive" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirFotoProducto(this)">🦷</div>`;
     const adminIcons = !esAdminCatalogo() ? '' : _modoSeleccionFotos
       ? (it.img ? `<div class="prod-card-admin"><input type="checkbox" ${_fotosSeleccionadas.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionFoto('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>` : '')
@@ -3595,10 +3589,9 @@ function renderResultados(){
           ${imgsArr.length ? `<button onclick="event.stopPropagation(); adminBorrarFotoProducto('${escHtml(it.s)}')" title="Borrar foto${imgsArr.length > 1 ? ' (elegir cuál)' : ''}">🗑️</button>` : ''}
          </div>`;
     const claseTarjeta = `prod-card${(puedeAgregar || qtyEnCarrito > 0) ? ' prod-card-clickeable' : ''}${qtyEnCarrito > 0 ? ' prod-card-en-carrito' : ''}${it.st ? ' prod-card-agotado' : ''}`;
-    const zoomBtn = (imgsArr.length ? `<button class="prod-card-zoom" onclick="event.stopPropagation(); abrirZoomProducto('${escHtml(it.s)}')" title="Ver más grande">🔍</button>` : '');
     return `
       <div class="${claseTarjeta}" data-sku="${escHtml(it.s)}"${clickeable} ondragover="_fotoDragOver(event, this)" ondragleave="_fotoDragLeave(this)" ondrop="_fotoDrop(event, '${escHtml(it.s)}', this)" onmouseenter="_fotoHoverSet('${escHtml(it.s)}')" onmouseleave="_fotoHoverClear('${escHtml(it.s)}')">
-        <div style="position:relative;">${foto}${adminIcons}${zoomBtn}</div>
+        <div style="position:relative;">${foto}${adminIcons}</div>
         <div class="prod-card-body">
           <div class="prod-sku">${escHtml(it.s)}</div>
           <div class="prod-nombre">${escHtml(it.n)}</div>
