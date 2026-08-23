@@ -205,8 +205,15 @@
   html[data-theme="dark"] .prod-row-agotado, html[data-theme="dark"] .prod-card-agotado{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.35);}
   .brand-sub{display:flex;align-items:center;gap:6px;font-size:17px;font-weight:700;color:#25D366;margin-top:6px;}
   .brand-sub svg{flex-shrink:0;}
-  .page-title{font-size:24px;font-weight:800;color:var(--text);letter-spacing:-.3px;margin:0 0 16px;}
+  .page-title{font-size:24px;font-weight:800;color:var(--text);letter-spacing:-.3px;margin:0 0 10px;}
   @media (max-width:420px){ .page-title{font-size:20px;} }
+  .badge-sin-registro{
+    display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;
+    color:#0a7a4a;background:#0ea96814;border:1px solid #0ea96840;border-radius:20px;
+    padding:6px 14px;margin-bottom:16px;line-height:1.4;
+  }
+  html[data-theme="dark"] .badge-sin-registro{color:#4ade9a;background:#0ea96820;border-color:#0ea96855;}
+  @media (max-width:420px){ .badge-sin-registro{font-size:11.5px;padding:5px 10px;} }
   /* ── Numeritos de paso (1, 2, 3a, 3b, 3c) que guían al cliente en el flujo del pedido ── */
   .paso-badge{
     display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
@@ -4316,6 +4323,7 @@ function renderPrincipal(){
   const listaLabel = listaActiva === 'p1' ? 'Contado (10% off)' : 'Tarjeta — 1 pago';
   app.innerHTML = `
     <h1 class="page-title">Armá tu pedido</h1>
+    <div class="badge-sin-registro">✨ No necesitás crear una cuenta ni registrarte — elegís los productos y coordinamos todo por WhatsApp</div>
     ${_htmlBienvenida()}
     ${_htmlAvisosLlegadosBanner()}
     ${_pedidoRestauradoDeLS ? `<div class="banner-info-suave" style="border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600;margin-bottom:12px;">🔄 Recuperamos el pedido que tenías armado.</div>` : ''}
