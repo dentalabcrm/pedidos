@@ -3304,14 +3304,22 @@ function _buscarGrupoEspecial(tokens){
 
 function buscarProductos(){
   const q = busqueda.trim().toLowerCase();
+  const tokensPre = q.split(/\s+/).filter(Boolean).map(t => _stripAccents(t));
+  const hayBusqueda = tokensPre.length > 0;
   let base = catalogo;
   // (se muestran todos los productos, con o sin stock)
   if (filtroMarca !== 'todas') base = base.filter(it => it.m === filtroMarca);
-  if (filtroCategoria !== 'todas') base = base.filter(it => it.g === filtroCategoria);
-  if (filtroSubgrupo !== 'todas') base = base.filter(it => it.sg === filtroSubgrupo);
+  // La categoría/subrubro son navegación ("estoy mirando esta sección") — en cuanto el
+  // cliente escribe algo en el buscador, la búsqueda pasa a ser universal sobre todo el
+  // catálogo, aunque haya una categoría seleccionada. Así no aparece "no encontrado" solo
+  // porque el producto en realidad está en otra sección.
+  if (!hayBusqueda) {
+    if (filtroCategoria !== 'todas') base = base.filter(it => it.g === filtroCategoria);
+    if (filtroSubgrupo !== 'todas') base = base.filter(it => it.sg === filtroSubgrupo);
+  }
   if (filtroSoloOfertas) base = base.filter(it => it.of);
 
-  const tokens = q.split(/\s+/).filter(Boolean).map(t => _stripAccents(t));
+  const tokens = tokensPre;
   let ordenados;
 
   if (tokens.length) {
@@ -3333,8 +3341,8 @@ function buscarProductos(){
         });
       }
       if (filtroMarca !== 'todas') candidatos = candidatos.filter(it => it.m === filtroMarca);
-      if (filtroCategoria !== 'todas') candidatos = candidatos.filter(it => it.g === filtroCategoria);
-      if (filtroSubgrupo !== 'todas') candidatos = candidatos.filter(it => it.sg === filtroSubgrupo);
+      // Sin filtro de categoría/subgrupo acá tampoco — misma razón: al escribir, la
+      // búsqueda es universal sobre todo el catálogo.
       if (filtroSoloOfertas) candidatos = candidatos.filter(it => it.of);
       ordenados = candidatos.sort((a, b) => a.n.localeCompare(b.n, 'es'));
     } else {
