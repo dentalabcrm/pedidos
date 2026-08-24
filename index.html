@@ -1554,7 +1554,8 @@ window.abrirZoomProducto = (sku) => {
       </div>
       <div style="padding:20px 22px 24px;">
         <div style="font-family:'DM Mono',monospace;font-size:10.5px;color:#8592a6;margin-bottom:4px;">${escHtml(it.s)}</div>
-        <div style="font-size:19px;font-weight:800;color:#0f172a;line-height:1.35;margin-bottom:10px;">${escHtml(it.n)}</div>
+        <div style="font-size:19px;font-weight:800;color:#0f172a;line-height:1.35;margin-bottom:6px;">${escHtml(it.n)}</div>
+        <div style="font-size:11.5px;font-weight:700;margin-bottom:10px;color:${it.st ? 'var(--red)' : it.sb ? 'var(--amber)' : 'var(--green)'};">${it.st ? '✕ Agotado' : it.sb ? '⏳ Stock a confirmar' : '✓ En stock'}</div>
         ${it.g ? `<div style="font-size:10.5px;color:#8592a6;margin-bottom:10px;">${escHtml(it.g)}${it.sg ? ` › ${escHtml(it.sg)}` : ''}</div>` : ''}
         <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:16px;">
           <div>
