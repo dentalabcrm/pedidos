@@ -1628,7 +1628,9 @@ window._zoomToggleRecorte = async () => {
   const original = btn.innerHTML;
   btn.innerHTML = 'Cargando…'; btn.disabled = true;
   try {
-    _zoomTarjetaCanvasCache = await _zoomConstruirTarjetaCanvas(_zoomProductoActual);
+    const trackRecorte = document.getElementById('zoom-prod-track');
+    const idxFotoRecorte = (trackRecorte && trackRecorte.clientWidth) ? Math.round(trackRecorte.scrollLeft / trackRecorte.clientWidth) : 0;
+    _zoomTarjetaCanvasCache = await _zoomConstruirTarjetaCanvas(_zoomProductoActual, idxFotoRecorte);
   } catch (e) {
     alert('No se pudo preparar la vista de recorte: ' + (e.message || e));
     _zoomRecorteActivo = false;
@@ -1740,9 +1742,10 @@ async function _zoomRecortarYCopiar(p1, p2, cw, ch){
 // Arma la tarjeta compuesta (foto + SKU + nombre + categoría + precio + aclaración de
 // pago) en un solo canvas — la usan tanto "Copiar tarjeta" como la herramienta de recorte,
 // así las dos ven exactamente la misma imagen.
-async function _zoomConstruirTarjetaCanvas(it){
+async function _zoomConstruirTarjetaCanvas(it, idxFoto = 0){
   const precio = precioDe(it);
   const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
+  const idFotoElegida = imgsArr[idxFoto] || imgsArr[0];
   const notaPago = (it.cp || _adminVistaPrecio !== 'normal') ? '' : (listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago');
 
   // Cargar la foto (si tiene) antes de medir el alto total. Google Drive no da permiso
@@ -1752,7 +1755,7 @@ async function _zoomConstruirTarjetaCanvas(it){
   let imgEl = null;
   if (imgsArr.length) {
     try {
-      const original = `drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w900`;
+      const original = `drive.google.com/thumbnail?id=${idFotoElegida}&sz=w900`;
       const proxiedUrl = `https://images.weserv.nl/?url=${encodeURIComponent(original)}`;
       const resp = await fetch(proxiedUrl);
       if (resp.ok) {
@@ -1846,7 +1849,12 @@ window._zoomCopiarTarjeta = async (sku) => {
   btn.innerHTML = 'Copiando…'; btn.disabled = true;
   try {
     if (!navigator.clipboard || !window.ClipboardItem) throw new Error('Este navegador no admite copiar imágenes al portapapeles');
-    const canvas = await _zoomConstruirTarjetaCanvas(it);
+    // Se copia la foto que se está viendo en ese momento en el carrusel, no siempre la
+    // primera — se calcula con la misma cuenta que ya usa el carrusel para saber en qué
+    // foto está parado (posición del scroll horizontal / ancho de una foto).
+    const track = document.getElementById('zoom-prod-track');
+    const idxFotoActual = (track && track.clientWidth) ? Math.round(track.scrollLeft / track.clientWidth) : 0;
+    const canvas = await _zoomConstruirTarjetaCanvas(it, idxFotoActual);
     const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
     if (!blob) throw new Error('No se pudo generar la imagen');
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
