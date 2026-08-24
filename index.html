@@ -549,6 +549,7 @@
   .ci-medio-pago{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;font-family:'DM Sans',sans-serif;}
   .ci-medio-pago.medio-contado{background:#0ea96814;color:var(--green);}
   .ci-medio-pago.medio-tarjeta{background:#0284c714;color:var(--blue);}
+  .ci-medio-pago-detalle{font-size:10.5px;color:var(--text3);margin-top:2px;}
   .ci-top{display:flex;align-items:center;gap:10px;flex:1;min-width:0;}
   .ci-bottom{display:flex;align-items:center;gap:10px;flex-shrink:0;}
   .ci-info{flex:1;min-width:0;}
@@ -3871,9 +3872,10 @@ function renderCarrito(){
         : '';
       const medioPagoBadgeCarrito = listaActiva
         ? (listaActiva === 'p1'
-            ? `<span class="ci-medio-pago medio-contado">💵 Contado (10% off)</span>`
+            ? `<span class="ci-medio-pago medio-contado">✓ Precios ya con 10% off</span>`
             : `<span class="ci-medio-pago medio-tarjeta">💳 Tarjeta — 1 pago</span>`)
         : '';
+      const medioPagoDetalleCarrito = (listaActiva === 'p1') ? `<div class="ci-medio-pago-detalle">Efectivo, débito o transferencia</div>` : '';
       return `
         <div class="carrito-item">
           <div class="ci-top">
@@ -3885,6 +3887,7 @@ function renderCarrito(){
                 ${it.st ? `<div class="prod-stock-agotado">Agotado</div>` : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>` : `<div class="prod-stock-en">En stock</div>`}
                 ${medioPagoBadgeCarrito}
               </div>
+              ${medioPagoDetalleCarrito}
               ${avisoDientes}
             </div>
           </div>
