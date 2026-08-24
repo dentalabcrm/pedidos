@@ -3870,12 +3870,12 @@ function renderCarrito(){
       const avisoDientes = SKUS_DIENTES_SURTIDOS[sku]
         ? `<a class="aviso-dientes" href="${SKUS_DIENTES_SURTIDOS[sku].url}" target="_blank" rel="noopener">🦷 Completá los dientes ${SKUS_DIENTES_SURTIDOS[sku].marca} acá →</a>`
         : '';
-      const medioPagoBadgeCarrito = listaActiva
+      const medioPagoBadgeCarrito = (listaActiva && _adminVistaPrecio === 'normal')
         ? (listaActiva === 'p1'
             ? `<span class="ci-medio-pago medio-contado">✓ Precios ya con 10% off</span>`
             : `<span class="ci-medio-pago medio-tarjeta">💳 Tarjeta — 1 pago</span>`)
         : '';
-      const medioPagoDetalleCarrito = (listaActiva === 'p1') ? `<div class="ci-medio-pago-detalle">Efectivo, débito o transferencia</div>` : '';
+      const medioPagoDetalleCarrito = (listaActiva === 'p1' && _adminVistaPrecio === 'normal') ? `<div class="ci-medio-pago-detalle">Efectivo, débito o transferencia</div>` : '';
       return `
         <div class="carrito-item">
           <div class="ci-top">
