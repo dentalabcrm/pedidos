@@ -3971,7 +3971,7 @@ function renderCarrito(){
 // ── "⛶ Pantalla completa": mismo listado de "Tu pedido", pero con fotos grandes y en
 // columna — para revisar el pedido con más comodidad antes de enviarlo, sobre todo en
 // celular donde las miniaturas del carrito quedan chiquitas. ──
-window.abrirVistaCompletaPedido = (irDirectoARecorte) => {
+window.abrirVistaCompletaPedido = () => {
   document.getElementById('pedido-full-backdrop')?.remove();
   if (!carrito.size) return;
 
@@ -4036,10 +4036,6 @@ window.abrirVistaCompletaPedido = (irDirectoARecorte) => {
     </div>`;
   document.body.appendChild(bd);
   bd.addEventListener('click', e => { if (e.target === bd) bd.remove(); });
-  // Solo para el admin: entra directo al modo recorte, sin tener que tocar el botón
-  // primero — salvo que se lo esté reabriendo a propósito para VER la lista (por ejemplo,
-  // al tocar "✕ Salir de recorte"), en cuyo caso no hay que volver a entrar solo.
-  if (esAdmin && irDirectoARecorte !== false) _pedidoToggleRecorte();
 };
 
 let _pedidoRecorteActivo = false;
@@ -4166,10 +4162,9 @@ window._pedidoToggleRecorte = async () => {
   if (!btn || !body) return;
 
   if (_pedidoRecorteActivo) {
-    // Salir del modo recorte: reabrir el modal, esta vez mostrando la lista normal (no
-    // hay que volver a entrar solo al recorte, o "Salir" no serviría para nada).
+    // Salir del modo recorte: reabrir el modal normal desde cero.
     _pedidoRecorteActivo = false;
-    abrirVistaCompletaPedido(false);
+    abrirVistaCompletaPedido();
     return;
   }
 
