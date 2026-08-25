@@ -34,6 +34,8 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if (window['pdfjsLib']) { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }</script>
 <style>
   :root{
     --bg:#f4f6fa; --panel:#ffffff; --panel2:#eef1f6; --border:#e1e6ee;
@@ -688,9 +690,31 @@
   @keyframes pwPupilasMirar{ 0%,100%{ transform:translate(0,0);} 50%{ transform:translate(1.4px,-1.4px);} }
   @keyframes pwRelojMirar{ 0%,100%{ transform:rotate(-18deg);} 50%{ transform:rotate(12deg);} }
   @media (max-width:420px){ #pw-diente-mascota{ bottom:120px; right:12px; } .pw-diente-body{ width:46px; height:58px; } }
+
+  /* Overlay "soltá el PDF acá" — para recuperar un pedido/presupuesto anterior arrastrando
+     el PDF que ya te mandamos, en vez de tener que rearmarlo producto por producto. */
+  #pdf-pedido-drop-overlay{
+    position:fixed;inset:0;z-index:99998;display:none;align-items:center;justify-content:center;
+    background:rgba(2,132,199,.14);backdrop-filter:blur(1px);pointer-events:none;
+  }
+  #pdf-pedido-drop-overlay.activo{display:flex;}
+  #pdf-pedido-drop-overlay .caja{
+    background:#fff;border:3px dashed var(--blue,#0284c7);border-radius:20px;padding:36px 44px;
+    text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.18);max-width:90vw;
+  }
+  #pdf-pedido-drop-overlay .caja .emoji{font-size:40px;margin-bottom:10px;}
+  #pdf-pedido-drop-overlay .caja .titulo{font-size:17px;font-weight:800;color:#0f172a;}
+  #pdf-pedido-drop-overlay .caja .sub{font-size:12.5px;color:#64748b;margin-top:4px;}
 </style>
 </head>
 <body>
+<div id="pdf-pedido-drop-overlay">
+  <div class="caja">
+    <div class="emoji">📄</div>
+    <div class="titulo">Soltá acá tu pedido o presupuesto en PDF</div>
+    <div class="sub">Cargamos los productos y cantidades automáticamente</div>
+  </div>
+</div>
   <script>
     // Aplicar el tema guardado ANTES de pintar la página, para que no se vea un flash claro→oscuro.
     try {
@@ -5498,6 +5522,138 @@ if ('serviceWorker' in navigator) {
       }, 600); // pequeño delay para dar tiempo a que 'beforeinstallprompt' llegue a dispararse
     }
   } catch (e) { /* URLSearchParams no soportado en navegadores muy viejos; no rompe nada */ }
+})();
+
+// ══════════════════════════════════════════════════════════════════════════
+// Arrastrar un PDF (pedido o presupuesto ya generado por Dentalab) para
+// recuperar todo el carrito de una — mismo sistema de lectura de PDF que ya
+// usa el CRM en "Presupuestos" (SKU en la primera columna de cada fila de la
+// tabla de Productos, cantidad en alguna de las columnas siguientes).
+// ══════════════════════════════════════════════════════════════════════════
+(function () {
+  const overlay = document.getElementById('pdf-pedido-drop-overlay');
+  if (!overlay) return;
+  let _dragCounter = 0;
+
+  const _traeArchivos = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+
+  document.addEventListener('dragenter', (e) => {
+    if (!_traeArchivos(e)) return;
+    e.preventDefault();
+    _dragCounter++;
+    overlay.classList.add('activo');
+  });
+  document.addEventListener('dragover', (e) => {
+    if (!_traeArchivos(e)) return;
+    e.preventDefault();
+  });
+  document.addEventListener('dragleave', () => {
+    _dragCounter = Math.max(0, _dragCounter - 1);
+    if (_dragCounter === 0) overlay.classList.remove('activo');
+  });
+  document.addEventListener('drop', async (e) => {
+    const traeArchivos = _traeArchivos(e);
+    _dragCounter = 0;
+    overlay.classList.remove('activo');
+    if (!traeArchivos) return;
+    e.preventDefault();
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!file) return;
+    await _importarPedidoDesdePDF(file);
+  });
+
+  // Reconstruye SKUs que el PDF cortó en dos líneas por una columna angosta (mismo
+  // criterio que usa el CRM), y arma pares {sku, qty} leyendo la tabla de Productos.
+  function _parsearProductosDesdePDFPresupuesto(lines) {
+    const skuLookup = {}; // SKU en mayúsculas -> SKU real (case exacto del catálogo)
+    catalogoBySku.forEach((it, sku) => { skuLookup[String(sku).toUpperCase()] = sku; });
+
+    const skipSet = new Set(['SKU', 'PRODUCTO', 'LISTA', 'CANT', 'CANT.', 'SUBTOTAL', 'TOTAL', 'DESC', 'DESC.', 'CLIENTE', 'CUIT', 'DNI', 'P.', 'UNIT.', 'ENVIO', 'ENVÍO']);
+    const numRe = /^[0-9]+$/;
+
+    for (let i = 0; i < lines.length - 1; i++) {
+      const tokensA = String(lines[i]).split('\t').map(s => s.trim()).filter(Boolean);
+      if (!tokensA.length) continue;
+      const candA = tokensA[0].toUpperCase();
+      if (skipSet.has(candA) || skuLookup[candA]) continue;
+      const tokensB = String(lines[i + 1]).split('\t').map(s => s.trim()).filter(Boolean);
+      if (!tokensB.length) continue;
+      const candB = tokensB[0].toUpperCase();
+      if (candB.length > 5 || !/^[A-Z0-9]+$/.test(candB)) continue;
+      const unido = candA + candB;
+      if (skuLookup[unido]) {
+        tokensA[0] = unido;
+        lines[i] = tokensA.join('\t');
+        tokensB.shift();
+        lines[i + 1] = tokensB.join('\t');
+      }
+    }
+
+    const parsed = [];
+    lines.forEach(line => {
+      const tokens = String(line).split('\t').map(s => s.trim()).filter(Boolean);
+      if (!tokens.length) return;
+      const candidate = tokens[0].toUpperCase();
+      if (skipSet.has(candidate)) return;
+      const skuReal = skuLookup[candidate];
+      if (!skuReal) return;
+      let qty = 1;
+      for (let i = 1; i < tokens.length; i++) {
+        if (numRe.test(tokens[i])) { const n = parseInt(tokens[i], 10); if (n >= 1 && n <= 999) { qty = n; break; } }
+      }
+      const existente = parsed.find(p => p.sku === skuReal);
+      if (existente) existente.qty = qty; else parsed.push({ sku: skuReal, qty });
+    });
+    return parsed;
+  }
+
+  async function _importarPedidoDesdePDF(file) {
+    const esPDF = (file.type === 'application/pdf') || /\.pdf$/i.test(file.name || '');
+    if (!esPDF) { _zoomMostrarAviso('⚠ Ese archivo no es un PDF'); return; }
+    if (typeof pdfjsLib === 'undefined') { _zoomMostrarAviso('⚠ No se pudo cargar el lector de PDF — probá recargar la página'); return; }
+    _zoomMostrarAviso('📄 Leyendo el PDF…');
+    try {
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      const lines = [];
+      for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        const porLinea = {};
+        content.items.forEach(item => {
+          const y = Math.round(item.transform[5]);
+          (porLinea[y] = porLinea[y] || []).push({ x: item.transform[4], str: item.str });
+        });
+        Object.keys(porLinea).map(Number).sort((a, b) => b - a).forEach(y => {
+          lines.push(porLinea[y].sort((a, b) => a.x - b.x).map(i => i.str).join('\t'));
+        });
+      }
+
+      const encontrados = _parsearProductosDesdePDFPresupuesto(lines);
+      if (!encontrados.length) {
+        _zoomMostrarAviso('⚠ No encontramos productos de nuestro catálogo en ese PDF');
+        return;
+      }
+      let agregados = 0, noDisponibles = 0;
+      encontrados.forEach(({ sku, qty }) => {
+        const it = catalogoBySku.get(sku);
+        if (!it) { noDisponibles++; return; }
+        carrito.set(sku, qty);
+        agregados++;
+      });
+      if (typeof renderResultados === 'function') renderResultados();
+      renderCarrito();
+      if (typeof _guardarCarritoLS === 'function') _guardarCarritoLS();
+      const msg = agregados
+        ? `✅ Se cargaron ${agregados} producto${agregados !== 1 ? 's' : ''} de tu pedido`
+          + (noDisponibles ? ` · ${noDisponibles} ya no ${noDisponibles !== 1 ? 'están' : 'está'} disponible${noDisponibles !== 1 ? 's' : ''}` : '')
+        : '⚠ No encontramos esos productos en el catálogo actual';
+      _zoomMostrarAviso(msg);
+    } catch (e) {
+      console.error('[Importar pedido PDF]', e);
+      _zoomMostrarAviso('⚠ No se pudo leer ese PDF');
+    }
+  }
 })();
 </script>
 
