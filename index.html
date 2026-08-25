@@ -5936,11 +5936,19 @@ document.addEventListener('keydown', (e) => {
   // Si hay un producto con el mouse encima, tiene prioridad. Si no, pero la búsqueda dejó
   // un solo resultado en pantalla (típico caso: escribís un SKU y aparece un solo
   // producto), Enter agrega/saca directo ese único resultado sin necesidad de mover el
-  // mouse hasta él.
+  // mouse hasta él. Y si escribiste el SKU justo (por ejemplo "32791") pero aparecen
+  // variaciones de ese mismo código (como "32791-F"), se prioriza el que coincide EXACTO
+  // con lo que escribiste, no cualquiera de las variaciones.
   let skuObjetivo = _skuHoverAdmin;
   if (!skuObjetivo && esBuscador && typeof buscarProductos === 'function') {
     const resultadosActuales = buscarProductos();
-    if (resultadosActuales.length === 1) skuObjetivo = resultadosActuales[0].s;
+    if (resultadosActuales.length === 1) {
+      skuObjetivo = resultadosActuales[0].s;
+    } else if (resultadosActuales.length > 1) {
+      const consulta = (el.value || '').trim().toUpperCase();
+      const exacto = consulta && resultadosActuales.find(r => String(r.s).toUpperCase() === consulta);
+      if (exacto) skuObjetivo = exacto.s;
+    }
   }
   if (!skuObjetivo) return;
   const it = catalogoBySku.get(skuObjetivo);
