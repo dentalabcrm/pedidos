@@ -5932,13 +5932,23 @@ document.addEventListener('keydown', (e) => {
   const esBuscador = el && el.id === 'input-busqueda';
   if (!esBuscador && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || (el && el.isContentEditable))) return;
   if (el && el.closest && el.closest('.pwfin-backdrop, #zoom-prod-backdrop, #pdf-pedido-drop-overlay')) return;
-  if (!_skuHoverAdmin) return;
-  const it = catalogoBySku.get(_skuHoverAdmin);
+
+  // Si hay un producto con el mouse encima, tiene prioridad. Si no, pero la búsqueda dejó
+  // un solo resultado en pantalla (típico caso: escribís un SKU y aparece un solo
+  // producto), Enter agrega/saca directo ese único resultado sin necesidad de mover el
+  // mouse hasta él.
+  let skuObjetivo = _skuHoverAdmin;
+  if (!skuObjetivo && esBuscador && typeof buscarProductos === 'function') {
+    const resultadosActuales = buscarProductos();
+    if (resultadosActuales.length === 1) skuObjetivo = resultadosActuales[0].s;
+  }
+  if (!skuObjetivo) return;
+  const it = catalogoBySku.get(skuObjetivo);
   if (!it) return;
   e.preventDefault();
-  const qtyEnCarrito = carrito.get(_skuHoverAdmin) || 0;
-  if (qtyEnCarrito > 0) { if (typeof quitarDelCarrito === 'function') quitarDelCarrito(_skuHoverAdmin); }
-  else if (typeof agregarAlCarrito === 'function') agregarAlCarrito(_skuHoverAdmin);
+  const qtyEnCarrito = carrito.get(skuObjetivo) || 0;
+  if (qtyEnCarrito > 0) { if (typeof quitarDelCarrito === 'function') quitarDelCarrito(skuObjetivo); }
+  else if (typeof agregarAlCarrito === 'function') agregarAlCarrito(skuObjetivo);
 });
 
 // ══════════════════════════════════════════════════════════════════════════
