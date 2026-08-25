@@ -5683,6 +5683,19 @@ if ('serviceWorker' in navigator) {
   } catch (e) { /* URLSearchParams no soportado en navegadores muy viejos; no rompe nada */ }
 })();
 
+// Atajo de teclado: Ctrl + Retroceso vacía el carrito (con la misma confirmación que ya
+// pide el botón "🗑 Vaciar carrito", para no borrar el pedido sin querer).
+document.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.key !== 'Backspace') return;
+  // No interceptar si el foco está en un campo de texto donde Ctrl+Backspace se usa para
+  // borrar la palabra anterior (comportamiento nativo del navegador).
+  const tag = (document.activeElement && document.activeElement.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || (document.activeElement && document.activeElement.isContentEditable)) return;
+  if (typeof carrito === 'undefined' || !carrito.size) return;
+  e.preventDefault();
+  if (typeof confirmarVaciarCarrito === 'function') confirmarVaciarCarrito();
+});
+
 // ══════════════════════════════════════════════════════════════════════════
 // Arrastrar un PDF (pedido o presupuesto ya generado por Dentalab) para
 // recuperar todo el carrito de una — mismo sistema de lectura de PDF que ya
