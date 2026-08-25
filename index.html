@@ -5696,6 +5696,20 @@ document.addEventListener('keydown', (e) => {
   if (typeof confirmarVaciarCarrito === 'function') confirmarVaciarCarrito();
 });
 
+// Atajo de teclado: Tab abre "Tu pedido" en pantalla completa. No se interceptan Tabs que
+// se usan para moverse entre campos (foco en input/textarea/select o dentro de un modal ya
+// abierto) ni tampoco Shift+Tab, Ctrl+Tab, etc. — solo un Tab "suelto" navegando la página.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+  const el = document.activeElement;
+  const tag = (el && el.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
+  if (el && el.closest && el.closest('.pwfin-backdrop, #zoom-prod-backdrop, #pdf-pedido-drop-overlay')) return;
+  if (typeof carrito === 'undefined' || !carrito.size) return;
+  e.preventDefault();
+  if (typeof abrirVistaCompletaPedido === 'function') abrirVistaCompletaPedido();
+});
+
 // ══════════════════════════════════════════════════════════════════════════
 // Arrastrar un PDF (pedido o presupuesto ya generado por Dentalab) para
 // recuperar todo el carrito de una — mismo sistema de lectura de PDF que ya
