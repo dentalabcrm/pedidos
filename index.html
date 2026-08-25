@@ -5418,6 +5418,13 @@ if (_avisosGetLista().length) {
       respuesta: () => `💳 Con la forma de pago "Tarjeta — 1 pago" podés ver el financiamiento disponible: tocando "Ver cuotas" en cualquier producto te muestra las opciones para ese producto, o "Ver total en cuotas" en tu pedido armado te muestra el financiamiento de todo el pedido junto.`
     },
     {
+      id:'atajos_teclado',
+      sugerencia:'Atajos de teclado (PC)',
+      claves:['atajo','atajos','atajos de teclado','teclado','teclas rapidas','shortcut','shortcuts','tecla','como uso el teclado','se puede usar el teclado'],
+      chip:'⌨️ Atajos de teclado (PC)',
+      respuesta: () => `⌨️ Si estás en compu, tenemos estos atajos de teclado para ir más rápido:\n\n🔎 Retroceso (Backspace) — lleva el cursor directo al buscador de productos.\n\n➕ Enter (con el mouse parado sobre un producto) — lo agrega al carrito. Si ya estaba agregado, lo saca.\n\n🛒 Tab — abre "Tu pedido" en pantalla completa, con fotos más grandes.\n\n🗑️ Ctrl + Retroceso — vacía todo el carrito (te pide confirmación antes).\n\nNinguno interrumpe si estás escribiendo en un campo de texto — ahí las teclas funcionan como siempre.`
+    },
+    {
       id:'pago',
       sugerencia:'Formas de pago',
       claves:['pago','pagar','forma de pago','formas de pago','tarjeta','efectivo','transferencia','mercadopago','mercado pago','descuento','recargo'],
@@ -5924,7 +5931,11 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
   const el = document.activeElement;
   const tag = (el && el.tagName) || '';
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || (el && el.isContentEditable)) return;
+  // El buscador de productos es una excepción: es normal buscar algo, dejar el foco ahí
+  // sin volver a clickear, y mover el mouse sobre un resultado para presionar Enter — así
+  // que ahí SÍ se deja pasar el atajo (no hace nada más al presionar Enter en ese campo).
+  const esBuscador = el && el.id === 'input-busqueda';
+  if (!esBuscador && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || (el && el.isContentEditable))) return;
   if (el && el.closest && el.closest('.pwfin-backdrop, #zoom-prod-backdrop, #pdf-pedido-drop-overlay')) return;
   if (!_skuHoverAdmin) return;
   const it = catalogoBySku.get(_skuHoverAdmin);
