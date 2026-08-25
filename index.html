@@ -1648,12 +1648,21 @@ window._zoomToggleRecorte = async () => {
   // recorte puede tomar cualquier parte, sea la foto, el nombre, el precio, etc.
   body.innerHTML = `
     <div style="position:relative;">
-      <img src="${_zoomTarjetaCanvasCache.toDataURL('image/png')}" style="width:100%;display:block;" draggable="false" alt="">
+      <img id="zoom-prod-recorte-img" src="${_zoomTarjetaCanvasCache.toDataURL('image/png')}" style="width:100%;display:block;" draggable="false" alt="">
       <canvas id="zoom-prod-recorte-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;cursor:crosshair;touch-action:none;"></canvas>
     </div>
     <div style="padding:10px 22px;font-size:11.5px;color:#8592a6;text-align:center;">✂️ Arrastrá para elegir qué copiar (foto y/o texto) — "✕ Salir de recorte" para volver</div>
   `;
-  _zoomInicializarRecorteCanvas(document.getElementById('zoom-prod-recorte-canvas'));
+  // El lienzo de selección necesita el ancho/alto YA renderizados de la imagen para medirse
+  // bien — si se mide antes de que la imagen termine de cargar, el contenedor todavía no
+  // tiene alto (queda en 0) y el recorte no funciona hasta la segunda vez que se abre (ahí
+  // la imagen ya está en caché y carga al toque). Por eso se espera el "load" de la imagen.
+  const _imgRecorte = document.getElementById('zoom-prod-recorte-img');
+  const _canvasRecorte = document.getElementById('zoom-prod-recorte-canvas');
+  const _iniciarCanvasRecorte = () => requestAnimationFrame(() => _zoomInicializarRecorteCanvas(_canvasRecorte));
+  if (_imgRecorte && _imgRecorte.complete && _imgRecorte.naturalWidth) _iniciarCanvasRecorte();
+  else if (_imgRecorte) _imgRecorte.addEventListener('load', _iniciarCanvasRecorte, { once: true });
+  else _iniciarCanvasRecorte();
 };
 
 function _zoomInicializarRecorteCanvas(canvas){
