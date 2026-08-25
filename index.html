@@ -3623,7 +3623,7 @@ function renderResultados(){
            </div>`;
       const claseFila = `prod-row${(puedeAgregar || qtyEnCarrito > 0) ? ' prod-row-clickeable' : ''}${qtyEnCarrito > 0 ? ' prod-row-en-carrito' : ''}${it.st ? ' prod-row-agotado' : ''}`;
       return `
-        <div class="${claseFila}" data-sku="${escHtml(it.s)}"${clickeable}>
+        <div class="${claseFila}" data-sku="${escHtml(it.s)}"${clickeable} onmouseenter="_fotoHoverSet('${escHtml(it.s)}')" onmouseleave="_fotoHoverClear('${escHtml(it.s)}')">
           ${adminIcons}${foto}
           <div class="prod-info">
             <div class="prod-sku">${escHtml(it.s)}</div>
@@ -4238,7 +4238,8 @@ window.descargarPedidoPDFConFotos = async () => {
     const pageH = doc.internal.pageSize.getHeight();
     const margin = 14;
     const fotoSize = 22;
-    const filaAlto = 27;
+    const mostrarMedioPago = _adminVistaPrecio === 'normal';
+    const filaAlto = mostrarMedioPago ? 35 : 27;
     let y = margin;
 
     doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(15, 23, 42);
@@ -4271,6 +4272,18 @@ window.descargarPedidoPDFConFotos = async () => {
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(130, 140, 160);
       doc.text(`SKU: ${it.s}`, textX, y + offsetY);
       doc.text(`${fmtMoney(precio)} c/u × ${qty}`, textX, y + offsetY + 4.5);
+
+      if (mostrarMedioPago) {
+        if (listaActiva === 'p1') {
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(14, 169, 104);
+          doc.text('✓ Precios ya con 10% off', textX, y + offsetY + 9);
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130, 140, 160);
+          doc.text('Efectivo, débito o transferencia', textX, y + offsetY + 13);
+        } else {
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130, 140, 160);
+          doc.text('Tarjeta de crédito en 1 pago', textX, y + offsetY + 9);
+        }
+      }
 
       doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 23, 42);
       doc.text(fmtMoney(precio * qty), pageW - margin, y + fotoSize / 2 + 1.5, { align: 'right' });
@@ -5902,6 +5915,24 @@ document.addEventListener('keydown', (e) => {
   e.preventDefault();
   buscador.focus();
   buscador.select();
+});
+
+// Atajo de teclado: con el mouse parado encima de un producto (tarjeta o fila, en
+// cualquiera de las dos vistas), Enter lo agrega al carrito — o lo saca, si ya estaba
+// agregado (mismo comportamiento que tocar la tarjeta con el mouse).
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+  const el = document.activeElement;
+  const tag = (el && el.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || (el && el.isContentEditable)) return;
+  if (el && el.closest && el.closest('.pwfin-backdrop, #zoom-prod-backdrop, #pdf-pedido-drop-overlay')) return;
+  if (!_skuHoverAdmin) return;
+  const it = catalogoBySku.get(_skuHoverAdmin);
+  if (!it) return;
+  e.preventDefault();
+  const qtyEnCarrito = carrito.get(_skuHoverAdmin) || 0;
+  if (qtyEnCarrito > 0) { if (typeof quitarDelCarrito === 'function') quitarDelCarrito(_skuHoverAdmin); }
+  else if (typeof agregarAlCarrito === 'function') agregarAlCarrito(_skuHoverAdmin);
 });
 
 // ══════════════════════════════════════════════════════════════════════════
