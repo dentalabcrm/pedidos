@@ -3971,7 +3971,7 @@ function renderCarrito(){
 // ── "⛶ Pantalla completa": mismo listado de "Tu pedido", pero con fotos grandes y en
 // columna — para revisar el pedido con más comodidad antes de enviarlo, sobre todo en
 // celular donde las miniaturas del carrito quedan chiquitas. ──
-window.abrirVistaCompletaPedido = () => {
+window.abrirVistaCompletaPedido = (irDirectoARecorte) => {
   document.getElementById('pedido-full-backdrop')?.remove();
   if (!carrito.size) return;
 
@@ -4007,15 +4007,16 @@ window.abrirVistaCompletaPedido = () => {
   const bd = document.createElement('div');
   bd.id = 'pedido-full-backdrop';
   bd.className = 'pwfin-backdrop';
+  const esAdmin = esAdminCatalogo();
   bd.innerHTML = `
     <div style="background:var(--panel);border-radius:18px;width:100%;max-width:640px;max-height:92vh;display:flex;flex-direction:column;position:relative;">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);gap:8px;">
         <h2 style="margin:0;font-size:17px;font-weight:800;color:var(--text);">🛒 Tu pedido</h2>
         <div style="display:flex;align-items:center;gap:8px;">
-          <button id="pedido-recortar-btn" onclick="_pedidoToggleRecorte()" style="
+          ${esAdmin ? `<button id="pedido-recortar-btn" onclick="_pedidoToggleRecorte()" style="
             background:var(--panel2);color:var(--text2);border:1px solid var(--border);border-radius:8px;
             padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;
-          ">✂️ Recortar</button>
+          ">✂️ Recortar</button>` : ''}
           <button onclick="document.getElementById('pedido-full-backdrop')?.remove()" style="
             width:34px;height:34px;border-radius:50%;background:var(--panel2);color:var(--text2);border:none;
             font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;
@@ -4035,6 +4036,10 @@ window.abrirVistaCompletaPedido = () => {
     </div>`;
   document.body.appendChild(bd);
   bd.addEventListener('click', e => { if (e.target === bd) bd.remove(); });
+  // Solo para el admin: entra directo al modo recorte, sin tener que tocar el botón
+  // primero — salvo que se lo esté reabriendo a propósito para VER la lista (por ejemplo,
+  // al tocar "✕ Salir de recorte"), en cuyo caso no hay que volver a entrar solo.
+  if (esAdmin && irDirectoARecorte !== false) _pedidoToggleRecorte();
 };
 
 let _pedidoRecorteActivo = false;
@@ -4154,15 +4159,17 @@ async function _construirCanvasPedidoCompleto(){
 // Prende/apaga el modo recorte dentro de "Tu pedido" — mismo mecanismo que ya usa el modal
 // de un producto individual (pero acá recorta de la lista completa, no de una sola tarjeta).
 window._pedidoToggleRecorte = async () => {
+  if (!esAdminCatalogo()) return;
   const btn = document.getElementById('pedido-recortar-btn');
   const body = document.getElementById('pedido-full-body');
   const footer = document.getElementById('pedido-full-footer');
   if (!btn || !body) return;
 
   if (_pedidoRecorteActivo) {
-    // Salir del modo recorte: reabrir el modal normal desde cero.
+    // Salir del modo recorte: reabrir el modal, esta vez mostrando la lista normal (no
+    // hay que volver a entrar solo al recorte, o "Salir" no serviría para nada).
     _pedidoRecorteActivo = false;
-    abrirVistaCompletaPedido();
+    abrirVistaCompletaPedido(false);
     return;
   }
 
