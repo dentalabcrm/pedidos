@@ -1081,6 +1081,7 @@ let paginaActual = 1;
 let POR_PAGINA = parseInt(localStorage.getItem('dentalab_por_pagina'), 10) || 50;
 let filtroOrdenPrecio = ''; // '' | 'asc' | 'desc'
 let filtroSoloOfertas = false;
+let filtroSoloStock = false;
 let filtroMarca = 'todas';
 let filtroCategoria = 'todas';
 let filtroSubgrupo = 'todas';
@@ -3377,6 +3378,7 @@ function buscarProductos(){
     if (filtroSubgrupo !== 'todas') base = base.filter(it => it.sg === filtroSubgrupo);
   }
   if (filtroSoloOfertas) base = base.filter(it => it.of);
+  if (filtroSoloStock) base = base.filter(it => !it.st);
 
   const tokens = tokensPre;
   let ordenados;
@@ -3403,6 +3405,7 @@ function buscarProductos(){
       // Sin filtro de categoría/subgrupo acá tampoco — misma razón: al escribir, la
       // búsqueda es universal sobre todo el catálogo.
       if (filtroSoloOfertas) candidatos = candidatos.filter(it => it.of);
+      if (filtroSoloStock) candidatos = candidatos.filter(it => !it.st);
       ordenados = candidatos.sort((a, b) => a.n.localeCompare(b.n, 'es'));
     } else {
       const resultados = base.filter(it => {
@@ -4768,6 +4771,7 @@ function renderPrincipal(){
               ${categoriasDisponibles().map(g => `<option value="${escHtml(g)}">${escHtml(g)}</option>`).join('')}
             </select>
             <label class="chk-ofertas"><input type="checkbox" id="chk-ofertas" onchange="onFiltroChange()"> Solo en ofertas</label>
+            <label class="chk-ofertas"><input type="checkbox" id="chk-stock" onchange="onFiltroChange()"> Solo en stock</label>
             ${esAdminCatalogo() ? `<button id="btn-modo-seleccion-fotos" onclick="toggleModoSeleccionFotos()" style="background:${_modoSeleccionFotos ? '#dc2626' : 'var(--panel2)'};color:${_modoSeleccionFotos ? '#fff' : 'var(--text)'};border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">${_modoSeleccionFotos ? '✕ Cancelar selección' : '☑️ Seleccionar fotos para borrar'}</button>` : ''}
           </div>
           <div class="resultados" id="resultados"></div>
@@ -4889,6 +4893,7 @@ window.onFiltroChange = () => {
   filtroMarca = document.getElementById('sel-marca')?.value || 'todas';
   filtroCategoria = document.getElementById('sel-categoria')?.value || 'todas';
   filtroSoloOfertas = document.getElementById('chk-ofertas')?.checked || false;
+  filtroSoloStock = document.getElementById('chk-stock')?.checked || false;
   paginaActual = 1;
   renderResultados();
   requestAnimationFrame(() => window.scrollTo(0, _scrollY));
