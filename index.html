@@ -1741,7 +1741,7 @@ window.abrirZoomProducto = (sku) => {
                ${it.manuales.map((m, i) => `
                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                  <a href="https://drive.google.com/uc?export=download&id=${escHtml(m.fileId)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:#2563eb;text-decoration:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:6px 12px;">📄 ${m.nombre ? escHtml(m.nombre) : `Manual ${i + 1}`}</a>
-                 ${esAdminCatalogo() ? `<button onclick="event.stopPropagation(); adminBorrarManualProducto('${escHtml(it.s)}', ${i})" title="Quitar este manual" style="background:none;border:1px solid var(--border);border-radius:6px;padding:5px 7px;cursor:pointer;font-size:12px;">🗑️</button>` : ''}
+                 ${esAdminCatalogo() ? `<button onclick="event.stopPropagation(); iniciarAsignarManualAOtros('${escHtml(it.s)}', ${i})" title="Asignar este mismo manual a otros productos" style="background:none;border:1px solid var(--border);border-radius:6px;padding:5px 7px;cursor:pointer;font-size:12px;">🔗</button><button onclick="event.stopPropagation(); adminBorrarManualProducto('${escHtml(it.s)}', ${i})" title="Quitar este manual" style="background:none;border:1px solid var(--border);border-radius:6px;padding:5px 7px;cursor:pointer;font-size:12px;">🗑️</button>` : ''}
                </div>`).join('')}
                ${esAdminCatalogo() ? `<button onclick="event.stopPropagation(); adminSubirManualProducto('${escHtml(it.s)}')" style="align-self:flex-start;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#475569;cursor:pointer;margin-top:2px;">➕ Agregar otro manual</button>` : ''}
              </div>`
@@ -2284,6 +2284,7 @@ function _refrescarVistaAdmin() {
   if (typeof renderResultados === 'function') renderResultados();
   if (typeof renderCarrito === 'function') renderCarrito();
   _renderBarraSeleccionFotos();
+  _renderBarraAsignarManual();
   if (typeof _renderCarruselBanners === 'function') _renderCarruselBanners();
   if (typeof _renderCarruselMarcas === 'function') _renderCarruselMarcas();
 }
@@ -2353,7 +2354,15 @@ window.guardarTextosCatalogo = async function() {
 let _modoSeleccionFotos = false;
 let _fotosSeleccionadas = new Set();
 
+// ── Asignar un mismo manual ya subido a varios productos a la vez (solo admin) ──
+// Se dispara desde la ficha ampliada, junto a un manual ya cargado ("🔗 A otros productos").
+let _modoAsignarManual = false;
+let _manualParaAsignar = null; // { fileId, nombre }
+let _skuOrigenManual = null;
+let _skusAsignarManual = new Set();
+
 window.toggleModoSeleccionFotos = function() {
+  if (_modoAsignarManual) cancelarAsignarManual();
   _modoSeleccionFotos = !_modoSeleccionFotos;
   if (!_modoSeleccionFotos) _fotosSeleccionadas.clear();
   const btn = document.getElementById('btn-modo-seleccion-fotos');
@@ -2427,7 +2436,80 @@ window.adminBorrarFotosSeleccionadas = async function() {
 };
 
 // ══════════════════════════════════════════════════════
-//  Carrusel de banners promocionales (imágenes que sube el administrador a Drive)
+//  Asignar un manual ya subido a otros productos que lo comparten (sin volver a subirlo)
+// ══════════════════════════════════════════════════════
+window.iniciarAsignarManualAOtros = function(sku, idx) {
+  const itCat = catalogoBySku.get(sku);
+  const manual = itCat?.manuales?.[idx];
+  if (!manual) return;
+  if (_modoSeleccionFotos) toggleModoSeleccionFotos(); // los dos modos de selección no conviven
+  _manualParaAsignar = manual;
+  _skuOrigenManual = sku;
+  _skusAsignarManual = new Set();
+  _modoAsignarManual = true;
+  document.getElementById('zoom-prod-backdrop')?.remove();
+  _refrescarVistaAdmin();
+  if (typeof showToast === 'function') showToast('📎 Elegí los demás productos que llevan este manual', 'info');
+};
+
+window.cancelarAsignarManual = function() {
+  _modoAsignarManual = false;
+  _manualParaAsignar = null;
+  _skuOrigenManual = null;
+  _skusAsignarManual.clear();
+  _refrescarVistaAdmin();
+};
+
+window.toggleSkuAsignarManual = function(sku) {
+  if (sku === _skuOrigenManual) return;
+  if (_skusAsignarManual.has(sku)) _skusAsignarManual.delete(sku);
+  else _skusAsignarManual.add(sku);
+  _refrescarVistaAdmin();
+};
+
+function _renderBarraAsignarManual() {
+  document.getElementById('barra-asignar-manual')?.remove();
+  if (!_modoAsignarManual) return;
+  const barra = document.createElement('div');
+  barra.id = 'barra-asignar-manual';
+  barra.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#1e293b;padding:12px 16px;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;box-shadow:0 -4px 20px rgba(0,0,0,.25);';
+  const cant = _skusAsignarManual.size;
+  barra.innerHTML = `
+    <span style="color:#fff;font-size:13.5px;font-weight:700;">📎 ${_manualParaAsignar?.nombre ? escHtml(_manualParaAsignar.nombre) : 'Manual'} — ${cant} producto${cant === 1 ? '' : 's'} elegido${cant === 1 ? '' : 's'}</span>
+    <button id="btn-asignar-manual" ${!cant ? 'disabled' : ''} style="background:${cant ? '#2563eb' : '#475569'};border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:${cant ? 'pointer' : 'not-allowed'};opacity:${cant ? '1' : '.6'};">✓ Asignar manual a estos productos</button>
+    <button onclick="cancelarAsignarManual()" style="background:none;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Cancelar</button>
+  `;
+  document.body.appendChild(barra);
+  barra.querySelector('#btn-asignar-manual').onclick = adminAsignarManualASeleccionados;
+}
+
+window.adminAsignarManualASeleccionados = async function() {
+  const skus = Array.from(_skusAsignarManual);
+  const manual = _manualParaAsignar;
+  if (!skus.length || !manual) return;
+  const btn = document.getElementById('btn-asignar-manual');
+  let ok = 0;
+  for (let i = 0; i < skus.length; i++) {
+    const sku = skus[i];
+    if (btn) btn.textContent = `Asignando… (${i + 1}/${skus.length})`;
+    try {
+      const itCat = catalogoBySku.get(sku);
+      if (!itCat) continue;
+      const yaLoTiene = (itCat.manuales || []).some(m => m.fileId === manual.fileId);
+      const nuevosManuales = yaLoTiene ? itCat.manuales : [...(itCat.manuales || []), manual];
+      const key = String(sku).trim().replace(/[.#$\[\]/]/g, '_');
+      if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_manuales/' + key).set(nuevosManuales);
+      itCat.manuales = nuevosManuales;
+      const itArr = catalogo.find(x => x.s === sku);
+      if (itArr) itArr.manuales = nuevosManuales;
+      ok++;
+    } catch (e) { /* seguimos con el resto aunque uno falle */ }
+  }
+  alert(`✓ Manual asignado a ${ok} producto${ok === 1 ? '' : 's'}.`);
+  cancelarAsignarManual();
+};
+
+
 // ══════════════════════════════════════════════════════
 let _bannersCarrusel = [];
 let _bannerActual = 0;
@@ -3871,7 +3953,9 @@ function renderResultados(){
            <button onclick="cambiarQtyCarrito('${it.s}', 1)">+</button>
          </div>`
       : `<button class="prod-add" onclick="event.stopPropagation(); agregarAlCarrito('${it.s}')" ${!puedeAgregar ? `disabled title="${it.st ? 'Sin stock disponible' : (it.cp ? 'Consultar precio por WhatsApp' : 'Sin precio en esta lista')}"` : ''}>+</button>`;
-    const clickeable = qtyEnCarrito > 0
+    const clickeable = _modoAsignarManual
+      ? (it.s === _skuOrigenManual ? '' : ` onclick="toggleSkuAsignarManual('${escHtml(it.s)}')"`)
+      : qtyEnCarrito > 0
       ? ` onclick="quitarDelCarrito('${it.s}')"`
       : (puedeAgregar ? ` onclick="agregarAlCarrito('${it.s}')"` : '');
     const stockHtml = it.st
@@ -3899,7 +3983,11 @@ function renderResultados(){
       const foto = it.img
         ? `<img class="prod-foto" src="https://drive.google.com/thumbnail?id=${it.img}&sz=w150" alt="" loading="lazy" title="Ver más grande" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirZoomProducto('${escHtml(it.s)}')" onerror="manejarErrorFotoProducto(this)">`
         : `<div class="prod-foto prod-foto-vacia" style="cursor:pointer;" title="Buscar foto en Drive" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirFotoProducto(this)">🦷</div>`;
-      const adminIcons = !esAdminCatalogo() ? '' : _modoSeleccionFotos
+      const adminIcons = !esAdminCatalogo() ? '' : _modoAsignarManual
+        ? (it.s === _skuOrigenManual
+          ? `<div style="display:flex;align-items:center;margin-right:4px;font-size:15px;" title="Ya tiene este manual">✅</div>`
+          : `<div style="display:flex;align-items:center;margin-right:4px;"><input type="checkbox" ${_skusAsignarManual.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSkuAsignarManual('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>`)
+        : _modoSeleccionFotos
         ? (it.img ? `<div style="display:flex;align-items:center;margin-right:4px;"><input type="checkbox" ${_fotosSeleccionadas.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionFoto('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>` : '')
         : `<div style="display:flex;flex-direction:column;gap:3px;margin-right:4px;">
             <button onclick="event.stopPropagation(); adminSubirFotoProducto('${escHtml(it.s)}')" title="Agregar/cambiar foto" style="background:none;border:none;font-size:13px;cursor:pointer;padding:1px;line-height:1;">✏️</button>
@@ -3940,7 +4028,11 @@ function renderResultados(){
       : imgsArr.length === 1
       ? `<img class="prod-card-foto" src="https://drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w300" alt="" loading="lazy" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" ${zoomAttr} onerror="manejarErrorFotoProducto(this)">`
       : `<div class="prod-card-foto prod-card-foto-vacia" style="cursor:pointer;" title="Buscar foto en Drive" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirFotoProducto(this)">🦷</div>`;
-    const adminIcons = !esAdminCatalogo() ? '' : _modoSeleccionFotos
+    const adminIcons = !esAdminCatalogo() ? '' : _modoAsignarManual
+      ? (it.s === _skuOrigenManual
+        ? `<div class="prod-card-admin" title="Ya tiene este manual" style="font-size:16px;">✅</div>`
+        : `<div class="prod-card-admin"><input type="checkbox" ${_skusAsignarManual.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSkuAsignarManual('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>`)
+      : _modoSeleccionFotos
       ? (it.img ? `<div class="prod-card-admin"><input type="checkbox" ${_fotosSeleccionadas.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionFoto('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>` : '')
       : `<div class="prod-card-admin">
           <button onclick="event.stopPropagation(); adminSubirFotoProducto('${escHtml(it.s)}')" title="${imgsArr.length ? 'Agregar otra foto' : 'Agregar foto'} (también podés arrastrarla acá o pegarla con Ctrl+V)">✏️</button>
