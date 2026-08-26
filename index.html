@@ -1132,8 +1132,26 @@ function precioDe(item){
 
 // ── Financiamiento en cuotas (solo aplica pagando con Tarjeta — 1 pago) ──
 function _pwFinRound(v){ return Math.ceil(v / 100) * 100; } // redondeo prolijo, igual que el CRM
-function _pwFinBuildCuotas(precio){
-  const sinInteres = (_finNoInt || []).filter(r => r.activo !== false).map(opt => {
+// Lee el monto mínimo ("...en compras desde $50.000") ya escrito en el texto de condición
+// de cada opción de cuotas sin interés, para aplicarlo como filtro real — así no depende
+// de que sea "la primera" o "la segunda" opción (frágil si las reordenan), sino de lo que
+// dice el propio texto, sea cual sea el orden.
+function _pwFinExtraerUmbral(condicion){
+  const m = String(condicion || '').match(/desde\s*\$?\s*([\d.,]+)/i);
+  if (!m) return null;
+  const num = parseFloat(m[1].replace(/\./g, '').replace(',', '.'));
+  return Number.isFinite(num) ? num : null;
+}
+function _pwFinBuildCuotas(precio, categoriaProducto){
+  // La opción de 3 cuotas sin interés vía terminal física de Mercado Pago solo aplica a
+  // productos de la categoría "Máquinas" — se identifica por su texto de condición, para
+  // no depender de un campo nuevo en la config de financiamiento (que se edita aparte).
+  const _esTerminalMP = (opt) => /terminal\s+(?:f[ií]sica\s+)?de\s+mercado\s+pago/i.test(opt.condicion || '');
+  const sinInteres = (_finNoInt || [])
+    .filter(r => r.activo !== false)
+    .filter(r => !_esTerminalMP(r) || categoriaProducto === 'Máquinas')
+    .filter(r => { const umbral = _pwFinExtraerUmbral(r.condicion); return umbral === null || precio >= umbral; })
+    .map(opt => {
     const cuotaValor = _pwFinRound(precio / opt.n);
     return { n: opt.n, rate: 0, cuotaValor, totalFinal: cuotaValor * opt.n, sinInteres: true, dias: opt.dias || '', condicion: opt.condicion || '' };
   });
@@ -1147,8 +1165,8 @@ function _pwFinBuildCuotas(precio){
 function _pwHayFinanciamiento(){
   return (_finRates || []).some(r => r.activo !== false) || (_finNoInt || []).some(r => r.activo !== false);
 }
-function _pwFinModalHtml(precio, titulo, subtitulo){
-  const cuotas = _pwFinBuildCuotas(precio);
+function _pwFinModalHtml(precio, titulo, subtitulo, categoriaProducto){
+  const cuotas = _pwFinBuildCuotas(precio, categoriaProducto);
   const filas = cuotas.map(c => `
     <div class="pwfin-cuota-row${c.sinInteres ? ' pwfin-cuota-row-noint' : ''}">
       <div>
@@ -1174,7 +1192,7 @@ function _pwCerrarFinModal(){
   document.getElementById('pwfin-backdrop')?.remove();
   _pwFinModalReabrir = null;
 }
-function _pwAbrirFinModal(precio, titulo, subtitulo){
+function _pwAbrirFinModal(precio, titulo, subtitulo, categoriaProducto){
   document.getElementById('pwfin-backdrop')?.remove();
   const bd = document.createElement('div');
   bd.id = 'pwfin-backdrop';
@@ -1185,18 +1203,24 @@ function _pwAbrirFinModal(precio, titulo, subtitulo){
         <div class="pwfin-title">💳 Financiamiento en cuotas</div>
         <button class="pwfin-close" onclick="_pwCerrarFinModal()">✕</button>
       </div>
-      <div class="pwfin-body">${_pwFinModalHtml(precio, titulo, subtitulo)}</div>
+      <div class="pwfin-body">${_pwFinModalHtml(precio, titulo, subtitulo, categoriaProducto)}</div>
     </div>`;
   document.body.appendChild(bd);
   bd.addEventListener('click', e => { if (e.target === bd) _pwCerrarFinModal(); });
 }
-window.abrirCuotasModal = (precio, nombreCodificado) => {
+window.abrirCuotasModal = (precio, nombreCodificado, categoriaCodificada) => {
   const nombre = decodeURIComponent(nombreCodificado);
-  _pwFinModalReabrir = () => _pwAbrirFinModal(precio, nombre, 'Precio del producto');
+  const categoria = categoriaCodificada ? decodeURIComponent(categoriaCodificada) : '';
+  _pwFinModalReabrir = () => _pwAbrirFinModal(precio, nombre, 'Precio del producto', categoria);
   _pwFinModalReabrir();
 };
 window.abrirCuotasTotalModal = () => {
-  _pwFinModalReabrir = () => _pwAbrirFinModal(calcularTotal(), '', 'Total del pedido');
+  // Para el total del pedido no hay una única categoría — la opción restringida a
+  // "Máquinas" solo se muestra si TODO lo que hay en el carrito es de esa categoría (si
+  // el pedido mezcla categorías, se omite para no ofrecer algo que no aplica a todo).
+  const categorias = new Set([...carrito.keys()].map(sku => catalogoBySku.get(sku)?.g).filter(Boolean));
+  const categoriaTotal = (categorias.size === 1) ? [...categorias][0] : '';
+  _pwFinModalReabrir = () => _pwAbrirFinModal(calcularTotal(), '', 'Total del pedido', categoriaTotal);
   _pwFinModalReabrir();
 };
 
@@ -3613,7 +3637,7 @@ function renderResultados(){
     const stockAdminHtml = esAdminCatalogo() && (it.d1 !== undefined || it.dc !== undefined)
       ? `<div class="prod-stock-admin" title="Solo vos ves esto — stock real por depósito">📦 <span>Local: <b>${it.d1 ?? 0}</b></span><span>Depósito: <b>${it.dc ?? 0}</b></span></div>`
       : '';
-    const cuotasHtml = (listaActiva === 'p2' && precio && !it.cp && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}')">💳 Ver cuotas</button>` : '';
+    const cuotasHtml = (listaActiva === 'p2' && precio && !it.cp && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}')">💳 Ver cuotas</button>` : '';
     const categoriaHtml = it.g
       ? `<div class="prod-categoria">
           <span onclick="event.stopPropagation(); irACategoriaDesdeProducto('${escHtml(it.g).replace(/'/g, "\\'")}')">${escHtml(it.g)}</span>
@@ -3953,7 +3977,7 @@ function renderCarrito(){
             </div>
             <div class="ci-subtotal-col">
               <div class="ci-subtotal">${fmtMoney(precio * qty)}</div>
-              ${(listaActiva === 'p2' && precio && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link ci-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio * qty}, '${encodeURIComponent(it.n)}')">💳 Cuotas</button>` : ''}
+              ${(listaActiva === 'p2' && precio && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link ci-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio * qty}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}')">💳 Cuotas</button>` : ''}
             </div>
             <button class="ci-quitar" onclick="quitarDelCarrito('${sku}')">✕</button>
           </div>
