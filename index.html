@@ -3757,7 +3757,7 @@ function renderResultados(){
     const stockAdminHtml = esAdminCatalogo() && (it.d1 !== undefined || it.dc !== undefined)
       ? `<div class="prod-stock-admin" title="Solo vos ves esto — stock real por depósito">📦 <span>Local: <b>${it.d1 ?? 0}</b></span><span>Depósito: <b>${it.dc ?? 0}</b></span></div>`
       : '';
-    const cuotasHtml = (listaActiva === 'p2' && precio && !it.cp && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}')">💳 Ver cuotas</button>` : '';
+    const cuotasHtml = (listaActiva === 'p2' && precio && !it.cp && !it.st && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}')">💳 Ver cuotas</button>` : '';
     const categoriaHtml = it.g
       ? `<div class="prod-categoria">
           <span onclick="event.stopPropagation(); irACategoriaDesdeProducto('${escHtml(it.g).replace(/'/g, "\\'")}')">${escHtml(it.g)}</span>
