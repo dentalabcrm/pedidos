@@ -1736,6 +1736,12 @@ window.abrirZoomProducto = (sku) => {
         <div style="font-size:19px;font-weight:800;color:#0f172a;line-height:1.35;margin-bottom:6px;">${escHtml(it.n)}</div>
         <div style="font-size:11.5px;font-weight:700;margin-bottom:10px;color:${it.st ? 'var(--red)' : it.sb ? 'var(--amber)' : 'var(--green)'};">${it.st ? '✕ Agotado' : it.sb ? '⏳ Stock a confirmar' : '✓ En stock'}</div>
         ${it.g ? `<div style="font-size:10.5px;color:#8592a6;margin-bottom:10px;">${escHtml(it.g)}${it.sg ? ` › ${escHtml(it.sg)}` : ''}</div>` : ''}
+        ${it.manual
+          ? `<div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+               <a href="https://drive.google.com/uc?export=download&id=${escHtml(it.manual.fileId)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:#2563eb;text-decoration:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:6px 12px;">📄 Descargar manual${it.manual.nombre ? ` — ${escHtml(it.manual.nombre)}` : ''}</a>
+               ${esAdminCatalogo() ? `<button onclick="event.stopPropagation(); adminSubirManualProducto('${escHtml(it.s)}')" title="Reemplazar manual" style="background:none;border:1px solid var(--border);border-radius:6px;padding:5px 7px;cursor:pointer;font-size:12px;">✏️</button><button onclick="event.stopPropagation(); adminBorrarManualProducto('${escHtml(it.s)}')" title="Quitar manual" style="background:none;border:1px solid var(--border);border-radius:6px;padding:5px 7px;cursor:pointer;font-size:12px;">🗑️</button>` : ''}
+             </div>`
+          : (esAdminCatalogo() ? `<div style="margin-bottom:10px;"><button onclick="event.stopPropagation(); adminSubirManualProducto('${escHtml(it.s)}')" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;color:#475569;cursor:pointer;">📎 Subir manual (PDF, Word o foto)</button></div>` : '')}
         <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:16px;">
           <div>
             <div style="font-size:26px;font-weight:800;color:#0f172a;">${it.cp ? '<span style="font-size:12px;color:#8592a6;font-style:italic;font-weight:500;">Consultar precio</span>' : fmtMoney(precio)}</div>
@@ -2963,6 +2969,100 @@ window.adminBorrarFotoProducto = async function(sku) {
   }
 };
 
+// ── Manual del producto (PDF, Word o foto) — un solo archivo por SKU ──
+// Mismo mecanismo que las fotos: se sube a la carpeta de Drive con el token de escritura
+// del admin y se guarda la referencia en Firebase, para que el catálogo público la lea
+// sin necesitar permisos de escritura.
+const _MANUAL_TIPOS_OK = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+async function _subirManualAlProducto(sku, file, silencioso){
+  const esImagen = file?.type?.startsWith('image/');
+  const esDocOk = _MANUAL_TIPOS_OK.includes(file?.type) || /\.(pdf|docx?)$/i.test(file?.name || '');
+  if (!file || (!esImagen && !esDocOk)) {
+    if (!silencioso) alert('El manual tiene que ser un PDF, un Word (.doc/.docx) o una foto.');
+    return false;
+  }
+  let token;
+  try {
+    token = await _pedirTokenEscrituraDrive();
+  } catch (e) {
+    alert('No se pudo autorizar el acceso a Drive: ' + e.message);
+    return false;
+  }
+  try {
+    const ext = (file.name && file.name.includes('.') ? file.name.split('.').pop() : (file.type.split('/')[1] || 'pdf')).toLowerCase();
+    const metadata = { name: `MANUAL-${sku}.${ext}`, parents: [GDRIVE_FOLDER_ID] };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', file);
+    const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: form
+    });
+    if (!resp.ok) { const err = await resp.json().catch(() => ({})); throw new Error(err?.error?.message || `Error ${resp.status}`); }
+    const data = await resp.json();
+    const manual = { fileId: data.id, nombre: file.name || `Manual.${ext}` };
+    const key = String(sku).trim().replace(/[.#$\[\]/]/g, '_');
+    const itCat = catalogoBySku.get(sku);
+    const itArr = catalogo.find(x => x.s === sku);
+    if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_manuales/' + key).set(manual);
+    if (itCat) itCat.manual = manual;
+    if (itArr) itArr.manual = manual;
+    if (!silencioso) alert('✓ Manual subido correctamente.');
+    else if (typeof showToast === 'function') showToast('📄 Manual guardado', 'ok');
+    return true;
+  } catch (e) {
+    alert('No se pudo subir el manual: ' + e.message);
+    return false;
+  }
+}
+
+window.adminSubirManualProducto = async function(sku) {
+  try {
+    await _pedirTokenEscrituraDrive();
+  } catch (e) {
+    alert('No se pudo autorizar el acceso a Drive: ' + e.message);
+    return;
+  }
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*';
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+    const ok = await _subirManualAlProducto(sku, file, false);
+    if (ok) abrirZoomProducto(sku);
+  };
+  input.click();
+};
+
+window.adminBorrarManualProducto = async function(sku) {
+  const itCat = catalogoBySku.get(sku);
+  const manual = itCat?.manual;
+  if (!manual) { alert('Este producto no tiene manual guardado.'); return; }
+  if (!confirm('¿Quitar el manual de este producto?\n\nSe va a mover a la papelera de Google Drive (recuperable 30 días) y va a dejar de mostrarse en el catálogo.')) return;
+  try {
+    const token = await _pedirTokenEscrituraDrive();
+    const resp = await fetch(`https://www.googleapis.com/drive/v3/files/${manual.fileId}`, {
+      method: 'PATCH',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trashed: true })
+    });
+    if (!resp.ok && resp.status !== 404) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `Error ${resp.status}`);
+    }
+    const key = String(sku).trim().replace(/[.#$\[\]/]/g, '_');
+    if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_manuales/' + key).remove();
+    delete itCat.manual;
+    const itArr = catalogo.find(x => x.s === sku);
+    if (itArr) delete itArr.manual;
+    abrirZoomProducto(sku);
+  } catch (e) {
+    alert('No se pudo quitar el manual: ' + e.message);
+  }
+};
+
 // ── Gestor de fotos (cuando un producto tiene más de una) ──
 // Permite ver todas las fotos de un SKU y borrar una en particular, sin tocar las demás.
 window.abrirGestorFotosProducto = function(sku){
@@ -3207,6 +3307,18 @@ async function cargarCatalogo(){
         else { delete it.imgs; delete it.img; }
       });
     } catch (e) { /* si falla, seguimos con lo que vino en el catálogo publicado */ }
+    // Manuales (PDF / Word / foto) por SKU: un solo archivo por producto, guardado en Drive
+    // y referenciado acá igual que las fotos — así el catálogo publicado nunca queda
+    // desactualizado si se sube/cambia un manual después de publicar.
+    try {
+      const snapManual = await db.ref('dentalab/sku_manuales').once('value');
+      const manualesVivo = snapManual.val() || {};
+      const claveManual = s => String(s).trim().replace(/[.#$\[\]/]/g, '_');
+      catalogo.forEach(it => {
+        const m = manualesVivo[claveManual(it.s)];
+        if (m && m.fileId) it.manual = m; else delete it.manual;
+      });
+    } catch (e) { /* si falla, seguimos sin manuales */ }
     // Fresas/piedras con SKU de estas familias: se les agrega el tipo entre paréntesis al
     // nombre, así se distinguen aunque el nombre real no lo diga (todas comparten forma/dientes,
     // lo único que cambia entre familias es para qué pieza de mano/turbina/contra ángulo son).
