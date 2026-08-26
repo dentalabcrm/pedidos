@@ -198,6 +198,12 @@
     min-height:100vh; padding:18px 14px 90px; -webkit-font-smoothing:antialiased;
     overflow-x:hidden; /* evita un scroll horizontal de unos pocos px por el banner full-bleed (100vw) */
   }
+  /* Vista de precios admin (Reventa/Mayorista): fondo de página con un tinte distinto al
+     normal, para que salte a la vista que no estás viendo los precios que ve el cliente. */
+  body.vista-reventa{ background:#f3effa; }
+  body.vista-mayorista{ background:#fdf3e7; }
+  html[data-theme="dark"] body.vista-reventa{ background:#241f33; }
+  html[data-theme="dark"] body.vista-mayorista{ background:#2e2515; }
   .wrap{max-width:760px;margin:0 auto;}
   .brand{display:flex;align-items:center;gap:10px;margin-bottom:16px;justify-content:space-between;}
   .brand-left{display:flex;align-items:center;gap:10px;}
@@ -1112,6 +1118,8 @@ function fmtMoney(n){ return '$' + Math.round(n || 0).toLocaleString('es-AR'); }
 let _adminVistaPrecio = 'normal'; // 'normal' | 'reventa' | 'mayorista' — solo cambia lo que ve el ADMIN, no la lista real del cliente
 window._cambiarVistaPrecioAdmin = (valor) => {
   _adminVistaPrecio = valor;
+  document.body.classList.toggle('vista-reventa', valor === 'reventa');
+  document.body.classList.toggle('vista-mayorista', valor === 'mayorista');
   renderPrincipal(); // re-dibuja todo (banner incluido) para que se note el cambio de vista
 };
 function precioDe(item){
