@@ -5927,6 +5927,16 @@ document.addEventListener('keydown', (e) => {
   buscador.select();
 });
 
+// Atajo de teclado: Shift + Retroceso, estando parado en el buscador, borra todo lo
+// escrito de una — en vez de ir borrando letra por letra o tocar la "✕" con el mouse.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Backspace' || !e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+  const el = document.activeElement;
+  if (!el || el.id !== 'input-busqueda' || !el.value) return;
+  e.preventDefault();
+  if (typeof limpiarBusqueda === 'function') limpiarBusqueda();
+});
+
 // Atajo de teclado: con el mouse parado encima de un producto (tarjeta o fila, en
 // cualquiera de las dos vistas), Enter lo agrega al carrito — o lo saca, si ya estaba
 // agregado (mismo comportamiento que tocar la tarjeta con el mouse).
