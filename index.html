@@ -1238,6 +1238,7 @@ function _pwCerrarFinModal(){
 }
 function _pwAbrirFinModal(precio, titulo, subtitulo, categoriaProducto){
   document.getElementById('pwfin-backdrop')?.remove();
+  _pwFinUltimoParams = { precio, titulo, subtitulo, categoriaProducto };
   const bd = document.createElement('div');
   bd.id = 'pwfin-backdrop';
   bd.className = 'pwfin-backdrop';
@@ -1248,10 +1249,85 @@ function _pwAbrirFinModal(precio, titulo, subtitulo, categoriaProducto){
         <button class="pwfin-close" onclick="_pwCerrarFinModal()">✕</button>
       </div>
       <div class="pwfin-body">${_pwFinModalHtml(precio, titulo, subtitulo, categoriaProducto)}</div>
+      <div style="padding:14px 22px;border-top:1px solid var(--border);">
+        <button onclick="_pwDescargarCuotasPDF()" style="
+          width:100%;background:var(--green,#0ea968);color:#fff;border:none;border-radius:10px;
+          padding:11px;font-size:13.5px;font-weight:700;cursor:pointer;
+        ">⬇ Descargar PDF</button>
+      </div>
     </div>`;
   document.body.appendChild(bd);
   bd.addEventListener('click', e => { if (e.target === bd) _pwCerrarFinModal(); });
 }
+
+// Arma una página imprimible (mismo CSS que usa el modal) para que el cliente la pueda
+// guardar como PDF desde el navegador — así se ve exactamente igual a lo que ya está
+// viendo en pantalla, logos de Mercado Pago/Nave incluidos.
+let _pwFinUltimoParams = null;
+window._pwDescargarCuotasPDF = () => {
+  if (!_pwFinUltimoParams) return;
+  const { precio, titulo, subtitulo, categoriaProducto } = _pwFinUltimoParams;
+  const cuerpo = _pwFinModalHtml(precio, titulo, subtitulo, categoriaProducto);
+  const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Financiamiento en cuotas — Dentalab</title>
+<style>
+  :root{--text:#0f172a;--text2:#475569;--text3:#8592a6;--border:#e1e6ee;--panel:#ffffff;--panel2:#eef1f6;--green:#0ea968;--blue:#0284c7;}
+  *{box-sizing:border-box;}
+  body{font-family:'DM Sans',Arial,sans-serif;background:#f4f6fa;padding:32px 16px;margin:0;color:var(--text);}
+  .page{background:#fff;max-width:600px;margin:0 auto;border-radius:16px;padding:26px 26px 30px;box-shadow:0 4px 24px rgba(0,0,0,.10);}
+  .page-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;padding-bottom:14px;border-bottom:2px solid var(--blue);}
+  .page-title{font-size:17px;font-weight:800;}
+  .page-date{font-size:11px;color:var(--text3);margin-top:2px;text-align:right;}
+  .zoom-bar{display:flex;align-items:center;gap:10px;padding:0 0 16px;max-width:600px;margin:0 auto;}
+  .zoom-bar button{padding:4px 12px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;}
+  .zoom-bar span{font-size:13px;color:#475569;min-width:40px;text-align:center;}
+  .pwfin-precio-base{background:var(--panel2);border-radius:12px;padding:12px 14px;margin-bottom:14px;}
+  .pwfin-precio-lbl{font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;}
+  .pwfin-precio-val{font-size:20px;font-weight:800;color:var(--blue);}
+  .pwfin-prod-name{font-size:12.5px;color:var(--text2);margin-top:2px;}
+  .pwfin-cuota-row{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-bottom:7px;}
+  .pwfin-cuota-row-noint{border-color:var(--green);background:#0ea96908;}
+  .pwfin-cuota-n{font-size:17px;font-weight:800;color:var(--blue);}
+  .pwfin-cuota-label{font-size:10.5px;color:var(--text3);margin-top:1px;}
+  .pwfin-noint-tag{color:var(--green);font-weight:700;}
+  .pwfin-cuota-meta{font-size:9.5px;color:var(--text3);margin-top:2px;line-height:1.4;}
+  .pwfin-cuota-right{text-align:right;}
+  .pwfin-cuota-valor{font-size:13.5px;font-weight:800;color:var(--text);}
+  .pwfin-cuota-total{font-size:10px;color:var(--text3);margin-top:1px;}
+  .pwfin-nave-header{margin:16px 0 10px;padding-top:14px;border-top:1px dashed var(--border);}
+  .pwfin-nave-badge{display:inline-flex;align-items:center;background:#ffffff;padding:6px 14px;border-radius:20px;box-shadow:0 1px 4px rgba(0,0,0,.1);border:1px solid var(--border);}
+  .pwfin-nave-logo{height:15px;display:block;}
+  .pwfin-nave-sub{font-size:10.5px;color:var(--text3);margin-top:6px;line-height:1.4;}
+  .pwfin-mp-header{margin-bottom:10px;}
+  .pwfin-mp-header + .pwfin-mp-header{margin-top:16px;padding-top:14px;border-top:1px dashed var(--border);}
+  .pwfin-mp-badge{display:inline-flex;align-items:center;gap:10px;background:#ffffff;padding:6px 14px;border-radius:20px;box-shadow:0 1px 4px rgba(0,0,0,.1);border:1px solid var(--border);}
+  .pwfin-mp-logo{height:46px;display:block;border-radius:6px;}
+  .pwfin-mp-wordmark{height:32px;display:block;}
+  .pwfin-mp-badge-txt{font-size:10.5px;font-weight:700;color:#0f172a;line-height:1.25;}
+  @media print{ body{background:#fff;padding:0;} .page{box-shadow:none;border-radius:0;} .zoom-bar{display:none;} }
+</style></head><body>
+  <div class="zoom-bar">
+    <button onclick="_z=Math.max(60,_z-10);document.querySelector('.page').style.zoom=_z+'%';document.getElementById('_zlbl').textContent=_z+'%'">−</button>
+    <span id="_zlbl">100%</span>
+    <button onclick="_z=Math.min(150,_z+10);document.querySelector('.page').style.zoom=_z+'%';document.getElementById('_zlbl').textContent=_z+'%'">+</button>
+    <button onclick="document.querySelector('.page').style.zoom='100%';_z=100;document.getElementById('_zlbl').textContent='100%'">↺ Restablecer</button>
+  </div>
+  <script>var _z=100;<\/script>
+  <div class="page">
+    <div class="page-header">
+      <div class="page-title">💳 Financiamiento en cuotas — Dentalab</div>
+      <div class="page-date">${fecha}</div>
+    </div>
+    ${cuerpo}
+  </div>
+</body></html>`;
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (!win && typeof _zoomMostrarAviso === 'function') _zoomMostrarAviso('⚠ Permití las ventanas emergentes para este sitio');
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+};
 window.abrirCuotasModal = (precio, nombreCodificado, categoriaCodificada) => {
   const nombre = decodeURIComponent(nombreCodificado);
   const categoria = categoriaCodificada ? decodeURIComponent(categoriaCodificada) : '';
