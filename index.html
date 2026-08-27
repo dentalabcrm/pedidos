@@ -4274,6 +4274,35 @@ window.agregarAlCarrito = (sku) => {
   requestAnimationFrame(() => { _actualizarTarjetaProducto(sku); renderCarrito(); });
 };
 
+// Al apretar Enter en el buscador: suma al pedido, de a uno y en el mismo orden en que
+// aparecen en la búsqueda, TODOS los resultados que matchean (no solo los de la página
+// actual). Los que ya estaban en el pedido se dejan como están (no se les toca la
+// cantidad) — solo se agregan los que todavía no estaban.
+window.agregarTodosLosResultados = () => {
+  const resultados = buscarProductos();
+  if (!resultados.length) return;
+  let agregados = 0, yaEstaban = 0, sinStock = 0;
+  resultados.forEach(it => {
+    if (carrito.has(it.s)) { yaEstaban++; return; }
+    const precio = precioDe(it);
+    const puedeAgregar = !!precio && !it.st;
+    if (!puedeAgregar) { sinStock++; return; }
+    carrito.set(it.s, 1);
+    agregados++;
+  });
+  renderCarrito();
+  if (typeof renderResultados === 'function') renderResultados();
+  let msg = agregados
+    ? `✓ Se agregaron ${agregados} producto${agregados === 1 ? '' : 's'} al pedido.`
+    : 'No había productos nuevos para agregar de esta búsqueda.';
+  const detalles = [];
+  if (yaEstaban) detalles.push(`${yaEstaban} ya estaba${yaEstaban === 1 ? '' : 'n'} en el pedido`);
+  if (sinStock) detalles.push(`${sinStock} sin stock o sin precio`);
+  if (detalles.length) msg += ` (${detalles.join(', ')}.)`;
+  if (typeof showToast === 'function') showToast(msg, agregados ? 'ok' : 'warn');
+  else alert(msg);
+};
+
 window.cambiarQtyCarrito = (sku, delta) => {
   const actual = carrito.get(sku) || 0;
   const nueva = actual + delta;
@@ -5219,7 +5248,7 @@ function renderPrincipal(){
       <h1><span class="paso-badge">2</span>Buscar productos</h1>
       <div class="buscador-row">
         <div class="buscador-input-wrap">
-          <input type="text" id="input-busqueda" placeholder="Nombre o SKU… (o dejá vacío para ver todo el catálogo)" oninput="onBusquedaInput(this.value)">
+          <input type="text" id="input-busqueda" placeholder="Nombre o SKU… (o dejá vacío para ver todo el catálogo)" oninput="onBusquedaInput(this.value)" onkeydown="if(event.key==='Enter'){ event.preventDefault(); agregarTodosLosResultados(); }">
           <button type="button" id="btn-limpiar-busqueda" class="btn-limpiar-busqueda" onclick="limpiarBusqueda()" title="Borrar búsqueda" style="display:none;">✕</button>
         </div>
         <button class="btn-ir-final" onclick="irAlFinalDeLista()" title="Saltar al final de la lista">⬇ Ir al final</button>
