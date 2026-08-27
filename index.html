@@ -1098,10 +1098,10 @@ let paginaActual = 1;
 // resets junto a "paginaActual = 1" más abajo), para que siempre arranque desde el
 // primer resultado de esa búsqueda puntual.
 let _busquedaEnterIndex = 0;
-// Último producto agregado por ese mismo recorrido de Enter (y la posición que ocupaba
-// en la búsqueda) — permite deshacerlo con Shift+Tab sin afectar el resto del pedido.
-let _busquedaEnterUltimoSku = null;
-let _busquedaEnterUltimoIndice = null;
+// Historial de productos agregados por ese mismo recorrido de Enter (pila: el último
+// entra, el primero sale) — permite deshacerlos de a uno con Shift+Tab, las veces que
+// haga falta, no solo el último.
+let _busquedaEnterHistorial = [];
 let POR_PAGINA = parseInt(localStorage.getItem('dentalab_por_pagina'), 10) || 50;
 let filtroOrdenPrecio = ''; // '' | 'asc' | 'desc'
 let filtroSoloOfertas = false;
@@ -3993,7 +3993,7 @@ window.seleccionarCategoriaTab = (cat) => {
   if (sel) sel.value = cat;
   paginaActual = 1;
   _busquedaEnterIndex = 0; // se reinicia el recorrido de 'Enter' al cambiar la búsqueda/filtros
-  _busquedaEnterUltimoSku = null; _busquedaEnterUltimoIndice = null;
+  _busquedaEnterHistorial = [];
   renderResultados();
   const nuevoTabs = document.querySelector('#cat-tabs-wrap .cat-tabs');
   if (nuevoTabs) nuevoTabs.scrollTop = _scrollTabs;
@@ -4005,7 +4005,7 @@ window.seleccionarSubgrupoTab = (sg) => {
   filtroSubgrupo = sg;
   paginaActual = 1;
   _busquedaEnterIndex = 0; // se reinicia el recorrido de 'Enter' al cambiar la búsqueda/filtros
-  _busquedaEnterUltimoSku = null; _busquedaEnterUltimoIndice = null;
+  _busquedaEnterHistorial = [];
   renderResultados();
   const nuevoTabs = document.querySelector('#cat-tabs-wrap .cat-tabs');
   if (nuevoTabs) nuevoTabs.scrollTop = _scrollTabs;
@@ -4180,7 +4180,7 @@ window.cambiarPorPagina = (valor) => {
   localStorage.setItem('dentalab_por_pagina', String(n));
   paginaActual = 1;
   _busquedaEnterIndex = 0; // se reinicia el recorrido de 'Enter' al cambiar la búsqueda/filtros
-  _busquedaEnterUltimoSku = null; _busquedaEnterUltimoIndice = null;
+  _busquedaEnterHistorial = [];
   if (typeof renderResultados === 'function') renderResultados();
 };
 
@@ -4313,21 +4313,19 @@ window.agregarSiguienteResultado = () => {
   const puedeAgregar = !!precio && !it.st;
   if (!puedeAgregar) return; // sin stock o sin precio: se saltea, el recorrido ya avanzó
   carrito.set(it.s, 1);
-  _busquedaEnterUltimoSku = it.s;
-  _busquedaEnterUltimoIndice = _busquedaEnterIndex - 1; // el índice ya se incrementó arriba
+  _busquedaEnterHistorial.push({ sku: it.s, indice: _busquedaEnterIndex - 1 }); // el índice ya se incrementó arriba
   requestAnimationFrame(() => { _actualizarTarjetaProducto(it.s); renderCarrito(); });
 };
 
-// Shift+Tab en el buscador: deshace el último producto agregado por ese mismo recorrido
-// de Enter (no toca el resto del pedido) y hace que el próximo Enter vuelva a ofrecer
-// ese mismo producto, por si se apretó Enter de más por error.
+// Shift+Tab en el buscador: deshace, de a uno por cada apriete, los productos agregados
+// por ese mismo recorrido de Enter — en orden inverso (el último que agregaste es el
+// primero que se saca). No toca el resto del pedido. Cada deshecho hace que el próximo
+// Enter vuelva a ofrecer ese mismo producto, por si se apretó Enter de más por error.
 window.deshacerUltimoAgregado = () => {
-  if (_busquedaEnterUltimoSku == null || _busquedaEnterUltimoIndice == null) return;
-  const sku = _busquedaEnterUltimoSku;
+  if (!_busquedaEnterHistorial.length) return;
+  const { sku, indice } = _busquedaEnterHistorial.pop();
   carrito.delete(sku);
-  _busquedaEnterIndex = _busquedaEnterUltimoIndice;
-  _busquedaEnterUltimoSku = null;
-  _busquedaEnterUltimoIndice = null;
+  _busquedaEnterIndex = indice;
   requestAnimationFrame(() => {
     _actualizarTarjetaProducto(sku);
     renderCarrito();
@@ -5389,7 +5387,7 @@ window.onBusquedaInput = (val) => {
   busqueda = val;
   paginaActual = 1;
   _busquedaEnterIndex = 0; // se reinicia el recorrido de 'Enter' al cambiar la búsqueda/filtros
-  _busquedaEnterUltimoSku = null; _busquedaEnterUltimoIndice = null;
+  _busquedaEnterHistorial = [];
   _actualizarBtnLimpiarBusqueda();
   clearTimeout(_busquedaTimer);
   _busquedaTimer = setTimeout(renderResultados, 150);
@@ -5419,7 +5417,7 @@ window.irACategoriaDesdeProducto = (categoria, subgrupo) => {
   if (sel) sel.value = categoria;
   paginaActual = 1;
   _busquedaEnterIndex = 0; // se reinicia el recorrido de 'Enter' al cambiar la búsqueda/filtros
-  _busquedaEnterUltimoSku = null; _busquedaEnterUltimoIndice = null;
+  _busquedaEnterHistorial = [];
   renderResultados();
   document.getElementById('card-buscar')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
@@ -5449,7 +5447,7 @@ window.onFiltroChange = () => {
   filtroSoloStock = document.getElementById('chk-stock')?.checked || false;
   paginaActual = 1;
   _busquedaEnterIndex = 0; // se reinicia el recorrido de 'Enter' al cambiar la búsqueda/filtros
-  _busquedaEnterUltimoSku = null; _busquedaEnterUltimoIndice = null;
+  _busquedaEnterHistorial = [];
   renderResultados();
   requestAnimationFrame(() => window.scrollTo(0, _scrollY));
 };
