@@ -494,12 +494,12 @@
   .prod-avisar-link:hover{opacity:.75;}
   .prod-stock-en{font-size:10px;color:var(--green);font-weight:600;margin-top:2px;}
   .prod-stock-admin{
-    font-size:9.5px;color:#7c3aed;font-weight:700;margin-top:3px;
+    font-size:9.5px;color:#000;font-weight:700;margin-top:3px;
     background:#7c3aed12;border:1px solid #7c3aed30;border-radius:5px;padding:3px 6px;
     display:inline-flex;flex-direction:column;gap:1px;font-family:'DM Mono',monospace;
   }
   html[data-theme="dark"] .prod-stock-admin{
-    color:#c4b5fd;background:#7c3aed26;border-color:#7c3aed55;
+    color:#fff;background:#7c3aed26;border-color:#7c3aed55;
   }
   .prod-restock-badge{
     display:inline-flex;align-items:center;font-size:10px;font-weight:800;color:var(--blue);
@@ -4513,7 +4513,13 @@ window.abrirVistaCompletaPedido = () => {
           <div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${stockHtml}${medioPagoBadge}</div>
           ${medioPagoDetalle}
         </div>
-        <div style="font-size:16px;font-weight:800;color:var(--text);flex-shrink:0;white-space:nowrap;">${fmtMoney(precio * qty)}</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+          <div style="font-size:16px;font-weight:800;color:var(--text);white-space:nowrap;">${fmtMoney(precio * qty)}</div>
+          <button onclick="quitarDelPedidoCompleto('${escHtml(sku)}')" title="Quitar del pedido" style="
+            background:none;border:1px solid var(--border);border-radius:8px;color:var(--red,#dc2626);
+            font-size:12px;padding:4px 8px;cursor:pointer;white-space:nowrap;
+          ">🗑 Quitar</button>
+        </div>
       </div>`;
   }).join('');
 
@@ -4549,6 +4555,16 @@ window.abrirVistaCompletaPedido = () => {
     </div>`;
   document.body.appendChild(bd);
   bd.addEventListener('click', e => { if (e.target === bd) bd.remove(); });
+};
+
+// Quitar un producto directamente desde la vista completa del pedido — saca el ítem del
+// carrito y vuelve a armar esta misma vista con lo que queda (o la cierra si ya no queda
+// nada, ya que abrirVistaCompletaPedido no hace nada si el carrito está vacío).
+window.quitarDelPedidoCompleto = (sku) => {
+  carrito.delete(sku);
+  renderCarrito();
+  if (typeof _actualizarTarjetaProducto === 'function') _actualizarTarjetaProducto(sku);
+  abrirVistaCompletaPedido();
 };
 
 let _pedidoRecorteActivo = false;
@@ -6492,34 +6508,19 @@ document.addEventListener('keydown', (e) => {
 // Atajo de teclado: con el mouse parado encima de un producto (tarjeta o fila, en
 // cualquiera de las dos vistas), Enter lo agrega al carrito — o lo saca, si ya estaba
 // agregado (mismo comportamiento que tocar la tarjeta con el mouse).
+// El buscador de productos NO entra acá — tiene su propio manejo de Enter (más abajo,
+// agregarSiguienteResultado), y dejar pasar este atajo ahí también hacía que las dos
+// lógicas se pisaran: este atajo terminaba sacando, en el mismo Enter, el producto que
+// el otro recién había agregado.
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
   const el = document.activeElement;
   const tag = (el && el.tagName) || '';
-  // El buscador de productos es una excepción: es normal buscar algo, dejar el foco ahí
-  // sin volver a clickear, y mover el mouse sobre un resultado para presionar Enter — así
-  // que ahí SÍ se deja pasar el atajo (no hace nada más al presionar Enter en ese campo).
-  const esBuscador = el && el.id === 'input-busqueda';
-  if (!esBuscador && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || (el && el.isContentEditable))) return;
+  if (el && el.id === 'input-busqueda') return;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || (el && el.isContentEditable)) return;
   if (el && el.closest && el.closest('.pwfin-backdrop, #zoom-prod-backdrop, #pdf-pedido-drop-overlay')) return;
 
-  // Si hay un producto con el mouse encima, tiene prioridad. Si no, pero la búsqueda dejó
-  // un solo resultado en pantalla (típico caso: escribís un SKU y aparece un solo
-  // producto), Enter agrega/saca directo ese único resultado sin necesidad de mover el
-  // mouse hasta él. Y si escribiste el SKU justo (por ejemplo "32791") pero aparecen
-  // variaciones de ese mismo código (como "32791-F"), se prioriza el que coincide EXACTO
-  // con lo que escribiste, no cualquiera de las variaciones.
-  let skuObjetivo = _skuHoverAdmin;
-  if (!skuObjetivo && esBuscador && typeof buscarProductos === 'function') {
-    const resultadosActuales = buscarProductos();
-    if (resultadosActuales.length === 1) {
-      skuObjetivo = resultadosActuales[0].s;
-    } else if (resultadosActuales.length > 1) {
-      const consulta = (el.value || '').trim().toUpperCase();
-      const exacto = consulta && resultadosActuales.find(r => String(r.s).toUpperCase() === consulta);
-      if (exacto) skuObjetivo = exacto.s;
-    }
-  }
+  const skuObjetivo = _skuHoverAdmin;
   if (!skuObjetivo) return;
   const it = catalogoBySku.get(skuObjetivo);
   if (!it) return;
