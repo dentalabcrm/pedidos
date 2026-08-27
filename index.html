@@ -4511,7 +4511,7 @@ let _pedidoFullMostrarTotal = true;
 window.abrirVistaCompletaPedido = (preservarEstado) => {
   if (!preservarEstado) {
     _pedidoFullModo = esAdminCatalogo() ? 'presupuesto' : 'pedido';
-    _pedidoFullMostrarTotal = true;
+    _pedidoFullMostrarTotal = !esAdminCatalogo(); // admin arranca en "sin total"; el cliente siempre lo ve
   }
   document.getElementById('pedido-full-backdrop')?.remove();
   if (!carrito.size) return;
@@ -4814,13 +4814,40 @@ window.descargarPedidoPDFConFotos = async () => {
     const fotoSize = 22;
     const mostrarMedioPago = _adminVistaPrecio === 'normal';
     const filaAlto = mostrarMedioPago ? 35 : 27;
+    // Modo "Presupuesto" (opción de admin): mismo encabezado que la vista previa de
+    // Presupuestos (logo, datos de la empresa, y el aviso "no válido como pedido") — el
+    // total solo se muestra si el toggle "Mostrar el total" de la vista está activado.
+    const _esPresu = esAdminCatalogo() && _pedidoFullModo === 'presupuesto';
     let y = margin;
 
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(15, 23, 42);
-    doc.text('Tu pedido — Dentalab', margin, y); y += 7;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(130, 140, 160);
-    doc.text(new Date().toLocaleDateString('es-AR'), margin, y);
-    y += 8;
+    if (_esPresu) {
+      const logoSrc = document.getElementById('brand-logo-admin-trigger')?.src || '';
+      if (logoSrc) { try { doc.addImage(logoSrc, 'PNG', margin, 2, 47, 14); } catch (e) {} }
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
+      doc.text('AGRA DENTAL SRL', margin, 21);
+      doc.setFontSize(6.5); doc.setTextColor(110, 110, 110);
+      doc.text('Marcelo T. de Alvear 2085  ·  Capital Federal  ·  CP. 1122', margin, 25.5);
+      doc.text('E-Mail: ventas@dentalab.com.ar', margin, 29.5);
+      doc.text('Resp. I.V.A.: Responsable Inscripto', margin, 33.5);
+      doc.text('CUIT: 30-71502151-6  ·  Ing. Brutos: 30-71502151-6', margin, 37.5);
+
+      doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 20, 20);
+      doc.text('PRESUPUESTO', pageW - margin, 12, { align: 'right' });
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
+      const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      doc.text(`Fecha: ${fecha}`, pageW - margin, 18, { align: 'right' });
+      doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(180, 60, 60);
+      doc.text('DOCUMENTO NO VÁLIDO COMO PEDIDO', pageW - margin, 23, { align: 'right' });
+      doc.setTextColor(0, 0, 0);
+
+      y = 44;
+    } else {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(15, 23, 42);
+      doc.text('Tu pedido — Dentalab', margin, y); y += 7;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(130, 140, 160);
+      doc.text(new Date().toLocaleDateString('es-AR'), margin, y);
+      y += 8;
+    }
 
     for (const [sku, qty] of carrito.entries()) {
       const it = catalogoBySku.get(sku);
@@ -4867,16 +4894,18 @@ window.descargarPedidoPDFConFotos = async () => {
       doc.line(margin, y - 4, pageW - margin, y - 4);
     }
 
-    if (y + 14 > pageH - margin) { doc.addPage(); y = margin; }
-    y += 4;
-    doc.setDrawColor(15, 23, 42); doc.setLineWidth(0.4);
-    doc.line(margin, y, pageW - margin, y);
-    y += 8;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(15, 23, 42);
-    doc.text('Total', margin, y);
-    doc.text(document.getElementById('carrito-total')?.textContent || '', pageW - margin, y, { align: 'right' });
+    if (!_esPresu || _pedidoFullMostrarTotal) {
+      if (y + 14 > pageH - margin) { doc.addPage(); y = margin; }
+      y += 4;
+      doc.setDrawColor(15, 23, 42); doc.setLineWidth(0.4);
+      doc.line(margin, y, pageW - margin, y);
+      y += 8;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(15, 23, 42);
+      doc.text('Total', margin, y);
+      doc.text(document.getElementById('carrito-total')?.textContent || '', pageW - margin, y, { align: 'right' });
+    }
 
-    doc.save('Pedido_Dentalab.pdf');
+    doc.save(_esPresu ? 'Presupuesto_Dentalab.pdf' : 'Pedido_Dentalab.pdf');
   } catch (e) {
     console.error('[Descargar PDF pedido]', e);
     alert('No se pudo generar el PDF: ' + (e.message || e));
