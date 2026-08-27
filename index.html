@@ -1141,11 +1141,30 @@ function escHtml(s){
 }
 function fmtMoney(n){ return '$' + Math.round(n || 0).toLocaleString('es-AR'); }
 let _adminVistaPrecio = 'normal'; // 'normal' | 'reventa' | 'mayorista' — solo cambia lo que ve el ADMIN, no la lista real del cliente
-window._cambiarVistaPrecioAdmin = (valor) => {
-  _adminVistaPrecio = valor;
-  document.body.classList.toggle('vista-reventa', valor === 'reventa');
-  document.body.classList.toggle('vista-mayorista', valor === 'mayorista');
+const _LISTA_ADMIN_LABEL = { 1: 'Lista 1 (Contado)', 2: 'Lista 2 (Tarjeta)', 3: 'Lista Reventa', 4: 'Lista Mayorista' };
+// Botones/atajo (Shift+1..4) para que el admin salte directo entre las 4 listas de
+// precio sin tener que ir forma-de-pago → cambiar → elegir, ni abrir un selector aparte.
+window.cambiarListaAdmin = (n) => {
+  if (!esAdminCatalogo()) return;
+  if (n === 1 || n === 2) {
+    listaActiva = n === 1 ? 'p1' : 'p2';
+    _adminVistaPrecio = 'normal';
+    if (listaActiva !== 'p1') medioPagoContado = null;
+    financiamientoTarjeta = null;
+    _guardarEstadoLS();
+    _guardarUltimaPrefLS();
+  } else if (n === 3) {
+    _adminVistaPrecio = 'reventa';
+  } else if (n === 4) {
+    _adminVistaPrecio = 'mayorista';
+  } else {
+    return;
+  }
+  document.body.classList.toggle('vista-reventa', _adminVistaPrecio === 'reventa');
+  document.body.classList.toggle('vista-mayorista', _adminVistaPrecio === 'mayorista');
   renderPrincipal(); // re-dibuja todo (banner incluido) para que se note el cambio de vista
+  const msg = `👁 ${_LISTA_ADMIN_LABEL[n]}`;
+  if (typeof showToast === 'function') showToast(msg, 'ok');
 };
 function precioDe(item){
   if (esAdminCatalogo() && _adminVistaPrecio !== 'normal') {
@@ -5281,11 +5300,17 @@ function renderPrincipal(){
     ${esAdminCatalogo() ? `
     <div style="background:#7c3aed12;border:1px solid #7c3aed40;border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
       <span style="font-size:12px;font-weight:700;color:#7c3aed;white-space:nowrap;">👁 Vista de precios (solo admin):</span>
-      <select onchange="_cambiarVistaPrecioAdmin(this.value)" style="border:1px solid #7c3aed40;border-radius:8px;padding:6px 10px;font-size:12.5px;background:#fff;color:var(--text);">
-        <option value="normal" ${_adminVistaPrecio === 'normal' ? 'selected' : ''}>Normal (Contado/Tarjeta, la que ve el cliente)</option>
-        <option value="reventa" ${_adminVistaPrecio === 'reventa' ? 'selected' : ''}>Lista Reventa</option>
-        <option value="mayorista" ${_adminVistaPrecio === 'mayorista' ? 'selected' : ''}>Lista Mayorista</option>
-      </select>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${[
+          { n: 1, label: 'Lista 1', activo: _adminVistaPrecio === 'normal' && listaActiva === 'p1' },
+          { n: 2, label: 'Lista 2', activo: _adminVistaPrecio === 'normal' && listaActiva === 'p2' },
+          { n: 3, label: 'Lista Reventa', activo: _adminVistaPrecio === 'reventa' },
+          { n: 4, label: 'Lista Mayorista', activo: _adminVistaPrecio === 'mayorista' },
+        ].map(o => `<button onclick="cambiarListaAdmin(${o.n})" title="Atajo: Shift + ${o.n}" style="
+          border:1px solid #7c3aed55;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;
+          background:${o.activo ? '#7c3aed' : '#fff'};color:${o.activo ? '#fff' : '#7c3aed'};
+        ">${o.label}</button>`).join('')}
+      </div>
       ${_adminVistaPrecio !== 'normal' ? `<span style="font-size:11.5px;font-weight:700;color:#dc2626;">⚠ Estás viendo precios de ${_adminVistaPrecio === 'reventa' ? 'Reventa' : 'Mayorista'} — el cliente NO ve esto</span>` : ''}
     </div>` : ''}
 
@@ -5991,7 +6016,7 @@ if (_avisosGetLista().length) {
       sugerencia:'Atajos de teclado (PC)',
       claves:['atajo','atajos','atajos de teclado','teclado','teclas rapidas','shortcut','shortcuts','tecla','como uso el teclado','se puede usar el teclado'],
       chip:'⌨️ Atajos de teclado (PC)',
-      respuesta: () => `⌨️ Si estás en compu, tenemos estos atajos de teclado para ir más rápido:\n\n🔎 Retroceso (Backspace) — lleva el cursor directo al buscador de productos.\n\n➕ Enter (con el mouse parado sobre un producto) — lo agrega al carrito. Si ya estaba agregado, lo saca.\n\n🔎➕ Enter (con el cursor DENTRO del buscador) — agrega al pedido, de a uno por cada Enter, los resultados de esa búsqueda en el mismo orden en que aparecen. Si alguno ya estaba en el pedido, se deja como está y el siguiente Enter pasa al que sigue.\n\n↩️ Shift + Tab (con el cursor dentro del buscador) — deshace el último producto que agregaste con Enter, y te lo vuelve a ofrecer la próxima vez que apretés Enter.\n\n🛒 Tab — abre "Tu pedido" en pantalla completa, con fotos más grandes.\n\n🗑️ Ctrl + Retroceso — vacía todo el carrito (te pide confirmación antes).\n\nNinguno de estos interrumpe si estás escribiendo en otro campo de texto (nombre, dirección, etc.) — ahí las teclas funcionan como siempre.`
+      respuesta: () => `⌨️ Si estás en compu, tenemos estos atajos de teclado para ir más rápido:\n\n🔎 Retroceso (Backspace) — lleva el cursor directo al buscador de productos.\n\n➕ Enter (con el mouse parado sobre un producto) — lo agrega al carrito. Si ya estaba agregado, lo saca.\n\n🔎➕ Enter (con el cursor DENTRO del buscador) — agrega al pedido, de a uno por cada Enter, los resultados de esa búsqueda en el mismo orden en que aparecen. Si alguno ya estaba en el pedido, se deja como está y el siguiente Enter pasa al que sigue.\n\n↩️ Shift + Tab (con el cursor dentro del buscador) — deshace el último producto que agregaste con Enter, y te lo vuelve a ofrecer la próxima vez que apretés Enter.\n\n🛒 Tab — abre "Tu pedido" en pantalla completa, con fotos más grandes.\n\n👁 Shift + 1 / 2 / 3 / 4 (solo admin) — salta directo a Lista 1, Lista 2, Lista Reventa o Lista Mayorista.\n\n🗑️ Ctrl + Retroceso — vacía todo el carrito (te pide confirmación antes).\n\nNinguno de estos interrumpe si estás escribiendo en otro campo de texto (nombre, dirección, etc.) — ahí las teclas funcionan como siempre.`
     },
     {
       id:'pago',
@@ -6501,6 +6526,19 @@ document.addEventListener('keydown', (e) => {
   if (!el || el.id !== 'input-busqueda' || !el.value) return;
   e.preventDefault();
   if (typeof limpiarBusqueda === 'function') limpiarBusqueda();
+});
+
+// Atajo de teclado: Shift + 1/2/3/4 cambia la lista de precio activa (solo para admin) —
+// Lista 1 (Contado), Lista 2 (Tarjeta), Lista Reventa, Lista Mayorista.
+document.addEventListener('keydown', (e) => {
+  if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (!['1', '2', '3', '4'].includes(e.key)) return;
+  if (typeof esAdminCatalogo !== 'function' || !esAdminCatalogo()) return;
+  const el = document.activeElement;
+  const tag = (el && el.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
+  e.preventDefault();
+  if (typeof cambiarListaAdmin === 'function') cambiarListaAdmin(Number(e.key));
 });
 
 // Atajo de teclado: con el mouse parado encima de un producto (tarjeta o fila, en
