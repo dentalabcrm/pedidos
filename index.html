@@ -1093,6 +1093,11 @@ function _avisosLlegadosSet(){
 }
 
 let paginaActual = 1;
+// Posición del próximo producto a agregar cuando el cliente aprieta Enter en el
+// buscador — se reinicia a 0 cada vez que cambia la búsqueda o los filtros (ver los
+// resets junto a "paginaActual = 1" más abajo), para que siempre arranque desde el
+// primer resultado de esa búsqueda puntual.
+let _busquedaEnterIndex = 0;
 let POR_PAGINA = parseInt(localStorage.getItem('dentalab_por_pagina'), 10) || 50;
 let filtroOrdenPrecio = ''; // '' | 'asc' | 'desc'
 let filtroSoloOfertas = false;
@@ -3983,6 +3988,7 @@ window.seleccionarCategoriaTab = (cat) => {
   const sel = document.getElementById('sel-categoria');
   if (sel) sel.value = cat;
   paginaActual = 1;
+  _busquedaEnterIndex = 0; // se reinicia el recorrido de 'Enter' al cambiar la búsqueda/filtros
   renderResultados();
   const nuevoTabs = document.querySelector('#cat-tabs-wrap .cat-tabs');
   if (nuevoTabs) nuevoTabs.scrollTop = _scrollTabs;
@@ -3993,6 +3999,7 @@ window.seleccionarSubgrupoTab = (sg) => {
   const _scrollTabs = document.querySelector('#cat-tabs-wrap .cat-tabs')?.scrollTop || 0;
   filtroSubgrupo = sg;
   paginaActual = 1;
+  _busquedaEnterIndex = 0; // se reinicia el recorrido de 'Enter' al cambiar la búsqueda/filtros
   renderResultados();
   const nuevoTabs = document.querySelector('#cat-tabs-wrap .cat-tabs');
   if (nuevoTabs) nuevoTabs.scrollTop = _scrollTabs;
@@ -4166,6 +4173,7 @@ window.cambiarPorPagina = (valor) => {
   POR_PAGINA = n;
   localStorage.setItem('dentalab_por_pagina', String(n));
   paginaActual = 1;
+  _busquedaEnterIndex = 0; // se reinicia el recorrido de 'Enter' al cambiar la búsqueda/filtros
   if (typeof renderResultados === 'function') renderResultados();
 };
 
@@ -4274,33 +4282,31 @@ window.agregarAlCarrito = (sku) => {
   requestAnimationFrame(() => { _actualizarTarjetaProducto(sku); renderCarrito(); });
 };
 
-// Al apretar Enter en el buscador: suma al pedido, de a uno y en el mismo orden en que
-// aparecen en la búsqueda, TODOS los resultados que matchean (no solo los de la página
-// actual). Los que ya estaban en el pedido se dejan como están (no se les toca la
-// cantidad) — solo se agregan los que todavía no estaban.
-window.agregarTodosLosResultados = () => {
+// Al apretar Enter en el buscador: agrega al pedido UN solo resultado por cada apriete,
+// respetando el orden en que aparecen en la búsqueda (recorriendo todas las páginas, no
+// solo la que se ve en pantalla). Volver a apretar Enter avanza al siguiente. Si ese
+// producto ya estaba en el pedido, se deja como está (no se le toca la cantidad) — el
+// recorrido igual avanza al producto que sigue.
+window.agregarSiguienteResultado = () => {
   const resultados = buscarProductos();
   if (!resultados.length) return;
-  let agregados = 0, yaEstaban = 0, sinStock = 0;
-  resultados.forEach(it => {
-    if (carrito.has(it.s)) { yaEstaban++; return; }
-    const precio = precioDe(it);
-    const puedeAgregar = !!precio && !it.st;
-    if (!puedeAgregar) { sinStock++; return; }
-    carrito.set(it.s, 1);
-    agregados++;
-  });
-  renderCarrito();
-  if (typeof renderResultados === 'function') renderResultados();
-  let msg = agregados
-    ? `✓ Se agregaron ${agregados} producto${agregados === 1 ? '' : 's'} al pedido.`
-    : 'No había productos nuevos para agregar de esta búsqueda.';
-  const detalles = [];
-  if (yaEstaban) detalles.push(`${yaEstaban} ya estaba${yaEstaban === 1 ? '' : 'n'} en el pedido`);
-  if (sinStock) detalles.push(`${sinStock} sin stock o sin precio`);
-  if (detalles.length) msg += ` (${detalles.join(', ')}.)`;
-  if (typeof showToast === 'function') showToast(msg, agregados ? 'ok' : 'warn');
-  else alert(msg);
+  if (_busquedaEnterIndex >= resultados.length) {
+    const msg = '✓ Ya recorriste todos los resultados de esta búsqueda.';
+    if (typeof showToast === 'function') showToast(msg, 'ok'); else alert(msg);
+    return;
+  }
+  const it = resultados[_busquedaEnterIndex];
+  _busquedaEnterIndex++;
+  if (carrito.has(it.s)) {
+    // Ya estaba en el pedido: no lo tocamos, pero el recorrido ya avanzó — que
+    // el cliente apriete Enter de nuevo para ir al siguiente.
+    return;
+  }
+  const precio = precioDe(it);
+  const puedeAgregar = !!precio && !it.st;
+  if (!puedeAgregar) return; // sin stock o sin precio: se saltea, el recorrido ya avanzó
+  carrito.set(it.s, 1);
+  requestAnimationFrame(() => { _actualizarTarjetaProducto(it.s); renderCarrito(); });
 };
 
 window.cambiarQtyCarrito = (sku, delta) => {
@@ -5248,7 +5254,7 @@ function renderPrincipal(){
       <h1><span class="paso-badge">2</span>Buscar productos</h1>
       <div class="buscador-row">
         <div class="buscador-input-wrap">
-          <input type="text" id="input-busqueda" placeholder="Nombre o SKU… (o dejá vacío para ver todo el catálogo)" oninput="onBusquedaInput(this.value)" onkeydown="if(event.key==='Enter'){ event.preventDefault(); agregarTodosLosResultados(); }">
+          <input type="text" id="input-busqueda" placeholder="Nombre o SKU… (o dejá vacío para ver todo el catálogo)" oninput="onBusquedaInput(this.value)" onkeydown="if(event.key==='Enter'){ event.preventDefault(); agregarSiguienteResultado(); }">
           <button type="button" id="btn-limpiar-busqueda" class="btn-limpiar-busqueda" onclick="limpiarBusqueda()" title="Borrar búsqueda" style="display:none;">✕</button>
         </div>
         <button class="btn-ir-final" onclick="irAlFinalDeLista()" title="Saltar al final de la lista">⬇ Ir al final</button>
@@ -5340,6 +5346,7 @@ let _busquedaTimer = null;
 window.onBusquedaInput = (val) => {
   busqueda = val;
   paginaActual = 1;
+  _busquedaEnterIndex = 0; // se reinicia el recorrido de 'Enter' al cambiar la búsqueda/filtros
   _actualizarBtnLimpiarBusqueda();
   clearTimeout(_busquedaTimer);
   _busquedaTimer = setTimeout(renderResultados, 150);
@@ -5368,6 +5375,7 @@ window.irACategoriaDesdeProducto = (categoria, subgrupo) => {
   const sel = document.getElementById('sel-categoria');
   if (sel) sel.value = categoria;
   paginaActual = 1;
+  _busquedaEnterIndex = 0; // se reinicia el recorrido de 'Enter' al cambiar la búsqueda/filtros
   renderResultados();
   document.getElementById('card-buscar')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
@@ -5396,6 +5404,7 @@ window.onFiltroChange = () => {
   filtroSoloOfertas = document.getElementById('chk-ofertas')?.checked || false;
   filtroSoloStock = document.getElementById('chk-stock')?.checked || false;
   paginaActual = 1;
+  _busquedaEnterIndex = 0; // se reinicia el recorrido de 'Enter' al cambiar la búsqueda/filtros
   renderResultados();
   requestAnimationFrame(() => window.scrollTo(0, _scrollY));
 };
