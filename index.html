@@ -1143,6 +1143,22 @@ function precioDe(item){
 }
 
 // ── Financiamiento en cuotas (solo aplica pagando con Tarjeta — 1 pago) ──
+// SKUs para los que también se habilita el financiamiento sin interés por Terminal de
+// Mercado Pago, aunque su categoría no sea "Máquinas" — se pidió sumarlos puntualmente
+// (comparten el mismo tipo de equipo/accesorio que ya tiene esa opción habilitada).
+const SKUS_TERMINAL_MP_EXTRA = new Set([
+  '1384', '1382', '1386-bla', '1386-neg', '1380', '42007', '1381', '1383-bla', '1383-neg', '1385-bla', '1385-neg',
+  '8021', '8017', '3060', '8773-e', '8774-e', '8770', '8771', '8776', '8781', '8777', '8782', '8778', '8779',
+  '8100', '8111', '8115', '8176', '8160', '8175', '8101', '8308', '3065', '3064', '8043', '8044', '8092', '8090-pb',
+  '8094', '8093', '8804', '8808', '8809', '8819', '59994', '8010', '8005', '8009', '8007', '8000', '8002', '59999',
+  '8110', '8120', '8165', '8109', '8105', '8107', '8307', '8065', '8063', '8045', '8069', '8070', '8072', '8037',
+  '8038', '8034', '8032', '8305', '8304', '8306', '8302', '8058', '8764', '8125', '8121', '8773-n', '8772', '8760',
+  '8104', '8102', '8090-led', '8810', '8807', '8821', '8822', '59993', '35016', '8106', '8055', '8083', '8084',
+  '8030', '8036', '8303', '8060', '8059', '8061',
+  '3040', '3053', '3055', '3041', '3047', '3054', '8746', '8150', '8149', '3044', '3043', '3045', '22201',
+  '8230', '35340', '14003', '35030', '20001', '33665', '14008', '14007', '35028', '20002', '22200', '22000',
+  '22100', '8213', '35026'
+]);
 function _pwFinRound(v){ return Math.ceil(v / 100) * 100; } // redondeo prolijo, igual que el CRM
 // Lee el monto mínimo ("...en compras desde $50.000") ya escrito en el texto de condición
 // de cada opción de cuotas sin interés, para aplicarlo como filtro real — así no depende
@@ -1154,14 +1170,15 @@ function _pwFinExtraerUmbral(condicion){
   const num = parseFloat(m[1].replace(/\./g, '').replace(',', '.'));
   return Number.isFinite(num) ? num : null;
 }
-function _pwFinBuildCuotas(precio, categoriaProducto){
-  // La opción de 3 cuotas sin interés vía terminal física de Mercado Pago solo aplica a
-  // productos de la categoría "Máquinas" — se identifica por su texto de condición, para
-  // no depender de un campo nuevo en la config de financiamiento (que se edita aparte).
+function _pwFinBuildCuotas(precio, permitirTerminalMP){
+  // La opción de 3 cuotas sin interés vía terminal física de Mercado Pago aplica a
+  // productos de la categoría "Máquinas" o a los SKUs sumados puntualmente en
+  // SKUS_TERMINAL_MP_EXTRA — se identifica por su texto de condición, para no depender
+  // de un campo nuevo en la config de financiamiento (que se edita aparte).
   const _esTerminalMP = (opt) => /terminal\s+(?:f[ií]sica\s+)?de\s+mercado\s+pago/i.test(opt.condicion || '');
   const sinInteres = (_finNoInt || [])
     .filter(r => r.activo !== false)
-    .filter(r => !_esTerminalMP(r) || categoriaProducto === 'Máquinas')
+    .filter(r => !_esTerminalMP(r) || permitirTerminalMP)
     .filter(r => { const umbral = _pwFinExtraerUmbral(r.condicion); return umbral === null || precio >= umbral; })
     .map(opt => {
     const cuotaValor = _pwFinRound(precio / opt.n);
@@ -1177,8 +1194,8 @@ function _pwFinBuildCuotas(precio, categoriaProducto){
 function _pwHayFinanciamiento(){
   return (_finRates || []).some(r => r.activo !== false) || (_finNoInt || []).some(r => r.activo !== false);
 }
-function _pwFinModalHtml(precio, titulo, subtitulo, categoriaProducto){
-  const cuotas = _pwFinBuildCuotas(precio, categoriaProducto);
+function _pwFinModalHtml(precio, titulo, subtitulo, permitirTerminalMP){
+  const cuotas = _pwFinBuildCuotas(precio, permitirTerminalMP);
   const _filaHtml = (c) => `
     <div class="pwfin-cuota-row${c.sinInteres ? ' pwfin-cuota-row-noint' : ' pwfin-cuota-row-nave'}">
       <div>
@@ -1236,9 +1253,9 @@ function _pwCerrarFinModal(){
   document.getElementById('pwfin-backdrop')?.remove();
   _pwFinModalReabrir = null;
 }
-function _pwAbrirFinModal(precio, titulo, subtitulo, categoriaProducto){
+function _pwAbrirFinModal(precio, titulo, subtitulo, permitirTerminalMP){
   document.getElementById('pwfin-backdrop')?.remove();
-  _pwFinUltimoParams = { precio, titulo, subtitulo, categoriaProducto };
+  _pwFinUltimoParams = { precio, titulo, subtitulo, permitirTerminalMP };
   const bd = document.createElement('div');
   bd.id = 'pwfin-backdrop';
   bd.className = 'pwfin-backdrop';
@@ -1248,7 +1265,7 @@ function _pwAbrirFinModal(precio, titulo, subtitulo, categoriaProducto){
         <div class="pwfin-title">💳 Financiamiento en cuotas</div>
         <button class="pwfin-close" onclick="_pwCerrarFinModal()">✕</button>
       </div>
-      <div class="pwfin-body">${_pwFinModalHtml(precio, titulo, subtitulo, categoriaProducto)}</div>
+      <div class="pwfin-body">${_pwFinModalHtml(precio, titulo, subtitulo, permitirTerminalMP)}</div>
       <div style="padding:14px 22px;border-top:1px solid var(--border);">
         <button onclick="_pwDescargarCuotasPDF()" style="
           width:100%;background:var(--green,#0ea968);color:#fff;border:none;border-radius:10px;
@@ -1266,8 +1283,8 @@ function _pwAbrirFinModal(precio, titulo, subtitulo, categoriaProducto){
 let _pwFinUltimoParams = null;
 window._pwDescargarCuotasPDF = () => {
   if (!_pwFinUltimoParams) return;
-  const { precio, titulo, subtitulo, categoriaProducto } = _pwFinUltimoParams;
-  const cuerpo = _pwFinModalHtml(precio, titulo, subtitulo, categoriaProducto);
+  const { precio, titulo, subtitulo, permitirTerminalMP } = _pwFinUltimoParams;
+  const cuerpo = _pwFinModalHtml(precio, titulo, subtitulo, permitirTerminalMP);
   const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Financiamiento en cuotas — Dentalab</title>
@@ -1328,19 +1345,24 @@ window._pwDescargarCuotasPDF = () => {
   if (!win && typeof _zoomMostrarAviso === 'function') _zoomMostrarAviso('⚠ Permití las ventanas emergentes para este sitio');
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 };
-window.abrirCuotasModal = (precio, nombreCodificado, categoriaCodificada) => {
+window.abrirCuotasModal = (precio, nombreCodificado, categoriaCodificada, skuCodificado) => {
   const nombre = decodeURIComponent(nombreCodificado);
   const categoria = categoriaCodificada ? decodeURIComponent(categoriaCodificada) : '';
-  _pwFinModalReabrir = () => _pwAbrirFinModal(precio, nombre, 'Precio del producto', categoria);
+  const sku = skuCodificado ? decodeURIComponent(skuCodificado) : '';
+  const permitirTerminalMP = categoria === 'Máquinas' || SKUS_TERMINAL_MP_EXTRA.has(sku);
+  _pwFinModalReabrir = () => _pwAbrirFinModal(precio, nombre, 'Precio del producto', permitirTerminalMP);
   _pwFinModalReabrir();
 };
 window.abrirCuotasTotalModal = () => {
-  // Para el total del pedido no hay una única categoría — la opción restringida a
-  // "Máquinas" solo se muestra si TODO lo que hay en el carrito es de esa categoría (si
-  // el pedido mezcla categorías, se omite para no ofrecer algo que no aplica a todo).
-  const categorias = new Set([...carrito.keys()].map(sku => catalogoBySku.get(sku)?.g).filter(Boolean));
-  const categoriaTotal = (categorias.size === 1) ? [...categorias][0] : '';
-  _pwFinModalReabrir = () => _pwAbrirFinModal(calcularTotal(), '', 'Total del pedido', categoriaTotal);
+  // Para el total del pedido no hay una única categoría/SKU — la opción de Terminal MP
+  // solo se muestra si TODO lo que hay en el carrito califica (por categoría "Máquinas"
+  // o por estar en la lista extra), para no ofrecer algo que no aplica a todo el pedido.
+  const skusCarrito = [...carrito.keys()];
+  const permitirTerminalMP = skusCarrito.length > 0 && skusCarrito.every(sku => {
+    const it = catalogoBySku.get(sku);
+    return it?.g === 'Máquinas' || SKUS_TERMINAL_MP_EXTRA.has(sku);
+  });
+  _pwFinModalReabrir = () => _pwAbrirFinModal(calcularTotal(), '', 'Total del pedido', permitirTerminalMP);
   _pwFinModalReabrir();
 };
 
@@ -3970,7 +3992,7 @@ function renderResultados(){
     const stockAdminHtml = esAdminCatalogo() && (it.d1 !== undefined || it.dc !== undefined)
       ? `<div class="prod-stock-admin" title="Solo vos ves esto — stock real por depósito">📦 <span>Local: <b>${it.d1 ?? 0}</b></span><span>Depósito: <b>${it.dc ?? 0}</b></span></div>`
       : '';
-    const cuotasHtml = (listaActiva === 'p2' && precio && !it.cp && !it.st && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}')">💳 Ver cuotas</button>` : '';
+    const cuotasHtml = (listaActiva === 'p2' && precio && !it.cp && !it.st && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}', '${encodeURIComponent(it.s)}')">💳 Ver cuotas</button>` : '';
     const categoriaHtml = it.g
       ? `<div class="prod-categoria">
           <span onclick="event.stopPropagation(); irACategoriaDesdeProducto('${escHtml(it.g).replace(/'/g, "\\'")}')">${escHtml(it.g)}</span>
@@ -4318,7 +4340,7 @@ function renderCarrito(){
             </div>
             <div class="ci-subtotal-col">
               <div class="ci-subtotal">${fmtMoney(precio * qty)}</div>
-              ${(listaActiva === 'p2' && precio && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link ci-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio * qty}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}')">💳 Cuotas</button>` : ''}
+              ${(listaActiva === 'p2' && precio && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link ci-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio * qty}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}', '${encodeURIComponent(sku)}')">💳 Cuotas</button>` : ''}
             </div>
             <button class="ci-quitar" onclick="quitarDelCarrito('${sku}')">✕</button>
           </div>
