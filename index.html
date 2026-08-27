@@ -6530,15 +6530,20 @@ document.addEventListener('keydown', (e) => {
 
 // Atajo de teclado: Shift + 1/2/3/4 cambia la lista de precio activa (solo para admin) —
 // Lista 1 (Contado), Lista 2 (Tarjeta), Lista Reventa, Lista Mayorista.
+// Se usa e.code (tecla física, "Digit1"..."Digit4") en vez de e.key, porque con Shift
+// apretado e.key devuelve el símbolo de arriba del número (!, ", #, $...) según el
+// teclado — nunca el dígito — y por eso el atajo no respondía.
 document.addEventListener('keydown', (e) => {
   if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (!['1', '2', '3', '4'].includes(e.key)) return;
+  const _DIGIT_CODE_A_N = { Digit1: 1, Digit2: 2, Digit3: 3, Digit4: 4, Numpad1: 1, Numpad2: 2, Numpad3: 3, Numpad4: 4 };
+  const n = _DIGIT_CODE_A_N[e.code];
+  if (!n) return;
   if (typeof esAdminCatalogo !== 'function' || !esAdminCatalogo()) return;
   const el = document.activeElement;
   const tag = (el && el.tagName) || '';
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
   e.preventDefault();
-  if (typeof cambiarListaAdmin === 'function') cambiarListaAdmin(Number(e.key));
+  if (typeof cambiarListaAdmin === 'function') cambiarListaAdmin(n);
 });
 
 // Atajo de teclado: con el mouse parado encima de un producto (tarjeta o fila, en
