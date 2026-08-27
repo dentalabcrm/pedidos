@@ -4945,14 +4945,22 @@ function _initBarrasFlotantes(){
   btnArriba.onclick = () => document.getElementById('card-buscar')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   document.body.appendChild(btnArriba);
 
-  // Botón "bajar" — simétrico al de "subir", para seguir recorriendo la página hacia
-  // abajo sin tener que arrastrar el dedo/scroll manualmente. Funciona igual en PC y celular.
+  // Botón "bajar" — simétrico al de "subir", para saltar directo a "Tu pedido" sin tener
+  // que arrastrar el dedo/scroll manualmente. Funciona igual en PC y celular.
   const btnAbajo = document.createElement('button');
   btnAbajo.id = 'btn-bajar-flotante';
-  btnAbajo.title = 'Bajar';
+  btnAbajo.title = 'Ir a Tu pedido';
   btnAbajo.textContent = '⬇';
   btnAbajo.style.cssText = 'position:fixed;right:14px;bottom:70px;z-index:500;display:none;width:44px;height:44px;border-radius:50%;background:var(--panel,#fff);border:1px solid var(--border,#e2e8f0);box-shadow:0 2px 10px rgba(0,0,0,.15);font-size:18px;cursor:pointer;color:var(--text,#0f172a);';
-  btnAbajo.onclick = () => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+  btnAbajo.onclick = () => {
+    const destino = document.getElementById('card-pedido');
+    if (!destino) { window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }); return; }
+    try {
+      destino.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {
+      window.scrollTo({ top: destino.getBoundingClientRect().top + window.scrollY - 10, behavior: 'smooth' });
+    }
+  };
   document.body.appendChild(btnAbajo);
 
   const _actualizarVisibilidadBotonesScroll = () => {
