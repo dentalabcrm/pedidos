@@ -4501,7 +4501,18 @@ function renderCarrito(){
 // ── "⛶ Pantalla completa": mismo listado de "Tu pedido", pero con fotos grandes y en
 // columna — para revisar el pedido con más comodidad antes de enviarlo, sobre todo en
 // celular donde las miniaturas del carrito quedan chiquitas. ──
-window.abrirVistaCompletaPedido = () => {
+// Modo de la vista de pantalla completa del pedido — 'pedido' o 'presupuesto' (esto
+// último es opción de admin: cambia el título y agrega el toggle de mostrar/ocultar el
+// total). Se reinicia a su valor por defecto cada vez que se abre "de cero" (desde el
+// botón, el atajo Tab, etc.); las reaperturas internas (quitar un producto, recortar)
+// pasan preservarEstado=true para no perder lo que el admin ya eligió.
+let _pedidoFullModo = 'pedido';
+let _pedidoFullMostrarTotal = true;
+window.abrirVistaCompletaPedido = (preservarEstado) => {
+  if (!preservarEstado) {
+    _pedidoFullModo = esAdminCatalogo() ? 'presupuesto' : 'pedido';
+    _pedidoFullMostrarTotal = true;
+  }
   document.getElementById('pedido-full-backdrop')?.remove();
   if (!carrito.size) return;
 
@@ -4544,11 +4555,16 @@ window.abrirVistaCompletaPedido = () => {
   bd.id = 'pedido-full-backdrop';
   bd.className = 'pwfin-backdrop';
   const esAdmin = esAdminCatalogo();
+  const _esPresu = esAdmin && _pedidoFullModo === 'presupuesto';
   bd.innerHTML = `
     <div style="background:var(--panel);border-radius:18px;width:100%;max-width:640px;max-height:92vh;display:flex;flex-direction:column;position:relative;">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);gap:8px;">
-        <h2 style="margin:0;font-size:17px;font-weight:800;color:var(--text);">🛒 Tu pedido</h2>
-        <div style="display:flex;align-items:center;gap:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);gap:8px;flex-wrap:wrap;">
+        <h2 style="margin:0;font-size:17px;font-weight:800;color:var(--text);">${_esPresu ? '📄 Presupuesto' : '🛒 Tu pedido'}</h2>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          ${esAdmin ? `<div style="display:flex;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:2px;">
+            <button onclick="_pedidoCambiarModo('pedido')" style="border:none;border-radius:6px;padding:5px 10px;font-size:11.5px;font-weight:700;cursor:pointer;background:${_pedidoFullModo === 'pedido' ? 'var(--panel)' : 'transparent'};color:${_pedidoFullModo === 'pedido' ? 'var(--text)' : 'var(--text3)'};">🛒 Pedido</button>
+            <button onclick="_pedidoCambiarModo('presupuesto')" style="border:none;border-radius:6px;padding:5px 10px;font-size:11.5px;font-weight:700;cursor:pointer;background:${_pedidoFullModo === 'presupuesto' ? 'var(--panel)' : 'transparent'};color:${_pedidoFullModo === 'presupuesto' ? 'var(--text)' : 'var(--text3)'};">📄 Presupuesto</button>
+          </div>` : ''}
           ${esAdmin ? `<button id="pedido-recortar-btn" onclick="_pedidoToggleRecorte()" style="
             background:var(--panel2);color:var(--text2);border:1px solid var(--border);border-radius:8px;
             padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;
@@ -4559,11 +4575,15 @@ window.abrirVistaCompletaPedido = () => {
           ">✕</button>
         </div>
       </div>
+      ${_esPresu ? `<label style="display:flex;align-items:center;gap:7px;padding:10px 20px 0;font-size:12.5px;font-weight:600;color:var(--text2);cursor:pointer;">
+        <input type="checkbox" id="pedido-presu-mostrar-total" ${_pedidoFullMostrarTotal ? 'checked' : ''} onchange="_pedidoToggleMostrarTotal(this.checked)" style="width:15px;height:15px;cursor:pointer;">
+        Mostrar el total
+      </label>` : ''}
       <div id="pedido-full-body" style="overflow-y:auto;padding:4px 20px;flex:1;">${filas}</div>
       <div id="pedido-full-footer" style="padding:16px 20px;border-top:1px solid var(--border);">
-        <div style="display:flex;align-items:center;justify-content:space-between;font-size:16px;font-weight:800;color:var(--text);margin-bottom:12px;">
+        ${(!_esPresu || _pedidoFullMostrarTotal) ? `<div style="display:flex;align-items:center;justify-content:space-between;font-size:16px;font-weight:800;color:var(--text);margin-bottom:12px;">
           <span>Total</span><span>${document.getElementById('carrito-total')?.textContent || ''}</span>
-        </div>
+        </div>` : ''}
         <button id="btn-descargar-pedido-pdf" onclick="descargarPedidoPDFConFotos()" style="
           width:100%;background:var(--green,#0ea968);color:#fff;border:none;border-radius:10px;
           padding:12px;font-size:14px;font-weight:700;cursor:pointer;
@@ -4574,6 +4594,19 @@ window.abrirVistaCompletaPedido = () => {
   bd.addEventListener('click', e => { if (e.target === bd) bd.remove(); });
 };
 
+// Cambiar entre "Pedido" y "Presupuesto" (solo admin), o mostrar/ocultar el total —
+// vuelve a armar la vista preservando ese modo recién elegido (no lo resetea, a
+// diferencia de una apertura "de cero" con el botón o el atajo Tab).
+window._pedidoCambiarModo = (modo) => {
+  if (!esAdminCatalogo()) return;
+  _pedidoFullModo = modo;
+  abrirVistaCompletaPedido(true);
+};
+window._pedidoToggleMostrarTotal = (mostrar) => {
+  _pedidoFullMostrarTotal = mostrar;
+  abrirVistaCompletaPedido(true);
+};
+
 // Quitar un producto directamente desde la vista completa del pedido — saca el ítem del
 // carrito y vuelve a armar esta misma vista con lo que queda (o la cierra si ya no queda
 // nada, ya que abrirVistaCompletaPedido no hace nada si el carrito está vacío).
@@ -4581,7 +4614,7 @@ window.quitarDelPedidoCompleto = (sku) => {
   carrito.delete(sku);
   renderCarrito();
   if (typeof _actualizarTarjetaProducto === 'function') _actualizarTarjetaProducto(sku);
-  abrirVistaCompletaPedido();
+  abrirVistaCompletaPedido(true);
 };
 
 let _pedidoRecorteActivo = false;
@@ -4708,9 +4741,9 @@ window._pedidoToggleRecorte = async () => {
   if (!btn || !body) return;
 
   if (_pedidoRecorteActivo) {
-    // Salir del modo recorte: reabrir el modal normal desde cero.
+    // Salir del modo recorte: reabrir el modal normal, preservando el modo Pedido/Presupuesto elegido.
     _pedidoRecorteActivo = false;
-    abrirVistaCompletaPedido();
+    abrirVistaCompletaPedido(true);
     return;
   }
 
