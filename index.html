@@ -6097,7 +6097,7 @@ if (_avisosGetLista().length) {
       sugerencia:'Atajos de teclado (PC)',
       claves:['atajo','atajos','atajos de teclado','teclado','teclas rapidas','shortcut','shortcuts','tecla','como uso el teclado','se puede usar el teclado'],
       chip:'⌨️ Atajos de teclado (PC)',
-      respuesta: () => `⌨️ Si estás en compu, tenemos estos atajos de teclado para ir más rápido:\n\n🔎 Retroceso (Backspace) — lleva el cursor directo al buscador de productos.\n\n➕ Enter (con el mouse parado sobre un producto) — lo agrega al carrito. Si ya estaba agregado, lo saca.\n\n🔎➕ Enter (con el cursor DENTRO del buscador) — agrega al pedido, de a uno por cada Enter, los resultados de esa búsqueda en el mismo orden en que aparecen. Si alguno ya estaba en el pedido, se deja como está y el siguiente Enter pasa al que sigue.\n\n↩️ Shift + Tab (con el cursor dentro del buscador) — deshace el último producto que agregaste con Enter, y te lo vuelve a ofrecer la próxima vez que apretés Enter.\n\n🛒 Tab — abre "Tu pedido" en pantalla completa, con fotos más grandes.\n\n👁 Shift + 1 / 2 / 3 / 4 (solo admin) — salta directo a Lista 1, Lista 2, Lista Reventa o Lista Mayorista.\n\n🗑️ Ctrl + Retroceso — vacía todo el carrito (te pide confirmación antes).\n\nNinguno de estos interrumpe si estás escribiendo en otro campo de texto (nombre, dirección, etc.) — ahí las teclas funcionan como siempre.`
+      respuesta: () => `⌨️ Si estás en compu, tenemos estos atajos de teclado para ir más rápido:\n\n🔎 Retroceso (Backspace) — lleva el cursor directo al buscador de productos.\n\n➕ Enter (con el mouse parado sobre un producto) — lo agrega al carrito. Si ya estaba agregado, lo saca.\n\n🔎➕ Enter (con el cursor DENTRO del buscador) — agrega al pedido, de a uno por cada Enter, los resultados de esa búsqueda en el mismo orden en que aparecen. Si alguno ya estaba en el pedido, se deja como está y el siguiente Enter pasa al que sigue.\n\n↩️ Shift + Tab (con el cursor dentro del buscador) — deshace el último producto que agregaste con Enter, y te lo vuelve a ofrecer la próxima vez que apretés Enter.\n\n🛒 Tab — abre "Tu pedido" en pantalla completa, con fotos más grandes.\n\n👁 Shift + 1 / 2 / 3 / 4 (solo admin) — salta directo a Lista 1, Lista 2, Lista Reventa o Lista Mayorista.\n\n🔢 Shift + Q (con el mouse sobre un producto que ya está en el pedido) — salta directo al campo de cantidad, listo para escribir el número exacto.\n\n🗑️ Ctrl + Retroceso — vacía todo el carrito (te pide confirmación antes).\n\nNinguno de estos interrumpe si estás escribiendo en otro campo de texto (nombre, dirección, etc.) — ahí las teclas funcionan como siempre.`
     },
     {
       id:'pago',
@@ -6625,6 +6625,63 @@ document.addEventListener('keydown', (e) => {
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
   e.preventDefault();
   if (typeof cambiarListaAdmin === 'function') cambiarListaAdmin(n);
+});
+
+// Atajo de teclado: Shift + Q — mismo atajo que ya usamos en el CRM (Lista de Precios,
+// "foco en cantidad"). Con el mouse parado sobre un producto, o si no, tomando el primer
+// resultado que aparece en la búsqueda actual (por SKU o por nombre), lo agrega al pedido
+// si todavía no estaba, y salta directo al campo de cantidad para escribir el número exacto.
+document.addEventListener('keydown', (e) => {
+  if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.code !== 'KeyQ') return;
+  const el = document.activeElement;
+  const tag = (el && el.tagName) || '';
+  // El buscador es una excepción (igual que con los demás atajos): es normal escribir un
+  // SKU o un nombre ahí y apretar Shift+Q sin mover el mouse ni el foco a ningún otro lado.
+  const esBuscador = el && el.id === 'input-busqueda';
+  if (!esBuscador && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable))) return;
+  // A partir de acá el atajo aplica seguro — se frena la "Q" ANTES de intentar identificar
+  // el producto, para que nunca se termine escribiendo en el buscador (antes, si no se
+  // encontraba un único resultado, la tecla se dejaba pasar y quedaba tipeada).
+  e.preventDefault();
+  // Si el mouse no está sobre ningún producto, se usa el primer resultado que aparece en
+  // pantalla de la búsqueda actual (por SKU o por nombre) — mismo orden en que se listan,
+  // así el atajo funciona sin necesidad de mover el mouse hasta la tarjeta, sea cual sea
+  // la cantidad de resultados.
+  let skuObjetivo = _skuHoverAdmin;
+  let resultados = null;
+  if (!skuObjetivo && typeof buscarProductos === 'function') {
+    resultados = buscarProductos();
+    if (resultados.length) skuObjetivo = resultados[0].s;
+  }
+  if (!skuObjetivo) {
+    const msg = '⚠ No hay ningún producto para aplicar Shift+Q.';
+    if (typeof showToast === 'function') showToast(msg, 'warn'); else alert(msg);
+    return;
+  }
+  const _enfocarCantidad = () => {
+    const cont = document.getElementById('resultados');
+    const qtyInp = cont && cont.querySelector(`[data-sku="${CSS.escape(skuObjetivo)}"] .qty-val`);
+    if (qtyInp) { qtyInp.focus(); qtyInp.select(); }
+  };
+  if (carrito.has(skuObjetivo)) {
+    _enfocarCantidad();
+    return;
+  }
+  // Todavía no estaba en el pedido: lo agregamos primero (mismas condiciones que el "+" de
+  // la tarjeta — tiene que tener precio y no estar agotado) y recién ahí enfocamos la
+  // cantidad, una vez que el campo ya existe en la página.
+  const it = catalogoBySku.get(skuObjetivo);
+  const precio = it ? precioDe(it) : 0;
+  const puedeAgregar = !!precio && !(it && it.st);
+  if (!puedeAgregar) return;
+  carrito.set(skuObjetivo, 1);
+  requestAnimationFrame(() => {
+    _actualizarTarjetaProducto(skuObjetivo);
+    renderCarrito();
+    requestAnimationFrame(_enfocarCantidad);
+  });
+
 });
 
 // Atajo de teclado: con el mouse parado encima de un producto (tarjeta o fila, en
