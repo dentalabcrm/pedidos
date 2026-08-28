@@ -1225,7 +1225,9 @@ function _pwFinBuildCuotas(precio, permitirTerminalMP){
 function _pwHayFinanciamiento(){
   return (_finRates || []).some(r => r.activo !== false) || (_finNoInt || []).some(r => r.activo !== false);
 }
-function _pwFinModalHtml(precio, titulo, subtitulo, permitirTerminalMP){
+function _pwFinModalHtml(precio, titulo, subtitulo, permitirTerminalMP, sku){
+  const _itFoto = sku ? catalogoBySku.get(sku) : null;
+  const _fotoId = _itFoto ? (_itFoto.img || (_itFoto.imgs && _itFoto.imgs[0]) || '') : '';
   const cuotas = _pwFinBuildCuotas(precio, permitirTerminalMP);
   const _filaHtml = (c, proveedor) => `
     <div class="pwfin-cuota-row${c.sinInteres ? ' pwfin-cuota-row-noint' : ' pwfin-cuota-row-nave'}">
@@ -1274,10 +1276,13 @@ function _pwFinModalHtml(precio, titulo, subtitulo, permitirTerminalMP){
     ${cuotasNave.map(c => _filaHtml(c, 'nave')).join('')}
   ` : '';
   return `
-    <div class="pwfin-precio-base">
-      <div class="pwfin-precio-lbl">${escHtml(subtitulo)}</div>
-      <div class="pwfin-precio-val">${fmtMoney(precio)}</div>
-      ${titulo ? `<div class="pwfin-prod-name">${escHtml(titulo)}</div>` : ''}
+    <div class="pwfin-precio-base" style="display:flex;align-items:center;gap:12px;">
+      ${_fotoId ? `<img src="https://drive.google.com/thumbnail?id=${_fotoId}&sz=w150" alt="" style="width:52px;height:52px;object-fit:contain;background:#fff;border-radius:8px;border:1px solid var(--border,#e1e6ee);flex-shrink:0;" onerror="this.remove()">` : ''}
+      <div style="min-width:0;">
+        <div class="pwfin-precio-lbl">${escHtml(subtitulo)}</div>
+        <div class="pwfin-precio-val">${fmtMoney(precio)}</div>
+        ${titulo ? `<div class="pwfin-prod-name">${escHtml(titulo)}</div>` : ''}
+      </div>
     </div>
     ${cuotas.length ? (filasTerminalMP + filasTarjetaMP + filasNave) : `<div style="font-size:12.5px;color:var(--text3,#64748b);text-align:center;padding:14px 0;">No hay cuotas configuradas por el momento.</div>`}`;
 }
@@ -1316,9 +1321,9 @@ window.quitarFinanciamientoTarjeta = () => {
   const cont = document.getElementById('cf-financiamiento-tarjeta');
   if (cont) cont.innerHTML = _htmlFinanciamientoTarjetaElegido();
 };
-function _pwAbrirFinModal(precio, titulo, subtitulo, permitirTerminalMP){
+function _pwAbrirFinModal(precio, titulo, subtitulo, permitirTerminalMP, sku){
   document.getElementById('pwfin-backdrop')?.remove();
-  _pwFinUltimoParams = { precio, titulo, subtitulo, permitirTerminalMP };
+  _pwFinUltimoParams = { precio, titulo, subtitulo, permitirTerminalMP, sku };
   const bd = document.createElement('div');
   bd.id = 'pwfin-backdrop';
   bd.className = 'pwfin-backdrop';
@@ -1328,7 +1333,7 @@ function _pwAbrirFinModal(precio, titulo, subtitulo, permitirTerminalMP){
         <div class="pwfin-title">💳 Financiamiento en cuotas</div>
         <button class="pwfin-close" onclick="_pwCerrarFinModal()">✕</button>
       </div>
-      <div class="pwfin-body">${_pwFinModalHtml(precio, titulo, subtitulo, permitirTerminalMP)}</div>
+      <div class="pwfin-body">${_pwFinModalHtml(precio, titulo, subtitulo, permitirTerminalMP, sku)}</div>
       <div style="padding:14px 22px;border-top:1px solid var(--border);">
         <button onclick="_pwDescargarCuotasPDF()" style="
           width:100%;background:var(--green,#0ea968);color:#fff;border:none;border-radius:10px;
@@ -1346,8 +1351,8 @@ function _pwAbrirFinModal(precio, titulo, subtitulo, permitirTerminalMP){
 let _pwFinUltimoParams = null;
 window._pwDescargarCuotasPDF = () => {
   if (!_pwFinUltimoParams) return;
-  const { precio, titulo, subtitulo, permitirTerminalMP } = _pwFinUltimoParams;
-  const cuerpo = _pwFinModalHtml(precio, titulo, subtitulo, permitirTerminalMP);
+  const { precio, titulo, subtitulo, permitirTerminalMP, sku } = _pwFinUltimoParams;
+  const cuerpo = _pwFinModalHtml(precio, titulo, subtitulo, permitirTerminalMP, sku);
   const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Financiamiento en cuotas — Dentalab</title>
@@ -1424,7 +1429,7 @@ window.abrirCuotasModal = (precio, nombreCodificado, categoriaCodificada, skuCod
   const categoria = categoriaCodificada ? decodeURIComponent(categoriaCodificada) : '';
   const sku = skuCodificado ? decodeURIComponent(skuCodificado) : '';
   const permitirTerminalMP = categoria === 'Máquinas' || SKUS_TERMINAL_MP_EXTRA.has(sku);
-  _pwFinModalReabrir = () => _pwAbrirFinModal(precio, nombre, 'Precio del producto', permitirTerminalMP);
+  _pwFinModalReabrir = () => _pwAbrirFinModal(precio, nombre, 'Precio del producto', permitirTerminalMP, sku);
   _pwFinModalReabrir();
 };
 window.abrirCuotasTotalModal = () => {
