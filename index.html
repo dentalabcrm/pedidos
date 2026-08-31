@@ -4818,7 +4818,7 @@ window.descargarPedidoPDFConFotos = async () => {
     const margin = 14;
     const fotoSize = 22;
     const mostrarMedioPago = _adminVistaPrecio === 'normal';
-    const filaAlto = mostrarMedioPago ? 35 : 27;
+    const filaAlto = mostrarMedioPago ? 39 : 31;
     // Modo "Presupuesto" (opción de admin): mismo encabezado que la vista previa de
     // Presupuestos (logo, datos de la empresa, y el aviso "no válido como pedido") — el
     // total solo se muestra si el toggle "Mostrar el total" de la vista está activado.
@@ -4879,15 +4879,23 @@ window.descargarPedidoPDFConFotos = async () => {
       doc.text(`SKU: ${it.s}`, textX, y + offsetY);
       doc.text(`${fmtMoney(precio)} c/u × ${qty}`, textX, y + offsetY + 4.5);
 
+      // Estado de stock — mismo texto y criterio que se ve en pantalla (Agotado /
+      // Stock a confirmar / En stock), para que el presupuesto no genere falsas
+      // expectativas de disponibilidad inmediata.
+      const stockTexto = it.st ? 'Agotado' : it.sb ? 'Stock a confirmar' : 'En stock';
+      const stockColor = it.st ? [220, 38, 38] : it.sb ? [217, 119, 6] : [14, 169, 104];
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...stockColor);
+      doc.text(stockTexto, textX, y + offsetY + 9);
+
       if (mostrarMedioPago) {
         if (listaActiva === 'p1') {
           doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(14, 169, 104);
-          doc.text('✓ Precios ya con 10% off', textX, y + offsetY + 9);
+          doc.text('✓ Precios ya con 10% off', textX, y + offsetY + 13.5);
           doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130, 140, 160);
-          doc.text('Efectivo, débito o transferencia', textX, y + offsetY + 13);
+          doc.text('Efectivo, débito o transferencia', textX, y + offsetY + 17.5);
         } else {
           doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130, 140, 160);
-          doc.text('Tarjeta de crédito en 1 pago', textX, y + offsetY + 9);
+          doc.text('Tarjeta de crédito en 1 pago', textX, y + offsetY + 13.5);
         }
       }
 
