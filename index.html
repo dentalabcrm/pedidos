@@ -2973,7 +2973,7 @@ let _driveWriteToken = null, _driveWriteTokenExp = 0;
 function _pedirTokenEscrituraDrive() {
   return new Promise((resolve, reject) => {
     if (_driveWriteToken && Date.now() < _driveWriteTokenExp) { resolve(_driveWriteToken); return; }
-    const clientId = '327538440647-pvhrjvskjh9c9lr12eo6gdtlki48ng59.apps.googleusercontent.com';
+    const clientId = localStorage.getItem('dentalab_gmail_client_id') || '327538440647-pvhrjvskjh9c9lr12eo6gdtlki48ng59.apps.googleusercontent.com';
     if (!window.google?.accounts?.oauth2) { reject(new Error('No está disponible el inicio de sesión de Google en este momento.')); return; }
     try {
       const client = google.accounts.oauth2.initTokenClient({
