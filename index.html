@@ -6788,20 +6788,37 @@ document.addEventListener('keydown', (e) => {
     }
 
     const parsed = [];
-    lines.forEach(line => {
-      const tokens = String(line).split('\t').map(s => s.trim()).filter(Boolean);
-      if (!tokens.length) return;
+    for (let idx = 0; idx < lines.length; idx++) {
+      const tokens = String(lines[idx]).split('\t').map(s => s.trim()).filter(Boolean);
+      if (!tokens.length) continue;
       const candidate = tokens[0].toUpperCase();
-      if (skipSet.has(candidate)) return;
+      if (skipSet.has(candidate)) continue;
       const skuReal = skuLookup[candidate];
-      if (!skuReal) return;
+      if (!skuReal) continue;
+
+      // Nombres largos de producto ocupan más de una línea en la tabla del PDF, y la
+      // columna de cantidad puede caer en esa continuación en vez de en la primera
+      // línea (donde está el SKU) — se juntan hasta 4 líneas siguientes, cortando en
+      // cuanto aparece otra fila de producto (otro SKU) o una fila vacía.
+      let allTokens = tokens.slice(1);
+      let look = idx + 1;
+      let extra = 0;
+      while (look < lines.length && extra < 4) {
+        const nextTokens = String(lines[look]).split('\t').map(s => s.trim()).filter(Boolean);
+        if (!nextTokens.length) break;
+        const nextCand = nextTokens[0].toUpperCase();
+        if (skipSet.has(nextCand) || skuLookup[nextCand]) break;
+        allTokens = allTokens.concat(nextTokens);
+        look++; extra++;
+      }
+
       let qty = 1;
-      for (let i = 1; i < tokens.length; i++) {
-        if (numRe.test(tokens[i])) { const n = parseInt(tokens[i], 10); if (n >= 1 && n <= 999) { qty = n; break; } }
+      for (let i = 0; i < allTokens.length; i++) {
+        if (numRe.test(allTokens[i])) { const n = parseInt(allTokens[i], 10); if (n >= 1 && n <= 999) { qty = n; break; } }
       }
       const existente = parsed.find(p => p.sku === skuReal);
       if (existente) existente.qty = qty; else parsed.push({ sku: skuReal, qty });
-    });
+    }
     return parsed;
   }
 
