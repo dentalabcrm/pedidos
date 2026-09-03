@@ -4094,7 +4094,7 @@ function renderResultados(){
     if (vistaProductos === 'lista') {
       // ── Vista LISTA: fila horizontal compacta (formato original) ──
       const foto = it.img
-        ? `<img class="prod-foto" src="https://drive.google.com/thumbnail?id=${it.img}&sz=w150" alt="" loading="lazy" title="Ver más grande" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirZoomProducto('${escHtml(it.s)}')" onerror="manejarErrorFotoProducto(this)">`
+        ? `<img class="prod-foto" src="https://drive.google.com/thumbnail?id=${it.img}&sz=w150" alt="" loading="lazy" title="Ver más grande" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirZoomProducto('${escHtml(it.s)}'); _zoomCopiarTarjeta('${escHtml(it.s)}')" onerror="manejarErrorFotoProducto(this)">`
         : `<div class="prod-foto prod-foto-vacia" style="cursor:pointer;" title="Buscar foto en Drive" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirFotoProducto(this)">🦷</div>`;
       const adminIcons = !esAdminCatalogo() ? '' : _modoAsignarManual
         ? (it.s === _skuOrigenManual
@@ -4128,7 +4128,7 @@ function renderResultados(){
 
     // ── Vista GRILLA: tarjeta vertical con foto grande ──
     const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
-    const zoomAttr = `onclick="event.stopPropagation(); abrirZoomProducto('${escHtml(it.s)}')" style="cursor:pointer;"`;
+    const zoomAttr = `onclick="event.stopPropagation(); abrirZoomProducto('${escHtml(it.s)}'); _zoomCopiarTarjeta('${escHtml(it.s)}')" style="cursor:pointer;"`;
     const foto = imgsArr.length > 1
       ? `<div class="prod-carrusel">
           <div class="prod-carrusel-track" onscroll="_carruselOnScroll(this)">
@@ -4436,7 +4436,7 @@ function renderCarrito(){
       if (!it) return '';
       const precio = precioDe(it);
       const foto = it.img
-        ? `<img class="prod-foto" src="https://drive.google.com/thumbnail?id=${it.img}&sz=w150" alt="" loading="lazy" title="Ver más grande" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirZoomProducto('${escHtml(it.s)}')" onerror="manejarErrorFotoProducto(this)">`
+        ? `<img class="prod-foto" src="https://drive.google.com/thumbnail?id=${it.img}&sz=w150" alt="" loading="lazy" title="Ver más grande" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirZoomProducto('${escHtml(it.s)}'); _zoomCopiarTarjeta('${escHtml(it.s)}')" onerror="manejarErrorFotoProducto(this)">`
         : `<div class="prod-foto prod-foto-vacia" style="cursor:pointer;" title="Buscar foto en Drive" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirFotoProducto(this)">🦷</div>`;
       const adminIconsCarrito = !esAdminCatalogo() ? '' : _modoSeleccionFotos
         ? (it.img ? `<div style="display:flex;align-items:center;margin-right:4px;"><input type="checkbox" ${_fotosSeleccionadas.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionFoto('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>` : '')
