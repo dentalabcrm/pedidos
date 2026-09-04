@@ -557,7 +557,7 @@
   .ci-medio-pago{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;font-family:'DM Sans',sans-serif;}
   .ci-medio-pago.medio-contado{background:#0ea96814;color:var(--green);}
   .ci-medio-pago.medio-tarjeta{background:#0284c714;color:var(--blue);}
-  .ci-medio-pago-detalle{font-size:10.5px;color:var(--text3);margin-top:2px;}
+  .ci-medio-pago-detalle{font-size:11px;font-weight:600;color:var(--text2);margin-top:2px;}
   .ci-top{display:flex;align-items:center;gap:10px;flex:1;min-width:0;}
   .ci-bottom{display:flex;align-items:center;gap:10px;flex-shrink:0;}
   .ci-info{flex:1;min-width:0;}
@@ -1857,7 +1857,7 @@ window.abrirZoomProducto = (sku) => {
           <div>
             <div style="font-size:26px;font-weight:800;color:#0f172a;">${it.cp ? '<span style="font-size:12px;color:#8592a6;font-style:italic;font-weight:500;">Consultar precio</span>' : fmtMoney(precio)}</div>
             ${(!it.cp && listaActiva === 'p1' && _adminVistaPrecio === 'normal') ? `<div style="font-size:11px;font-weight:700;color:#0ea968;margin-top:4px;">✓ Precios ya con 10% off</div>` : ''}
-            ${(!it.cp && _adminVistaPrecio === 'normal') ? `<div style="font-size:11.5px;color:#8592a6;margin-top:2px;">${listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago'}</div>` : ''}
+            ${(!it.cp && _adminVistaPrecio === 'normal') ? `<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px;">${listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago'}</div>` : ''}
           </div>
           ${qtyEnCarrito > 0
             ? `<div class="qty-stepper prod-qty" style="transform:scale(1.15);transform-origin:right;">
@@ -2136,7 +2136,7 @@ async function _zoomConstruirTarjetaCanvas(it, idxFoto = 0){
   }
   if (notaPago) {
     y += 20;
-    ctx.fillStyle = '#8592a6'; ctx.font = '11.5px DM Sans, sans-serif';
+    ctx.fillStyle = '#475569'; ctx.font = '600 12px DM Sans, sans-serif';
     ctx.fillText(notaPago, PAD, y);
   }
 
