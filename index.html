@@ -4514,11 +4514,13 @@ function renderCarrito(){
 let _pedidoFullModo = 'pedido';
 let _pedidoFullMostrarTotal = true;
 let _pedidoFullMostrarFormaPago = true;
+let _pedidoFullOrden = 'original'; // 'original' | 'precio_asc' | 'precio_desc' — solo aplica en modo Presupuesto
 window.abrirVistaCompletaPedido = (preservarEstado) => {
   if (!preservarEstado) {
     _pedidoFullModo = esAdminCatalogo() ? 'presupuesto' : 'pedido';
     _pedidoFullMostrarTotal = !esAdminCatalogo(); // admin arranca en "sin total"; el cliente siempre lo ve
     _pedidoFullMostrarFormaPago = true;
+    _pedidoFullOrden = 'original';
   }
   document.getElementById('pedido-full-backdrop')?.remove();
   if (!carrito.size) return;
@@ -4526,7 +4528,16 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
   const esAdmin = esAdminCatalogo();
   const _esPresu = esAdmin && _pedidoFullModo === 'presupuesto';
 
-  const filas = Array.from(carrito.entries()).map(([sku, qty]) => {
+  let entradasCarrito = Array.from(carrito.entries());
+  if (_esPresu && _pedidoFullOrden !== 'original') {
+    entradasCarrito = entradasCarrito.slice().sort(([skuA, qtyA], [skuB, qtyB]) => {
+      const itA = catalogoBySku.get(skuA), itB = catalogoBySku.get(skuB);
+      const subtotalA = (itA ? precioDe(itA) : 0) * qtyA;
+      const subtotalB = (itB ? precioDe(itB) : 0) * qtyB;
+      return _pedidoFullOrden === 'precio_asc' ? subtotalA - subtotalB : subtotalB - subtotalA;
+    });
+  }
+  const filas = entradasCarrito.map(([sku, qty]) => {
     const it = catalogoBySku.get(sku);
     if (!it) return '';
     const precio = precioDe(it);
@@ -4593,6 +4604,14 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
           <input type="checkbox" id="pedido-presu-mostrar-forma-pago" ${_pedidoFullMostrarFormaPago ? 'checked' : ''} onchange="_pedidoToggleMostrarFormaPago(this.checked)" style="width:15px;height:15px;cursor:pointer;">
           Mostrar forma de pago
         </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--text2);">
+          Ordenar por precio:
+          <select onchange="_pedidoCambiarOrden(this.value)" style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--panel);color:var(--text);cursor:pointer;">
+            <option value="original" ${_pedidoFullOrden === 'original' ? 'selected' : ''}>Original</option>
+            <option value="precio_asc" ${_pedidoFullOrden === 'precio_asc' ? 'selected' : ''}>Menor a mayor</option>
+            <option value="precio_desc" ${_pedidoFullOrden === 'precio_desc' ? 'selected' : ''}>Mayor a menor</option>
+          </select>
+        </label>
       </div>` : ''}
       <div id="pedido-full-body" style="overflow-y:auto;padding:4px 20px;flex:1;">${filas}</div>
       <div id="pedido-full-footer" style="padding:16px 20px;border-top:1px solid var(--border);">
@@ -4623,6 +4642,10 @@ window._pedidoToggleMostrarTotal = (mostrar) => {
 };
 window._pedidoToggleMostrarFormaPago = (mostrar) => {
   _pedidoFullMostrarFormaPago = mostrar;
+  abrirVistaCompletaPedido(true);
+};
+window._pedidoCambiarOrden = (orden) => {
+  _pedidoFullOrden = orden;
   abrirVistaCompletaPedido(true);
 };
 
@@ -4869,7 +4892,16 @@ window.descargarPedidoPDFConFotos = async () => {
       y += 8;
     }
 
-    for (const [sku, qty] of carrito.entries()) {
+    let entradasCarritoPDF = Array.from(carrito.entries());
+    if (_esPresu && _pedidoFullOrden !== 'original') {
+      entradasCarritoPDF = entradasCarritoPDF.slice().sort(([skuA, qtyA], [skuB, qtyB]) => {
+        const itA = catalogoBySku.get(skuA), itB = catalogoBySku.get(skuB);
+        const subtotalA = (itA ? precioDe(itA) : 0) * qtyA;
+        const subtotalB = (itB ? precioDe(itB) : 0) * qtyB;
+        return _pedidoFullOrden === 'precio_asc' ? subtotalA - subtotalB : subtotalB - subtotalA;
+      });
+    }
+    for (const [sku, qty] of entradasCarritoPDF) {
       const it = catalogoBySku.get(sku);
       if (!it) continue;
       if (y + filaAlto > pageH - margin - 16) { doc.addPage(); y = margin; }
