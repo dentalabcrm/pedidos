@@ -4513,13 +4513,18 @@ function renderCarrito(){
 // pasan preservarEstado=true para no perder lo que el admin ya eligió.
 let _pedidoFullModo = 'pedido';
 let _pedidoFullMostrarTotal = true;
+let _pedidoFullMostrarFormaPago = true;
 window.abrirVistaCompletaPedido = (preservarEstado) => {
   if (!preservarEstado) {
     _pedidoFullModo = esAdminCatalogo() ? 'presupuesto' : 'pedido';
     _pedidoFullMostrarTotal = !esAdminCatalogo(); // admin arranca en "sin total"; el cliente siempre lo ve
+    _pedidoFullMostrarFormaPago = true;
   }
   document.getElementById('pedido-full-backdrop')?.remove();
   if (!carrito.size) return;
+
+  const esAdmin = esAdminCatalogo();
+  const _esPresu = esAdmin && _pedidoFullModo === 'presupuesto';
 
   const filas = Array.from(carrito.entries()).map(([sku, qty]) => {
     const it = catalogoBySku.get(sku);
@@ -4530,12 +4535,13 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
       ? `<img src="https://drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w400" alt="" style="width:100%;height:100%;object-fit:contain;background:#f4f6fa;">`
       : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;background:#f4f6fa;opacity:.35;">🦷</div>`;
     const stockHtml = it.st ? `<div class="prod-stock-agotado">Agotado</div>` : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>` : `<div class="prod-stock-en">En stock</div>`;
-    const medioPagoBadge = (listaActiva && _adminVistaPrecio === 'normal')
+    const _mostrarFormaPagoFila = !_esPresu || _pedidoFullMostrarFormaPago;
+    const medioPagoBadge = (listaActiva && _adminVistaPrecio === 'normal' && _mostrarFormaPagoFila)
       ? (listaActiva === 'p1'
           ? `<span class="ci-medio-pago medio-contado">✓ Precios ya con 10% off</span>`
           : `<span class="ci-medio-pago medio-tarjeta">💳 Tarjeta — 1 pago</span>`)
       : '';
-    const medioPagoDetalle = (listaActiva === 'p1' && _adminVistaPrecio === 'normal') ? `<div class="ci-medio-pago-detalle">Efectivo, débito o transferencia</div>` : '';
+    const medioPagoDetalle = (listaActiva === 'p1' && _adminVistaPrecio === 'normal' && _mostrarFormaPagoFila) ? `<div class="ci-medio-pago-detalle">Efectivo, débito o transferencia</div>` : '';
     return `
       <div style="display:flex;gap:14px;align-items:center;padding:14px 4px;border-bottom:1px solid var(--border);">
         <div style="width:88px;height:88px;flex-shrink:0;border-radius:12px;overflow:hidden;border:1px solid var(--border);">${foto}</div>
@@ -4559,8 +4565,6 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
   const bd = document.createElement('div');
   bd.id = 'pedido-full-backdrop';
   bd.className = 'pwfin-backdrop';
-  const esAdmin = esAdminCatalogo();
-  const _esPresu = esAdmin && _pedidoFullModo === 'presupuesto';
   bd.innerHTML = `
     <div style="background:var(--panel);border-radius:18px;width:100%;max-width:640px;max-height:92vh;display:flex;flex-direction:column;position:relative;">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);gap:8px;flex-wrap:wrap;">
@@ -4580,10 +4584,16 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
           ">✕</button>
         </div>
       </div>
-      ${_esPresu ? `<label style="display:flex;align-items:center;gap:7px;padding:10px 20px 0;font-size:12.5px;font-weight:600;color:var(--text2);cursor:pointer;">
-        <input type="checkbox" id="pedido-presu-mostrar-total" ${_pedidoFullMostrarTotal ? 'checked' : ''} onchange="_pedidoToggleMostrarTotal(this.checked)" style="width:15px;height:15px;cursor:pointer;">
-        Mostrar el total
-      </label>` : ''}
+      ${_esPresu ? `<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:10px 20px 0;">
+        <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--text2);cursor:pointer;">
+          <input type="checkbox" id="pedido-presu-mostrar-total" ${_pedidoFullMostrarTotal ? 'checked' : ''} onchange="_pedidoToggleMostrarTotal(this.checked)" style="width:15px;height:15px;cursor:pointer;">
+          Mostrar el total
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--text2);cursor:pointer;">
+          <input type="checkbox" id="pedido-presu-mostrar-forma-pago" ${_pedidoFullMostrarFormaPago ? 'checked' : ''} onchange="_pedidoToggleMostrarFormaPago(this.checked)" style="width:15px;height:15px;cursor:pointer;">
+          Mostrar forma de pago
+        </label>
+      </div>` : ''}
       <div id="pedido-full-body" style="overflow-y:auto;padding:4px 20px;flex:1;">${filas}</div>
       <div id="pedido-full-footer" style="padding:16px 20px;border-top:1px solid var(--border);">
         ${(!_esPresu || _pedidoFullMostrarTotal) ? `<div style="display:flex;align-items:center;justify-content:space-between;font-size:16px;font-weight:800;color:var(--text);margin-bottom:12px;">
@@ -4609,6 +4619,10 @@ window._pedidoCambiarModo = (modo) => {
 };
 window._pedidoToggleMostrarTotal = (mostrar) => {
   _pedidoFullMostrarTotal = mostrar;
+  abrirVistaCompletaPedido(true);
+};
+window._pedidoToggleMostrarFormaPago = (mostrar) => {
+  _pedidoFullMostrarFormaPago = mostrar;
   abrirVistaCompletaPedido(true);
 };
 
@@ -4817,12 +4831,13 @@ window.descargarPedidoPDFConFotos = async () => {
     const pageH = doc.internal.pageSize.getHeight();
     const margin = 14;
     const fotoSize = 22;
-    const mostrarMedioPago = _adminVistaPrecio === 'normal';
-    const filaAlto = mostrarMedioPago ? 39 : 31;
     // Modo "Presupuesto" (opción de admin): mismo encabezado que la vista previa de
     // Presupuestos (logo, datos de la empresa, y el aviso "no válido como pedido") — el
-    // total solo se muestra si el toggle "Mostrar el total" de la vista está activado.
+    // total y la forma de pago por fila solo se muestran si esos toggles de la vista
+    // están activados.
     const _esPresu = esAdminCatalogo() && _pedidoFullModo === 'presupuesto';
+    const mostrarMedioPago = _adminVistaPrecio === 'normal' && (!_esPresu || _pedidoFullMostrarFormaPago);
+    const filaAlto = mostrarMedioPago ? 39 : 31;
     let y = margin;
 
     if (_esPresu) {
