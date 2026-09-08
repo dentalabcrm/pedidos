@@ -3420,6 +3420,23 @@ window._carruselIrA = function(dotEl, idx){
 };
 
 window.manejarErrorFotoProducto = function(imgEl) {
+  // Cuando la página pide muchas miniaturas de Drive de golpe (una tanda de productos),
+  // Google a veces rechaza algunas por exceso de pedidos simultáneos — aunque el archivo
+  // esté perfecto (funciona bien abriéndolo de a uno, despacio, directo en Drive). Antes
+  // de darla por perdida y mostrar el ícono de "sin foto", se reintenta un par de veces
+  // con una espera creciente, para darle tiempo a Google de dejar de frenar el pedido.
+  const intentos = parseInt(imgEl.dataset.reintentos || '0', 10);
+  if (intentos < 3) {
+    imgEl.dataset.reintentos = String(intentos + 1);
+    if (!imgEl.dataset.srcBase) imgEl.dataset.srcBase = imgEl.src;
+    const srcBase = imgEl.dataset.srcBase;
+    const espera = 700 + intentos * 900 + Math.random() * 500;
+    setTimeout(() => {
+      const sep = srcBase.includes('?') ? '&' : '?';
+      imgEl.src = srcBase + sep + '_r=' + Date.now(); // fuerza un pedido nuevo, sin caché
+    }, espera);
+    return;
+  }
   const div = document.createElement('div');
   div.className = 'prod-foto prod-foto-vacia';
   div.style.cursor = 'pointer';
