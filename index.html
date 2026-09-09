@@ -6844,7 +6844,7 @@ document.addEventListener('keydown', (e) => {
       for (let d = 0; d <= 3; d++) {
         const cand = lines[i + d];
         if (!cand) continue;
-        const qm = String(cand).replace(/\t/g, ' ').match(/[×x]\s*(\d+)\s*$/i);
+        const qm = String(cand).replace(/\t/g, ' ').match(/[×x]\s*(\d+)\b/i);
         if (qm) { qty = parseInt(qm[1], 10) || 1; break; }
       }
       const existente = encontrados.find(p => p.sku === skuReal);
