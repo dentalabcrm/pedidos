@@ -3285,10 +3285,15 @@ window.abrirGestorFotosProducto = function(sku){
           <button id="gestor-fotos-close" style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--text2);">✕</button>
         </div>
         <div style="padding:16px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;">
-          ${imgs.map(id => `
+          ${imgs.map((id, idx) => `
             <div style="position:relative;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+              ${idx === 0 ? `<div style="position:absolute;top:4px;left:4px;background:#0ea968;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;z-index:1;">Principal</div>` : ''}
               <img src="https://drive.google.com/thumbnail?id=${id}&sz=w200" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">
               <button onclick="_borrarFotoIndividual('${escHtml(sku)}','${escHtml(id)}')" title="Borrar esta foto" style="position:absolute;top:4px;right:4px;background:rgba(220,38,38,.9);color:#fff;border:none;border-radius:6px;width:24px;height:24px;font-size:12px;cursor:pointer;">🗑️</button>
+              <div style="display:flex;">
+                <button onclick="_moverFotoIndividual('${escHtml(sku)}',${idx},-1)" title="Mover a la izquierda" ${idx === 0 ? 'disabled' : ''} style="flex:1;background:var(--panel2);border:none;border-top:1px solid var(--border);padding:5px 0;font-size:12px;cursor:${idx === 0 ? 'default' : 'pointer'};opacity:${idx === 0 ? '.35' : '1'};color:var(--text2);">◀</button>
+                <button onclick="_moverFotoIndividual('${escHtml(sku)}',${idx},1)" title="Mover a la derecha" ${idx === imgs.length - 1 ? 'disabled' : ''} style="flex:1;background:var(--panel2);border:none;border-top:1px solid var(--border);border-left:1px solid var(--border);padding:5px 0;font-size:12px;cursor:${idx === imgs.length - 1 ? 'default' : 'pointer'};opacity:${idx === imgs.length - 1 ? '.35' : '1'};color:var(--text2);">▶</button>
+              </div>
             </div>`).join('')}
         </div>
         <div style="padding:0 18px 18px;">
@@ -3331,6 +3336,28 @@ window._borrarFotoIndividual = async function(sku, fileId){
     _refrescarVistaAdmin();
   } catch (e) {
     alert('No se pudo borrar la foto: ' + e.message);
+  }
+};
+
+// Cambia el orden de las fotos (sin borrar ninguna) — la que queda primera pasa a ser la
+// "principal", la que se ve en la tarjeta del producto y en el catálogo en general.
+window._moverFotoIndividual = async function(sku, idx, direccion){
+  const itCat = catalogoBySku.get(sku);
+  const imgs = itCat?.imgs || [];
+  const idx2 = idx + direccion;
+  if (idx2 < 0 || idx2 >= imgs.length) return;
+  const nuevosImgs = imgs.slice();
+  [nuevosImgs[idx], nuevosImgs[idx2]] = [nuevosImgs[idx2], nuevosImgs[idx]];
+  const key = String(sku).trim().replace(/[.#$\[\]/]/g, '_');
+  try {
+    if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_imagenes/' + key).set(nuevosImgs);
+    const itArr = catalogo.find(x => x.s === sku);
+    if (itCat) { itCat.imgs = nuevosImgs; itCat.img = nuevosImgs[0]; }
+    if (itArr) { itArr.imgs = nuevosImgs; itArr.img = nuevosImgs[0]; }
+    if (window._gestorFotosRender) { document.getElementById('gestor-fotos-backdrop')?.remove(); window._gestorFotosRender(); }
+    _refrescarVistaAdmin();
+  } catch (e) {
+    alert('No se pudo reordenar la foto: ' + e.message);
   }
 };
 
