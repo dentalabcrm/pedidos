@@ -4666,11 +4666,6 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
           width:100%;background:var(--green,#0ea968);color:#fff;border:none;border-radius:10px;
           padding:12px;font-size:14px;font-weight:700;cursor:pointer;
         ">⬇ Descargar PDF con fotos</button>
-        ${_esPresu ? `<button id="btn-cargar-yiqi" onclick="cargarPedidoEnYiqiDesdePedidos()" style="
-          width:100%;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;border:none;border-radius:10px;
-          padding:12px;font-size:14px;font-weight:700;cursor:pointer;margin-top:10px;
-        ">⚡ Cargar en YiQi (Consumidor Final)</button>
-        <div id="yiqi-pedidos-resultado" style="margin-top:8px;"></div>` : ''}
       </div>
     </div>`;
   document.body.appendChild(bd);
@@ -5023,113 +5018,6 @@ window.descargarPedidoPDFConFotos = async () => {
   }
 };
 
-// ── Cargar el pedido en YiQi como "Consumidor Final" (solo admin, modo Presupuesto) ──
-// Reutiliza EXACTAMENTE el mismo mecanismo que ya usa el CRM ("⚡ Agregar a pedido YIQI"
-// en Presupuestos, y "📦 Cargar en Yiqi" en Pedidos Web): las credenciales y el caché del
-// mapa SKU→ID interno se guardan en localStorage, que está compartido entre el CRM y
-// Pedidos porque viven en el mismo dominio — así que si ya las cargaste una vez en el
-// CRM, acá se usan solas, sin pedirlas de nuevo.
-window.cargarPedidoEnYiqiDesdePedidos = async () => {
-  const YIQI_API_BASE = 'https://api.yiqi.com.ar';
-  const YIQI_SCHEMA_ID = 328;
-  const YIQI_CLIENTE_CONSUMIDOR_FINAL_ID = 8192; // mismo ID que usa "Consumidor Final" en el CRM
-  const LS_TOKEN = 'yiqi_api_token', LS_TOKEN_EXP = 'yiqi_api_token_exp';
-  const LS_USER = 'yiqi_api_user', LS_PASS = 'yiqi_api_pass';
-  const YIQI_SKU_MAP_KEY = 'dentalab_yiqi_sku_map', YIQI_SKU_MAP_TS_KEY = 'dentalab_yiqi_sku_map_ts';
-  const YIQI_SKU_MAP_TTL = 4 * 60 * 60 * 1000;
-
-  const btn = document.getElementById('btn-cargar-yiqi');
-  const resEl = document.getElementById('yiqi-pedidos-resultado');
-  const setBtn = (label, disabled) => { if (btn) { btn.textContent = label; btn.disabled = disabled; btn.style.opacity = disabled ? '.6' : '1'; } };
-  const setRes = (html) => { if (resEl) resEl.innerHTML = html; };
-
-  if (!carrito.size) { setRes('<div style="color:#dc2626;font-size:12.5px;">⚠ El pedido está vacío.</div>'); return; }
-
-  try {
-    setBtn('🔑 Autenticando…', true);
-    setRes('');
-
-    // 1. Token — mismo esquema que el CRM (reusa uno ya guardado si sigue vigente).
-    async function getYiqiToken() {
-      const exp = parseInt(localStorage.getItem(LS_TOKEN_EXP) || '0', 10);
-      const tok = localStorage.getItem(LS_TOKEN);
-      if (tok && Date.now() < exp) return tok;
-      const user = localStorage.getItem(LS_USER), pass = localStorage.getItem(LS_PASS);
-      if (!user || !pass) throw new Error('No hay credenciales de YiQi guardadas en este navegador. Entrá al CRM → Lista de Precios → "🔄 Sincronizar precios Yiqi" una vez para cargarlas, y después volvé a intentar acá.');
-      const res = await fetch(`${YIQI_API_BASE}/token`, {
-        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `grant_type=password&username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}`
-      });
-      if (!res.ok) throw new Error('Error al autenticar con YiQi (usuario/contraseña guardados incorrectos).');
-      const data = await res.json();
-      if (!data.access_token) throw new Error('YiQi no devolvió token.');
-      const exp2 = (data.expires_in || 86400) * 1000;
-      localStorage.setItem(LS_TOKEN, data.access_token);
-      localStorage.setItem(LS_TOKEN_EXP, String(Date.now() + exp2 - 60000));
-      return data.access_token;
-    }
-    const token = await getYiqiToken();
-
-    // 2. Mapa SKU → ID interno de YiQi — mismo caché compartido que usa el CRM.
-    setBtn('🔍 Resolviendo SKUs…', true);
-    const ts = parseInt(localStorage.getItem(YIQI_SKU_MAP_TS_KEY) || '0', 10);
-    const raw = localStorage.getItem(YIQI_SKU_MAP_KEY);
-    let skuIdMap = null;
-    if (raw && ts && (Date.now() - ts) < YIQI_SKU_MAP_TTL) {
-      try { skuIdMap = JSON.parse(raw); } catch (e) {}
-    }
-    if (!skuIdMap) throw new Error('No hay un mapa de SKUs de YiQi cacheado (o está vencido) en este navegador. Entrá al CRM → Lista de Precios → "🔄 Sincronizar precios Yiqi" una vez, y volvé a intentar acá.');
-
-    const productosYiqi = [];
-    const skusOmitidos = [];
-    carrito.forEach((qty, sku) => {
-      const skuStr = String(sku).trim();
-      if (skuIdMap[skuStr] !== undefined) {
-        const it = catalogoBySku.get(sku);
-        const precioUnit = it ? precioDe(it) : 0;
-        productosYiqi.push({ DEDP_CANTIDAD: Number(qty) || 1, DEDP_PRECIO_UNITARIO_FINA: precioUnit, MATE_ID_MATE: skuIdMap[skuStr] });
-      } else {
-        skusOmitidos.push(skuStr);
-      }
-    });
-    if (!productosYiqi.length) throw new Error('Ninguno de los SKUs de este pedido se pudo resolver en YiQi.');
-
-    // 3. Crear el pedido — mismo payload que "Cargar en Yiqi" de Pedidos Web.
-    setBtn('📦 Creando pedido…', true);
-    const partesObs = ['Pedido web (Pedidos — catálogo)'];
-    const clienteNombre = document.getElementById('cl-nombre')?.value?.trim();
-    if (clienteNombre) partesObs.push(`Cliente: ${clienteNombre}`);
-    if (skusOmitidos.length) partesObs.push(`⚠ SKUs no encontrados en YiQi (no incluidos): ${skusOmitidos.join(', ')}`);
-
-    const pedidoData = {
-      CLIE_ID_CLIE: YIQI_CLIENTE_CONSUMIDOR_FINAL_ID,
-      PEDI_OBSERVACIONES: partesObs.join('\n'),
-      PRODUCTOS: productosYiqi,
-    };
-    const createRes = await fetch(`${YIQI_API_BASE}/api/public/PEDIDO`, {
-      method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ schemaId: YIQI_SCHEMA_ID, data: pedidoData })
-    });
-    if (!createRes.ok) {
-      const errText = await createRes.text();
-      throw new Error(`Error al crear el pedido (${createRes.status}): ${errText}`);
-    }
-    const createJson = await createRes.json();
-    const newId = createJson.newId || createJson.id;
-    if (!newId) throw new Error('YiQi no devolvió un ID de pedido: ' + JSON.stringify(createJson));
-
-    const omitidosMsg = skusOmitidos.length ? ` (${skusOmitidos.length} SKU sin resolver, no se incluyeron)` : '';
-    setRes(`<div style="background:#0ea96812;border:1px solid #0ea96840;border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--text);">
-      ✓ Pedido creado en YiQi${omitidosMsg}.<br>
-      Número interno: <b>${newId}</b><br>
-      <a href="https://me.yiqi.com.ar/view/PEDIDO?schemaId=${YIQI_SCHEMA_ID}#/${newId}" target="_blank" rel="noopener" style="color:#7c3aed;font-weight:700;">Abrir en YiQi →</a>
-    </div>`);
-    setBtn('⚡ Cargar en YiQi (Consumidor Final)', false);
-  } catch (e) {
-    setRes(`<div style="background:#dc262612;border:1px solid #dc262640;border-radius:8px;padding:10px 12px;font-size:12.5px;color:#dc2626;">✕ ${e.message || 'Error inesperado al cargar en YiQi'}</div>`);
-    setBtn('⚡ Cargar en YiQi (Consumidor Final)', false);
-  }
-};
 
 // ── Barras flotantes para hacer más cómodo navegar el catálogo en el celular ──
 function _initBarrasFlotantes(){
