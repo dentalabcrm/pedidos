@@ -4559,18 +4559,33 @@ let _pedidoFullModo = 'pedido';
 let _pedidoFullMostrarTotal = true;
 let _pedidoFullMostrarFormaPago = true;
 let _pedidoFullOrden = 'original'; // 'original' | 'precio_asc' | 'precio_desc' — solo aplica en modo Presupuesto
+// Costo de envío que el admin puede sumarle a "Tu pedido" — misma estrategia que
+// Presupuestos: Envío en el CRM (toggle activo + tipo + monto), simplificada acá.
+// Solo lo puede tocar el admin (esAdminCatalogo()) y se refleja tanto en el total
+// que se ve en pantalla como en el PDF que se descarga. "editando" controla si se
+// ve el panel completo (checkbox+selector+monto) o el resumen colapsado — apenas
+// se carga un monto válido se colapsa solo, para que la captura le quede limpia
+// al cliente. Solo existe en modo "Pedido": en "Presupuesto" no se ofrece.
+let _pedidoEnvioAdmin = { activo: false, tipo: 'Envío a domicilio', costo: '', editando: false };
 window.abrirVistaCompletaPedido = (preservarEstado) => {
   if (!preservarEstado) {
     _pedidoFullModo = esAdminCatalogo() ? 'presupuesto' : 'pedido';
     _pedidoFullMostrarTotal = !esAdminCatalogo(); // admin arranca en "sin total"; el cliente siempre lo ve
     _pedidoFullMostrarFormaPago = true;
     _pedidoFullOrden = 'original';
+    _pedidoEnvioAdmin = { activo: false, tipo: 'Envío a domicilio', costo: '', editando: false };
   }
   document.getElementById('pedido-full-backdrop')?.remove();
   if (!carrito.size) return;
 
   const esAdmin = esAdminCatalogo();
   const _esPresu = esAdmin && _pedidoFullModo === 'presupuesto';
+  // El costo de envío solo se ofrece y solo suma en modo "Pedido" — en "Presupuesto"
+  // la opción no aparece en absoluto.
+  const _envioTieneMonto = parseFloat(_pedidoEnvioAdmin.costo) > 0;
+  const _mostrarPanelEnvio = esAdmin && !_esPresu && (!_pedidoEnvioAdmin.activo || _pedidoEnvioAdmin.editando || !_envioTieneMonto);
+  const _mostrarResumenEnvio = esAdmin && !_esPresu && _pedidoEnvioAdmin.activo && !_pedidoEnvioAdmin.editando && _envioTieneMonto;
+  const _envioMontoActual = (esAdmin && !_esPresu && _pedidoEnvioAdmin.activo) ? (parseFloat(_pedidoEnvioAdmin.costo) || 0) : 0;
 
   let entradasCarrito = Array.from(carrito.entries());
   if (_esPresu && _pedidoFullOrden !== 'original') {
@@ -4659,8 +4674,27 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
       </div>` : ''}
       <div id="pedido-full-body" style="overflow-y:auto;padding:4px 20px;flex:1;">${filas}</div>
       <div id="pedido-full-footer" style="padding:16px 20px;border-top:1px solid var(--border);">
+        ${_mostrarPanelEnvio ? `<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;background:var(--panel2);">
+          <label style="display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;">
+            <span style="font-size:12.5px;font-weight:700;color:var(--text2);">🚚 Agregar costo de envío</span>
+            <input type="checkbox" id="pedido-envio-toggle" ${_pedidoEnvioAdmin.activo ? 'checked' : ''} onchange="_pedidoToggleEnvio(this.checked)" style="width:17px;height:17px;cursor:pointer;">
+          </label>
+          ${_pedidoEnvioAdmin.activo ? `<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+            <select id="pedido-envio-tipo" onchange="_pedidoCambiarTipoEnvio(this.value)" style="flex:1;min-width:150px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px;background:var(--panel);color:var(--text);">
+              ${['Envío a domicilio', 'Retiro en sucursal', 'Envío por transporte', 'Envío rápido (CABA)', 'Financiamiento'].map(t => `<option value="${escHtml(t)}" ${_pedidoEnvioAdmin.tipo === t ? 'selected' : ''}>${escHtml(t)}</option>`).join('')}
+            </select>
+            <input type="text" inputmode="numeric" id="pedido-envio-costo" placeholder="Monto, ej: 2500" value="${escHtml(String(_pedidoEnvioAdmin.costo || ''))}" onblur="_pedidoCommitCostoEnvio(this.value)" onkeydown="if(event.key==='Enter')this.blur()" style="width:130px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px;background:var(--panel);color:var(--text);">
+          </div>` : ''}
+        </div>` : ''}
+        ${_mostrarResumenEnvio ? `<div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--text2);margin-bottom:6px;">
+          <span>Envío (${escHtml(_pedidoEnvioAdmin.tipo)})</span>
+          <span style="display:flex;align-items:center;gap:7px;">
+            ${fmtMoney(_envioMontoActual)}
+            <button onclick="_pedidoEditarEnvio()" title="Editar envío" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:0;line-height:1;">✏️</button>
+          </span>
+        </div>` : ''}
         ${(!_esPresu || _pedidoFullMostrarTotal) ? `<div style="display:flex;align-items:center;justify-content:space-between;font-size:16px;font-weight:800;color:var(--text);margin-bottom:12px;">
-          <span>Total</span><span>${document.getElementById('carrito-total')?.textContent || ''}</span>
+          <span>Total</span><span>${fmtMoney(calcularTotal() + _envioMontoActual)}</span>
         </div>` : ''}
         <button id="btn-descargar-pedido-pdf" onclick="descargarPedidoPDFConFotos()" style="
           width:100%;background:var(--green,#0ea968);color:#fff;border:none;border-radius:10px;
@@ -4690,6 +4724,34 @@ window._pedidoToggleMostrarFormaPago = (mostrar) => {
 };
 window._pedidoCambiarOrden = (orden) => {
   _pedidoFullOrden = orden;
+  abrirVistaCompletaPedido(true);
+};
+// Envío (solo admin, solo modo "Pedido") — mismo mecanismo de "commit al confirmar"
+// que usa el CRM: el tipo y el toggle vuelven a armar la vista al toque, el monto
+// recién al perder el foco o apretar Enter. Apenas se carga un monto válido, el
+// panel se colapsa solo en un resumen de una línea (para la captura al cliente);
+// el ✏️ del resumen lo reabre si hay que corregir algo.
+window._pedidoToggleEnvio = (activo) => {
+  if (!esAdminCatalogo()) return;
+  _pedidoEnvioAdmin.activo = activo;
+  _pedidoEnvioAdmin.editando = activo; // al activar entra en modo edición; al desactivar no hay nada que mostrar
+  abrirVistaCompletaPedido(true);
+};
+window._pedidoCambiarTipoEnvio = (tipo) => {
+  if (!esAdminCatalogo()) return;
+  _pedidoEnvioAdmin.tipo = tipo;
+  abrirVistaCompletaPedido(true);
+};
+window._pedidoCommitCostoEnvio = (v) => {
+  if (!esAdminCatalogo()) return;
+  const num = parseFloat(String(v || '').replace(/[^0-9.]/g, '')) || 0;
+  _pedidoEnvioAdmin.costo = num || '';
+  if (num > 0) _pedidoEnvioAdmin.editando = false; // monto cargado → colapsar el panel
+  abrirVistaCompletaPedido(true);
+};
+window._pedidoEditarEnvio = () => {
+  if (!esAdminCatalogo()) return;
+  _pedidoEnvioAdmin.editando = true;
   abrirVistaCompletaPedido(true);
 };
 
@@ -4905,6 +4967,7 @@ window.descargarPedidoPDFConFotos = async () => {
     const _esPresu = esAdminCatalogo() && _pedidoFullModo === 'presupuesto';
     const mostrarMedioPago = _adminVistaPrecio === 'normal' && (!_esPresu || _pedidoFullMostrarFormaPago);
     const filaAlto = mostrarMedioPago ? 39 : 31;
+    const _envioMontoPDF = (esAdminCatalogo() && !_esPresu && _pedidoEnvioAdmin.activo) ? (parseFloat(_pedidoEnvioAdmin.costo) || 0) : 0;
     let y = margin;
 
     if (_esPresu) {
@@ -4999,14 +5062,20 @@ window.descargarPedidoPDFConFotos = async () => {
     }
 
     if (!_esPresu || _pedidoFullMostrarTotal) {
-      if (y + 14 > pageH - margin) { doc.addPage(); y = margin; }
+      if (y + (_envioMontoPDF > 0 ? 22 : 14) > pageH - margin) { doc.addPage(); y = margin; }
       y += 4;
+      if (_envioMontoPDF > 0) {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(80, 90, 110);
+        doc.text(`Envío (${_pedidoEnvioAdmin.tipo})`, margin, y);
+        doc.text(fmtMoney(_envioMontoPDF), pageW - margin, y, { align: 'right' });
+        y += 7;
+      }
       doc.setDrawColor(15, 23, 42); doc.setLineWidth(0.4);
       doc.line(margin, y, pageW - margin, y);
       y += 8;
       doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(15, 23, 42);
       doc.text('Total', margin, y);
-      doc.text(document.getElementById('carrito-total')?.textContent || '', pageW - margin, y, { align: 'right' });
+      doc.text(fmtMoney(calcularTotal() + _envioMontoPDF), pageW - margin, y, { align: 'right' });
     }
 
     doc.save(_esPresu ? 'Presupuesto_Dentalab.pdf' : 'Pedido_Dentalab.pdf');
