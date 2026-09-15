@@ -3050,9 +3050,13 @@ window.adminSubirFotoProducto = async function(sku) {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
-  input.onchange = () => {
-    const file = input.files[0];
-    if (file) _subirFotoAlProducto(sku, file, false);
+  input.multiple = true; // se pueden elegir varias fotos juntas en el selector (Ctrl/Cmd+clic o arrastrando la selección)
+  input.onchange = async () => {
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+    for (const file of files) {
+      await _subirFotoAlProducto(sku, file, true); // silencioso=true: muestra un toast por foto con el conteo acumulado ("2 en total", "3 en total"...)
+    }
   };
   input.click();
 };
