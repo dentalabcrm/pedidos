@@ -2461,6 +2461,15 @@ window.guardarTextosCatalogo = async function() {
 let _modoSeleccionFotos = false;
 let _fotosSeleccionadas = new Set();
 
+// ── Selección múltiple de PRODUCTOS para agregarles una foto a cada uno, todos de
+// un saque (solo admin) — la inversa del modo de borrado de arriba: en vez de tildar
+// fotos existentes para eliminarlas, se tildan productos (con o sin foto todavía) y
+// después se eligen tantos archivos como productos tildados. El archivo N se asigna
+// al producto N ordenando ambas listas por SKU, para que el orden sea siempre
+// predecible — y antes de subir nada se muestra esa asignación para confirmarla. ──
+let _modoAgregarFotos = false;
+let _productosSeleccionadosAgregar = new Set();
+
 // ── Asignar un mismo manual ya subido a varios productos a la vez (solo admin) ──
 // Se dispara desde la ficha ampliada, junto a un manual ya cargado ("🔗 A otros productos").
 let _modoAsignarManual = false;
@@ -2470,6 +2479,7 @@ let _skusAsignarManual = new Set();
 
 window.toggleModoSeleccionFotos = function() {
   if (_modoAsignarManual) cancelarAsignarManual();
+  if (_modoAgregarFotos) toggleModoAgregarFotos();
   _modoSeleccionFotos = !_modoSeleccionFotos;
   if (!_modoSeleccionFotos) _fotosSeleccionadas.clear();
   const btn = document.getElementById('btn-modo-seleccion-fotos');
@@ -2487,19 +2497,53 @@ window.toggleSeleccionFoto = function(sku) {
   _refrescarVistaAdmin();
 };
 
+window.toggleModoAgregarFotos = function() {
+  if (_modoAsignarManual) cancelarAsignarManual();
+  if (_modoSeleccionFotos) toggleModoSeleccionFotos();
+  _modoAgregarFotos = !_modoAgregarFotos;
+  if (!_modoAgregarFotos) _productosSeleccionadosAgregar.clear();
+  const btn = document.getElementById('btn-modo-agregar-fotos');
+  if (btn) {
+    btn.textContent = _modoAgregarFotos ? '✕ Cancelar selección' : '☑️ Seleccionar productos para agregar fotos';
+    btn.style.background = _modoAgregarFotos ? '#0ea968' : 'var(--panel2)';
+    btn.style.color = _modoAgregarFotos ? '#fff' : 'var(--text)';
+  }
+  _refrescarVistaAdmin();
+};
+
+window.toggleSeleccionProductoAgregar = function(sku) {
+  if (_productosSeleccionadosAgregar.has(sku)) _productosSeleccionadosAgregar.delete(sku);
+  else _productosSeleccionadosAgregar.add(sku);
+  _refrescarVistaAdmin();
+};
+
 function _renderBarraSeleccionFotos() {
   document.getElementById('barra-seleccion-fotos')?.remove();
-  if (!_modoSeleccionFotos || !_fotosSeleccionadas.size) return;
-  const barra = document.createElement('div');
-  barra.id = 'barra-seleccion-fotos';
-  barra.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#1e293b;padding:12px 16px;display:flex;align-items:center;justify-content:center;gap:14px;box-shadow:0 -4px 20px rgba(0,0,0,.25);';
-  barra.innerHTML = `
-    <span style="color:#fff;font-size:13.5px;font-weight:700;">${_fotosSeleccionadas.size} foto${_fotosSeleccionadas.size === 1 ? '' : 's'} seleccionada${_fotosSeleccionadas.size === 1 ? '' : 's'}</span>
-    <button id="btn-borrar-seleccion" style="background:#dc2626;border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">🗑️ Borrar seleccionadas</button>
-    <button onclick="toggleModoSeleccionFotos()" style="background:none;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Cancelar</button>
-  `;
-  document.body.appendChild(barra);
-  barra.querySelector('#btn-borrar-seleccion').onclick = adminBorrarFotosSeleccionadas;
+  document.getElementById('barra-agregar-fotos')?.remove();
+  if (_modoSeleccionFotos && _fotosSeleccionadas.size) {
+    const barra = document.createElement('div');
+    barra.id = 'barra-seleccion-fotos';
+    barra.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#1e293b;padding:12px 16px;display:flex;align-items:center;justify-content:center;gap:14px;box-shadow:0 -4px 20px rgba(0,0,0,.25);';
+    barra.innerHTML = `
+      <span style="color:#fff;font-size:13.5px;font-weight:700;">${_fotosSeleccionadas.size} foto${_fotosSeleccionadas.size === 1 ? '' : 's'} seleccionada${_fotosSeleccionadas.size === 1 ? '' : 's'}</span>
+      <button id="btn-borrar-seleccion" style="background:#dc2626;border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">🗑️ Borrar seleccionadas</button>
+      <button onclick="toggleModoSeleccionFotos()" style="background:none;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Cancelar</button>
+    `;
+    document.body.appendChild(barra);
+    barra.querySelector('#btn-borrar-seleccion').onclick = adminBorrarFotosSeleccionadas;
+  }
+  if (_modoAgregarFotos && _productosSeleccionadosAgregar.size) {
+    const barra = document.createElement('div');
+    barra.id = 'barra-agregar-fotos';
+    barra.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#1e293b;padding:12px 16px;display:flex;align-items:center;justify-content:center;gap:14px;box-shadow:0 -4px 20px rgba(0,0,0,.25);';
+    barra.innerHTML = `
+      <span style="color:#fff;font-size:13.5px;font-weight:700;">${_productosSeleccionadosAgregar.size} producto${_productosSeleccionadosAgregar.size === 1 ? '' : 's'} seleccionado${_productosSeleccionadosAgregar.size === 1 ? '' : 's'}</span>
+      <button id="btn-agregar-seleccion" style="background:#0ea968;border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">📷 Elegir fotos</button>
+      <button onclick="toggleModoAgregarFotos()" style="background:none;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Cancelar</button>
+    `;
+    document.body.appendChild(barra);
+    barra.querySelector('#btn-agregar-seleccion').onclick = adminAgregarFotosSeleccionadas;
+  }
 }
 
 window.adminBorrarFotosSeleccionadas = async function() {
@@ -2542,6 +2586,62 @@ window.adminBorrarFotosSeleccionadas = async function() {
   }
 };
 
+window.adminAgregarFotosSeleccionadas = async function() {
+  const skus = Array.from(_productosSeleccionadosAgregar).sort(); // orden predecible: alfabético por SKU
+  if (!skus.length) return;
+
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.multiple = true;
+  input.onchange = async () => {
+    const files = Array.from(input.files || []).sort((a, b) => a.name.localeCompare(b.name)); // mismo criterio: alfabético por nombre de archivo
+    if (!files.length) return;
+
+    // Arma la asignación 1 a 1 (archivo N → producto N) y la muestra para confirmar
+    // antes de subir nada — así el admin puede frenar si el orden no es el esperado.
+    const n = Math.min(skus.length, files.length);
+    const pares = [];
+    for (let i = 0; i < n; i++) {
+      const itCat = catalogoBySku.get(skus[i]);
+      pares.push({ sku: skus[i], nombre: itCat?.n || skus[i], file: files[i] });
+    }
+    let mensaje = `Se va a asignar así (${n} foto${n === 1 ? '' : 's'}):\n\n`;
+    mensaje += pares.map(p => `${p.file.name}  →  ${p.sku} · ${p.nombre}`).join('\n');
+    if (skus.length !== files.length) {
+      mensaje += `\n\n⚠️ Elegiste ${files.length} foto${files.length === 1 ? '' : 's'} para ${skus.length} producto${skus.length === 1 ? '' : 's'} seleccionado${skus.length === 1 ? '' : 's'}. Solo se van a asignar los primeros ${n} pares de la lista de arriba.`;
+    }
+    mensaje += `\n\n¿Confirmás?`;
+    if (!confirm(mensaje)) return;
+
+    try {
+      await _pedirTokenEscrituraDrive();
+    } catch (e) {
+      alert('No se pudo autorizar el acceso a Drive: ' + e.message);
+      return;
+    }
+    const barra = document.getElementById('barra-agregar-fotos');
+    const btn = barra?.querySelector('#btn-agregar-seleccion');
+    let ok = 0, fallidas = 0;
+    for (let i = 0; i < pares.length; i++) {
+      if (btn) btn.textContent = `Subiendo… (${i + 1}/${pares.length})`;
+      const subida = await _subirFotoAlProducto(pares[i].sku, pares[i].file, true);
+      if (subida) ok++; else fallidas++;
+    }
+    alert(`Listo. Subidas: ${ok}${fallidas ? `, no se pudieron subir: ${fallidas}` : ''}.`);
+    _modoAgregarFotos = false;
+    _productosSeleccionadosAgregar.clear();
+    const boton = document.getElementById('btn-modo-agregar-fotos');
+    if (boton) {
+      boton.textContent = '☑️ Seleccionar productos para agregar fotos';
+      boton.style.background = 'var(--panel2)';
+      boton.style.color = 'var(--text)';
+    }
+    _refrescarVistaAdmin();
+  };
+  input.click();
+};
+
 // ══════════════════════════════════════════════════════
 //  Asignar un manual ya subido a otros productos que lo comparten (sin volver a subirlo)
 // ══════════════════════════════════════════════════════
@@ -2549,7 +2649,8 @@ window.iniciarAsignarManualAOtros = function(sku, idx) {
   const itCat = catalogoBySku.get(sku);
   const manual = itCat?.manuales?.[idx];
   if (!manual) return;
-  if (_modoSeleccionFotos) toggleModoSeleccionFotos(); // los dos modos de selección no conviven
+  if (_modoSeleccionFotos) toggleModoSeleccionFotos(); // los modos de selección no conviven
+  if (_modoAgregarFotos) toggleModoAgregarFotos();
   _manualParaAsignar = manual;
   _skuOrigenManual = sku;
   _skusAsignarManual = new Set();
@@ -4150,6 +4251,8 @@ function renderResultados(){
           : `<div style="display:flex;align-items:center;margin-right:4px;"><input type="checkbox" ${_skusAsignarManual.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSkuAsignarManual('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>`)
         : _modoSeleccionFotos
         ? (it.img ? `<div style="display:flex;align-items:center;margin-right:4px;"><input type="checkbox" ${_fotosSeleccionadas.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionFoto('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>` : '')
+        : _modoAgregarFotos
+        ? `<div style="display:flex;align-items:center;margin-right:4px;"><input type="checkbox" ${_productosSeleccionadosAgregar.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionProductoAgregar('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>`
         : `<div style="display:flex;flex-direction:column;gap:3px;margin-right:4px;">
             <button onclick="event.stopPropagation(); adminSubirFotoProducto('${escHtml(it.s)}')" title="Agregar/cambiar foto" style="background:none;border:none;font-size:13px;cursor:pointer;padding:1px;line-height:1;">✏️</button>
             ${it.img ? `<button onclick="event.stopPropagation(); adminBorrarFotoProducto('${escHtml(it.s)}')" title="Borrar foto" style="background:none;border:none;font-size:13px;cursor:pointer;padding:1px;line-height:1;">🗑️</button>` : ''}
@@ -4195,6 +4298,8 @@ function renderResultados(){
         : `<div class="prod-card-admin"><input type="checkbox" ${_skusAsignarManual.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSkuAsignarManual('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>`)
       : _modoSeleccionFotos
       ? (it.img ? `<div class="prod-card-admin"><input type="checkbox" ${_fotosSeleccionadas.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionFoto('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>` : '')
+      : _modoAgregarFotos
+      ? `<div class="prod-card-admin"><input type="checkbox" ${_productosSeleccionadosAgregar.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionProductoAgregar('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>`
       : `<div class="prod-card-admin">
           <button onclick="event.stopPropagation(); adminSubirFotoProducto('${escHtml(it.s)}')" title="${imgsArr.length ? 'Agregar otra foto' : 'Agregar foto'} (también podés arrastrarla acá o pegarla con Ctrl+V)">✏️</button>
           ${imgsArr.length ? `<button onclick="event.stopPropagation(); adminBorrarFotoProducto('${escHtml(it.s)}')" title="Borrar foto${imgsArr.length > 1 ? ' (elegir cuál)' : ''}">🗑️</button>` : ''}
@@ -4488,6 +4593,8 @@ function renderCarrito(){
         : `<div class="prod-foto prod-foto-vacia" style="cursor:pointer;" title="Buscar foto en Drive" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirFotoProducto(this)">🦷</div>`;
       const adminIconsCarrito = !esAdminCatalogo() ? '' : _modoSeleccionFotos
         ? (it.img ? `<div style="display:flex;align-items:center;margin-right:4px;"><input type="checkbox" ${_fotosSeleccionadas.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionFoto('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>` : '')
+        : _modoAgregarFotos
+        ? `<div style="display:flex;align-items:center;margin-right:4px;"><input type="checkbox" ${_productosSeleccionadosAgregar.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionProductoAgregar('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>`
         : `<div style="display:flex;flex-direction:column;gap:3px;margin-right:4px;">
             <button onclick="event.stopPropagation(); adminSubirFotoProducto('${escHtml(it.s)}')" title="Agregar/cambiar foto" style="background:none;border:none;font-size:13px;cursor:pointer;padding:1px;line-height:1;">✏️</button>
             ${it.img ? `<button onclick="event.stopPropagation(); adminBorrarFotoProducto('${escHtml(it.s)}')" title="Borrar foto" style="background:none;border:none;font-size:13px;cursor:pointer;padding:1px;line-height:1;">🗑️</button>` : ''}
@@ -5604,6 +5711,7 @@ function renderPrincipal(){
             <label class="chk-ofertas"><input type="checkbox" id="chk-ofertas" onchange="onFiltroChange()"> Solo en ofertas</label>
             <label class="chk-ofertas"><input type="checkbox" id="chk-stock" onchange="onFiltroChange()"> Solo en stock</label>
             ${esAdminCatalogo() ? `<button id="btn-modo-seleccion-fotos" onclick="toggleModoSeleccionFotos()" style="background:${_modoSeleccionFotos ? '#dc2626' : 'var(--panel2)'};color:${_modoSeleccionFotos ? '#fff' : 'var(--text)'};border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">${_modoSeleccionFotos ? '✕ Cancelar selección' : '☑️ Seleccionar fotos para borrar'}</button>` : ''}
+            ${esAdminCatalogo() ? `<button id="btn-modo-agregar-fotos" onclick="toggleModoAgregarFotos()" style="background:${_modoAgregarFotos ? '#0ea968' : 'var(--panel2)'};color:${_modoAgregarFotos ? '#fff' : 'var(--text)'};border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">${_modoAgregarFotos ? '✕ Cancelar selección' : '☑️ Seleccionar productos para agregar fotos'}</button>` : ''}
           </div>
           <div class="resultados" id="resultados"></div>
         </div>
