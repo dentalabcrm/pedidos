@@ -1857,7 +1857,10 @@ window.abrirZoomProducto = (sku) => {
           <div>
             <div style="font-size:26px;font-weight:800;color:#0f172a;">${it.cp ? '<span style="font-size:12px;color:#8592a6;font-style:italic;font-weight:500;">Consultar precio</span>' : fmtMoney(precio)}</div>
             ${(!it.cp && listaActiva === 'p1' && _adminVistaPrecio === 'normal') ? `<div style="font-size:11px;font-weight:700;color:#0ea968;margin-top:4px;">✓ Precios ya con 10% off</div>` : ''}
-            ${(!it.cp && _adminVistaPrecio === 'normal') ? `<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px;">${listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago'}</div>` : ''}
+            ${(!it.cp && _adminVistaPrecio === 'normal') ? `<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span>${listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago'}</span>
+              ${(listaActiva === 'p2' && precio && !it.st && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}', '${encodeURIComponent(it.s)}')">💳 Ver cuotas</button>` : ''}
+            </div>` : ''}
           </div>
           ${qtyEnCarrito > 0
             ? `<div class="qty-stepper prod-qty" style="transform:scale(1.15);transform-origin:right;">
@@ -2302,7 +2305,7 @@ function _pwEscucharFinanciamiento(){
 // ── Buscar la foto de un producto en Drive cuando todavía no está en caché ──
 // (mismo mecanismo que usa el CRM en la Lista de Precios: SKU exacto → raíz del SKU → nombre)
 const GDRIVE_FOLDER_ID = '1O7kDXI62BB7iZEjOav2kG-EwKLY-KHpP';
-const GDRIVE_API_KEY_DEFAULT = 'AIzaSyCxPFIMKITtq71XWV0q0fjq6qZUTuZzu6Y';
+const GDRIVE_API_KEY_DEFAULT = 'AIzaSyAekXeTlCRYrLfBCPRctA5Am9UnOWWkOmw';
 const GDRIVE_EXTS = ['jpg','jpeg','png','webp'];
 const SKU_RAIZ_OVERRIDE = {
   '1512-A1': '1512', '1512-A2': '1512', '1512-A3': '1512', '1512-A35': '1512',
@@ -2723,6 +2726,24 @@ let _bannersCarrusel = [];
 let _bannerActual = 0;
 let _bannerTimer = null;
 
+// Mismo mecanismo de reintento con espera creciente que usan las fotos de producto
+// (manejarErrorFotoProducto): cuando Google frena varios pedidos de miniaturas de
+// golpe, en vez de dejar el banner en blanco para siempre, reintenta un par de veces.
+window._manejarErrorBanner = function(imgEl) {
+  const intentos = parseInt(imgEl.dataset.reintentos || '0', 10);
+  if (intentos < 3) {
+    imgEl.dataset.reintentos = String(intentos + 1);
+    if (!imgEl.dataset.srcBase) imgEl.dataset.srcBase = imgEl.src;
+    const srcBase = imgEl.dataset.srcBase;
+    const espera = 700 + intentos * 900 + Math.random() * 500;
+    setTimeout(() => {
+      const sep = srcBase.includes('?') ? '&' : '?';
+      imgEl.src = srcBase + sep + '_r=' + Date.now();
+    }, espera);
+  }
+  // Agotados los reintentos: se deja el slide en blanco en vez de romper el carrusel.
+};
+
 async function _cargarCarruselBanners() {
   try {
     const snap = await db.ref('dentalab/banners_carousel').once('value');
@@ -2758,7 +2779,7 @@ function _renderCarruselBanners() {
   cont.innerHTML = `
     <div class="carrusel-banners">
       <div class="carrusel-track" id="carrusel-track" style="width:${_bannersCarrusel.length * 100}%;">
-        ${_bannersCarrusel.map(b => `<div class="carrusel-slide" style="width:${100 / _bannersCarrusel.length}%;"><img src="https://drive.google.com/thumbnail?id=${b.fileId}&sz=w1400" loading="lazy" alt=""></div>`).join('')}
+        ${_bannersCarrusel.map(b => `<div class="carrusel-slide" style="width:${100 / _bannersCarrusel.length}%;"><img src="https://drive.google.com/thumbnail?id=${b.fileId}&sz=w1400" loading="lazy" alt="" onerror="_manejarErrorBanner(this)"></div>`).join('')}
       </div>
       ${_bannersCarrusel.length > 1 ? `
       <button class="carrusel-arrow left" onclick="_moverCarrusel(-1)">‹</button>
