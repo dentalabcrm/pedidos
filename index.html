@@ -505,6 +505,11 @@
   html[data-theme="dark"] .prod-stock-admin{
     color:#fff;background:#38a5e626;border-color:#38a5e655;
   }
+  /* Modal "Tu pedido"/"Presupuesto": el botón "Quitar" del admin queda oculto hasta que
+     pasás el mouse por la columna del precio de esa fila — para el cliente no aplica,
+     ahí el botón se ve siempre (en celular no hay hover para revelarlo). */
+  .ci-precio-col-hover-btn{ opacity:0; pointer-events:none; transition:opacity .12s; }
+  .ci-precio-col-hover:hover .ci-precio-col-hover-btn{ opacity:1; pointer-events:auto; }
   .prod-restock-badge{
     display:inline-flex;align-items:center;font-size:10px;font-weight:800;color:var(--blue);
     background:rgba(2,132,199,.12);border:1px solid rgba(2,132,199,.4);border-radius:5px;
@@ -4773,9 +4778,9 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
           <div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${stockHtml}${medioPagoBadge}</div>
           ${medioPagoDetalle}
         </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+        <div class="${esAdmin ? 'ci-precio-col-hover' : ''}" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
           <div style="font-size:16px;font-weight:800;color:var(--text);white-space:nowrap;">${fmtMoney(precio * qty)}</div>
-          <button onclick="quitarDelPedidoCompleto('${escHtml(sku)}')" title="Quitar del pedido" style="
+          <button onclick="quitarDelPedidoCompleto('${escHtml(sku)}')" title="Quitar del pedido" class="${esAdmin ? 'ci-precio-col-hover-btn' : ''}" style="
             background:none;border:1px solid var(--border);border-radius:8px;color:var(--red,#dc2626);
             font-size:12px;padding:4px 8px;cursor:pointer;white-space:nowrap;
           ">🗑 Quitar</button>
