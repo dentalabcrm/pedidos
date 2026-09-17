@@ -7030,8 +7030,10 @@ document.addEventListener('keydown', (e) => {
 
   if (e.key === 'Enter') {
     e.preventDefault();
-    if (_navIdxSeleccionado < 0 || !tarjetas[_navIdxSeleccionado]) { _navSeleccionar(0); return; } // primer Enter: solo selecciona, no agrega todavía
-    const sku = tarjetas[_navIdxSeleccionado].dataset.sku;
+    if (_navIdxSeleccionado < 0 || !tarjetas[_navIdxSeleccionado]) { _navSeleccionar(0); } // si no había nada seleccionado, se selecciona el primero y seguimos abajo para agregarlo de una
+    const idx = _navIdxSeleccionado;
+    if (idx < 0 || !tarjetas[idx]) return;
+    const sku = tarjetas[idx].dataset.sku;
     if (!sku) return;
     const yaEnCarrito = (carrito.get(sku) || 0) > 0;
     if (yaEnCarrito) {
