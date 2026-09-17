@@ -774,6 +774,7 @@
       <button class="btn-instalar" id="btn-qr-app" onclick="abrirModalQR()" title="Instalar en tu celular escaneando un QR" style="display:none;">📷 QR</button>
       <button class="btn-instalar" id="btn-historial-pedidos" onclick="abrirHistorialPedidos()" title="Ver mis pedidos anteriores">🕐 Mis pedidos</button>
       <button class="btn-tema" id="btn-tema" onclick="toggleTemaOscuro()" title="Cambiar a modo nocturno">🌙</button>
+      <span id="admin-presencia-badge" title="Dispositivos con esta página abierta ahora mismo" style="display:none;background:var(--panel2);border:1px solid var(--border);border-radius:20px;padding:6px 12px;font-size:12.5px;font-weight:700;color:var(--text2);white-space:nowrap;">👀 …</span>
     </div>
     <!-- ══ Modal: cómo instalar la app ══ -->
     <div id="instalar-backdrop" onclick="if(event.target===this)cerrarModalInstalar()">
@@ -883,6 +884,21 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const auth = firebase.auth();
 const app = document.getElementById('app');
+
+// ── Presencia: cada pestaña/dispositivo que tiene la página abierta se registra acá
+// mientras dure la conexión, y se borra solo (onDisconnect) al cerrarla o perder la
+// conexión — así el admin puede ver cuánta gente tiene el catálogo abierto en vivo, sin
+// guardar nada permanente ni identificar a nadie. Corre para todos los visitantes (no
+// solo admin), porque hace falta contar a los clientes también, no solo a quien mira.
+try {
+  const _presenciaRef = db.ref('dentalab/presencia').push();
+  db.ref('.info/connected').on('value', (snap) => {
+    if (snap.val() === true) {
+      _presenciaRef.onDisconnect().remove();
+      _presenciaRef.set(Date.now());
+    }
+  });
+} catch (e) { /* si falla, no pasa nada — es solo un contador informativo */ }
 
 let catalogo = [];
 let catalogoBySku = new Map();
@@ -2404,7 +2420,7 @@ window._logoAdminClickCount = function() {
     _abrirLoginAdminModal();
   }
 };
-auth.onAuthStateChanged(() => { _refrescarVistaAdmin(); });
+auth.onAuthStateChanged(() => { _refrescarVistaAdmin(); _actualizarContadorPresenciaAdmin(); });
 function _refrescarVistaAdmin() {
   if (typeof renderResultados === 'function') renderResultados();
   if (typeof renderCarrito === 'function') renderCarrito();
@@ -2412,6 +2428,29 @@ function _refrescarVistaAdmin() {
   _renderBarraAsignarManual();
   if (typeof _renderCarruselBanners === 'function') _renderCarruselBanners();
   if (typeof _renderCarruselMarcas === 'function') _renderCarruselMarcas();
+}
+
+// ── Contador de "gente con la página abierta ahora" — solo lo ve el admin. Cuenta las
+// entradas vivas de dentalab/presencia (una por cada pestaña/dispositivo conectado, de
+// cualquier visitante, no solo admins). Se prende/apaga el listener según entra o sale
+// del modo admin, para no dejar una conexión de Firebase abierta de más para el resto. ──
+let _presenciaListenerActivo = false;
+function _actualizarContadorPresenciaAdmin() {
+  const badge = document.getElementById('admin-presencia-badge');
+  if (!badge) return;
+  const esAdmin = esAdminCatalogo();
+  if (esAdmin && !_presenciaListenerActivo) {
+    _presenciaListenerActivo = true;
+    db.ref('dentalab/presencia').on('value', (snap) => {
+      const n = snap.numChildren();
+      const b = document.getElementById('admin-presencia-badge');
+      if (b) { b.style.display = ''; b.textContent = `👀 ${n} ${n === 1 ? 'persona' : 'personas'} ahora`; }
+    });
+  } else if (!esAdmin && _presenciaListenerActivo) {
+    _presenciaListenerActivo = false;
+    db.ref('dentalab/presencia').off('value');
+    badge.style.display = 'none';
+  }
 }
 
 // ── Editor de textos informativos (retiro, envío, formas de pago) — solo admin ──
