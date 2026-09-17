@@ -68,6 +68,7 @@
   html[data-theme="dark"] .prod-row-en-carrito{background:#173049;}
   html[data-theme="dark"] .prod-row-en-carrito:hover{background:#1c3a5a;}
   html[data-theme="dark"] .prod-card-en-carrito{background:#173049;}
+  html[data-theme="dark"] .prod-nav-selected{box-shadow:0 0 0 5px rgba(56,165,230,.22);}
   @media (hover: hover) and (pointer: fine) {
     html[data-theme="dark"] .prod-row-clickeable:hover{background:#1e3a5f;border-color:var(--blue);}
     html[data-theme="dark"] .prod-card-clickeable:active{background:#1c3a5a;}
@@ -406,6 +407,9 @@
     .prod-card-clickeable:active{background:#bfdbfe;}
   }
   .prod-card-en-carrito{background:#dbeafe;border-color:var(--blue);border-width:2px;}
+  /* Tarjeta "seleccionada" al navegar con las flechas del teclado — un borde bien visible
+     que no depende del fondo (así se ve igual arriba de "en carrito", "agotado", etc.). */
+  .prod-nav-selected{outline:3px solid var(--blue);outline-offset:2px;box-shadow:0 0 0 5px rgba(2,132,199,.15);}
   .prod-card-agotado{background:#fef2f2;border-color:#fecaca;}
   .prod-card-agotado .prod-nombre{text-decoration:line-through;text-decoration-color:var(--text3);color:var(--text3);}
   .prod-card-agotado .prod-precio{text-decoration:line-through;text-decoration-color:var(--text3);color:var(--text3);}
@@ -1111,6 +1115,12 @@ let filtroCategoria = 'todas';
 let filtroSubgrupo = 'todas';
 // Preferencia de vista del cliente (grilla con fotos grandes, o lista compacta) — se
 // guarda en su navegador, cada visitante puede elegir la suya sin afectar a los demás.
+// Estado de la navegación por teclado (flechas + Enter) sobre el catálogo — declarado
+// arriba junto con el resto del estado global para que esté listo desde el arranque,
+// sin depender del orden en que se ejecuten los `<script>` más abajo.
+let _navIdxSeleccionado = -1;
+let _navAutoDeseleccionId = null;
+
 // Si todavía no eligió ninguna: arranca en "grilla" en PC (se aprovecha mejor el ancho de
 // pantalla) y en "lista" en mobile (más compacto, se ve más catálogo sin scrollear tanto).
 let vistaProductos = (() => {
@@ -4208,6 +4218,8 @@ window.seleccionarSubgrupoTab = (sg) => {
 function renderResultados(){
   const cont = document.getElementById('resultados');
   if (!cont) return;
+  _navIdxSeleccionado = -1; // la grilla se vuelve a dibujar entera: la selección por teclado anterior ya no aplica
+  clearTimeout(_navAutoDeseleccionId);
   cont.classList.toggle('vista-lista', vistaProductos === 'lista');
   renderCatTabs();
   renderVistaToggle();
@@ -5713,7 +5725,7 @@ function renderPrincipal(){
       <h1><span class="paso-badge">2</span>Buscar productos</h1>
       <div class="buscador-row">
         <div class="buscador-input-wrap">
-          <input type="text" id="input-busqueda" placeholder="Nombre o SKU… (o dejá vacío para ver todo el catálogo)" oninput="onBusquedaInput(this.value)" onkeydown="if(event.key==='Enter'){ event.preventDefault(); agregarSiguienteResultado(); } else if(event.key==='Tab' && event.shiftKey){ event.preventDefault(); deshacerUltimoAgregado(); }">
+          <input type="text" id="input-busqueda" placeholder="Nombre o SKU… (o dejá vacío para ver todo el catálogo)" oninput="onBusquedaInput(this.value)" onkeydown="if(event.key==='Enter'){ if(_navIdxSeleccionado < 0){ event.preventDefault(); agregarSiguienteResultado(); } /* si ya hay algo seleccionado con flechas, no se pisa: lo maneja el atajo de navegación */ } else if(event.key==='Tab' && event.shiftKey){ event.preventDefault(); deshacerUltimoAgregado(); }">
           <button type="button" id="btn-limpiar-busqueda" class="btn-limpiar-busqueda" onclick="limpiarBusqueda()" title="Borrar búsqueda" style="display:none;">✕</button>
         </div>
         <button class="btn-ir-final" onclick="irAlFinalDeLista()" title="Saltar al final de la lista">⬇ Ir al final</button>
@@ -6873,9 +6885,13 @@ if ('serviceWorker' in navigator) {
 document.addEventListener('keydown', (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.key !== 'Backspace') return;
   // No interceptar si el foco está en un campo de texto donde Ctrl+Backspace se usa para
-  // borrar la palabra anterior (comportamiento nativo del navegador).
-  const tag = (document.activeElement && document.activeElement.tagName) || '';
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || (document.activeElement && document.activeElement.isContentEditable)) return;
+  // borrar la palabra anterior (comportamiento nativo del navegador) — excepto en el
+  // buscador de productos, donde también queremos que vacíe el carrito sin tener que
+  // hacer clic afuera primero (mismo criterio que los demás atajos de esta página).
+  const el = document.activeElement;
+  const tag = (el && el.tagName) || '';
+  const esBuscador = !!(el && el.id === 'input-busqueda');
+  if (!esBuscador && (tag === 'INPUT' || tag === 'TEXTAREA' || (el && el.isContentEditable))) return;
   if (typeof carrito === 'undefined' || !carrito.size) return;
   e.preventDefault();
   if (typeof confirmarVaciarCarrito === 'function') confirmarVaciarCarrito();
@@ -6911,6 +6927,115 @@ document.addEventListener('keydown', (e) => {
   e.preventDefault();
   buscador.focus();
   buscador.select();
+});
+
+// ══════════════════════════════════════════════════════
+//  Navegar el catálogo con las flechas del teclado (↑↓←→) + Enter para sumar al carrito
+//  — por ahora solo en modo admin.
+// ══════════════════════════════════════════════════════
+// Igual criterio de exclusión que Tab/Backspace de arriba: no hace nada si el foco está en
+// un campo de texto (así no se rompe el cursor del buscador ni de los inputs de cantidad)
+// ni si hay algún modal abierto encima. Mover la selección NO vuelve a dibujar la grilla —
+// solo saca la clase "prod-nav-selected" de la tarjeta anterior y se la pone a la nueva —
+// por eso responde al instante sin importar cuántos productos haya en pantalla.
+function _navTarjetas() {
+  return Array.from(document.querySelectorAll('#resultados > .prod-card, #resultados > .prod-row'));
+}
+
+// Cuántas columnas tiene la grilla en este momento (cambia solo según el ancho de
+// pantalla — leyendo el grid ya calculado por el navegador no hace falta adivinar ni
+// mantener el número a mano). En vista lista siempre es 1 columna.
+function _navColumnas() {
+  if (vistaProductos === 'lista') return 1;
+  const cont = document.getElementById('resultados');
+  if (!cont) return 1;
+  const valor = getComputedStyle(cont).gridTemplateColumns;
+  const cols = valor ? valor.trim().split(/\s+/).filter(Boolean).length : 1;
+  return cols > 0 ? cols : 1;
+}
+
+// Si pasa 1 segundo sin tocar una flecha ni Enter, se saca la selección sola — así no
+// queda un borde "pegado" en pantalla de algo que ya no se está mirando.
+function _navProgramarAutoDeseleccion() {
+  clearTimeout(_navAutoDeseleccionId);
+  _navAutoDeseleccionId = setTimeout(_navDeseleccionar, 1000);
+}
+
+function _navDeseleccionar() {
+  clearTimeout(_navAutoDeseleccionId);
+  const tarjetas = _navTarjetas();
+  if (_navIdxSeleccionado >= 0 && tarjetas[_navIdxSeleccionado]) {
+    tarjetas[_navIdxSeleccionado].classList.remove('prod-nav-selected');
+  }
+  _navIdxSeleccionado = -1;
+}
+
+function _navSeleccionar(idx) {
+  const tarjetas = _navTarjetas();
+  if (!tarjetas.length) { _navIdxSeleccionado = -1; return; }
+  idx = Math.max(0, Math.min(idx, tarjetas.length - 1));
+  if (_navIdxSeleccionado >= 0 && tarjetas[_navIdxSeleccionado]) {
+    tarjetas[_navIdxSeleccionado].classList.remove('prod-nav-selected');
+  }
+  _navIdxSeleccionado = idx;
+  tarjetas[idx].classList.add('prod-nav-selected');
+  tarjetas[idx].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  _navProgramarAutoDeseleccion();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (typeof esAdminCatalogo !== 'function' || !esAdminCatalogo()) return; // por ahora, solo admin
+  if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return; // no pisar otros atajos (Ctrl+C, etc.)
+  const el = document.activeElement;
+  const tag = (el && el.tagName) || '';
+  // El buscador es la única excepción: ahí también queremos que funcionen las flechas +
+  // Enter, para no tener que hacer clic afuera antes de poder navegar los resultados.
+  const esBuscador = !!(el && el.id === 'input-busqueda');
+  if ((tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) && !esBuscador) return;
+  // Mientras se escribe en el buscador, ← y → tienen que seguir moviendo el cursor del
+  // texto como siempre — recién se los apropia la navegación una vez que ya hay algo
+  // seleccionado con ↑/↓ (que en un input de una sola línea no hacen nada nativo, así
+  // que usarlas ahí no le saca ninguna función al buscador).
+  if (esBuscador && _navIdxSeleccionado < 0 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
+  const modalesAbiertos = '.pwfin-backdrop, #zoom-prod-backdrop, #pdf-pedido-drop-overlay, #admin-login-backdrop, #avisarme-backdrop, #gestor-fotos-backdrop, #historial-backdrop, #instalar-backdrop, #pedido-full-backdrop, #presu-backdrop, #qr-backdrop';
+  if (el && el.closest && el.closest(modalesAbiertos)) return;
+
+  const tarjetas = _navTarjetas();
+  if (!tarjetas.length) return;
+
+  if (e.key === 'Enter') {
+    // En el buscador, si todavía no se seleccionó nada con flechas, Enter sigue siendo el
+    // atajo propio de ahí ("agregar siguiente resultado") — no lo pisamos acá.
+    if (esBuscador && _navIdxSeleccionado < 0) return;
+    e.preventDefault();
+    if (_navIdxSeleccionado < 0 || !tarjetas[_navIdxSeleccionado]) { _navSeleccionar(0); return; } // primer Enter: solo selecciona, no agrega todavía
+    const sku = tarjetas[_navIdxSeleccionado].dataset.sku;
+    if (!sku) return;
+    const yaEnCarrito = (carrito.get(sku) || 0) > 0;
+    if (yaEnCarrito) {
+      // Ya estaba en el carrito (lo agregó un Enter anterior): un Enter más lo saca del
+      // pedido y deselecciona — el mismo resultado que hacer doble clic sobre la tarjeta
+      // con el mouse (un clic la agrega, el siguiente clic la saca).
+      if (typeof quitarDelCarrito === 'function') quitarDelCarrito(sku);
+      _navDeseleccionar();
+    } else {
+      if (typeof agregarAlCarrito === 'function') agregarAlCarrito(sku);
+      _navProgramarAutoDeseleccion(); // sigue seleccionada, pero reinicia el reloj de inactividad
+    }
+    return;
+  }
+
+  e.preventDefault();
+  if (_navIdxSeleccionado < 0) { _navSeleccionar(0); return; }
+
+  const cols = _navColumnas();
+  let nuevo = _navIdxSeleccionado;
+  if (e.key === 'ArrowRight') nuevo += 1;
+  else if (e.key === 'ArrowLeft') nuevo -= 1;
+  else if (e.key === 'ArrowDown') nuevo += cols;
+  else if (e.key === 'ArrowUp') nuevo -= cols;
+  _navSeleccionar(nuevo);
 });
 
 // Atajo de teclado: Shift + Retroceso, estando parado en el buscador, borra todo lo
@@ -6958,11 +7083,15 @@ document.addEventListener('keydown', (e) => {
   // el producto, para que nunca se termine escribiendo en el buscador (antes, si no se
   // encontraba un único resultado, la tecla se dejaba pasar y quedaba tipeada).
   e.preventDefault();
-  // Si el mouse no está sobre ningún producto, se usa el primer resultado que aparece en
-  // pantalla de la búsqueda actual (por SKU o por nombre) — mismo orden en que se listan,
-  // así el atajo funciona sin necesidad de mover el mouse hasta la tarjeta, sea cual sea
-  // la cantidad de resultados.
+  // Si el mouse no está sobre ningún producto, se usa el que esté seleccionado por
+  // teclado (flechas) en este momento; si tampoco hay eso, se cae al primer resultado que
+  // aparece en pantalla de la búsqueda actual (por SKU o por nombre) — mismo orden en que
+  // se listan, así el atajo funciona sin necesidad de mover el mouse ni las flechas.
   let skuObjetivo = _skuHoverAdmin;
+  if (!skuObjetivo && typeof _navIdxSeleccionado !== 'undefined' && _navIdxSeleccionado >= 0) {
+    const tarjetaSel = _navTarjetas()[_navIdxSeleccionado];
+    if (tarjetaSel) skuObjetivo = tarjetaSel.dataset.sku;
+  }
   let resultados = null;
   if (!skuObjetivo && typeof buscarProductos === 'function') {
     resultados = buscarProductos();
@@ -7007,6 +7136,10 @@ document.addEventListener('keydown', (e) => {
 // el otro recién había agregado.
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+  // Si hay un producto seleccionado por teclado (flechas), ese Enter ya lo maneja el atajo
+  // de navegación de arriba — no lo procesamos acá también, o se terminaría agregando o
+  // sacando el producto DOS veces (una por cada atajo) en el mismo Enter.
+  if (typeof _navIdxSeleccionado !== 'undefined' && _navIdxSeleccionado >= 0) return;
   const el = document.activeElement;
   const tag = (el && el.tagName) || '';
   if (el && el.id === 'input-busqueda') return;
