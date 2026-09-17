@@ -5159,6 +5159,18 @@ window.descargarPedidoPDFConFotos = async () => {
         return _pedidoFullOrden === 'precio_asc' ? subtotalA - subtotalB : subtotalB - subtotalA;
       });
     }
+
+    // Encabezado simple ("PRODUCTO" / "SUBTOTAL") para ordenar un poco la lista — mismos
+    // textos que ya usa el PDF de Presupuestos del CRM, alineados con el nombre y el
+    // precio de cada fila.
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(130, 140, 160);
+    doc.text('PRODUCTO', margin + fotoSize + 6, y);
+    doc.text('SUBTOTAL', pageW - margin, y, { align: 'right' });
+    y += 3;
+    doc.setDrawColor(210, 214, 224); doc.setLineWidth(0.3);
+    doc.line(margin, y, pageW - margin, y);
+    y += 6;
+
     for (const [sku, qty] of entradasCarritoPDF) {
       const it = catalogoBySku.get(sku);
       if (!it) continue;
@@ -6954,19 +6966,26 @@ function _navColumnas() {
   return cols > 0 ? cols : 1;
 }
 
-// Si pasa 1 segundo sin tocar una flecha ni Enter, se saca la selección sola — así no
+// Si pasan 5 segundos sin tocar una flecha ni Enter, se saca la selección sola — así no
 // queda un borde "pegado" en pantalla de algo que ya no se está mirando.
 function _navProgramarAutoDeseleccion() {
   clearTimeout(_navAutoDeseleccionId);
-  _navAutoDeseleccionId = setTimeout(_navDeseleccionar, 1000);
+  _navAutoDeseleccionId = setTimeout(_navDeseleccionar, 5000);
 }
 
 function _navDeseleccionar() {
-  clearTimeout(_navAutoDeseleccionId);
   const tarjetas = _navTarjetas();
-  if (_navIdxSeleccionado >= 0 && tarjetas[_navIdxSeleccionado]) {
-    tarjetas[_navIdxSeleccionado].classList.remove('prod-nav-selected');
+  const tarjetaActual = _navIdxSeleccionado >= 0 ? tarjetas[_navIdxSeleccionado] : null;
+  // Si justo en este momento se está escribiendo en el campo de cantidad de la tarjeta
+  // seleccionada (por ejemplo, con Shift+Q), no la deseleccionamos todavía — se pospone
+  // el reloj un segundo más, para no perder la selección a mitad de la edición.
+  const el = document.activeElement;
+  if (tarjetaActual && el && tarjetaActual.contains(el) && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+    _navAutoDeseleccionId = setTimeout(_navDeseleccionar, 5000);
+    return;
   }
+  clearTimeout(_navAutoDeseleccionId);
+  if (tarjetaActual) tarjetaActual.classList.remove('prod-nav-selected');
   _navIdxSeleccionado = -1;
 }
 
@@ -7100,6 +7119,14 @@ document.addEventListener('keydown', (e) => {
     const msg = '⚠ No hay ningún producto para aplicar Shift+Q.';
     if (typeof showToast === 'function') showToast(msg, 'warn'); else alert(msg);
     return;
+  }
+  // Sincronizar el cursor de navegación (flechas) con el producto que Shift+Q terminó
+  // usando — así, si llegaste con el mouse (no con las flechas), la próxima flecha que
+  // toques sigue desde ACÁ y no desde donde había quedado antes (que era el bug: parecía
+  // que "volvía al principio de la columna" porque el cursor nunca se había movido).
+  if (typeof _navTarjetas === 'function' && typeof _navSeleccionar === 'function') {
+    const idxObjetivo = _navTarjetas().findIndex(t => t.dataset.sku === skuObjetivo);
+    if (idxObjetivo >= 0) _navSeleccionar(idxObjetivo);
   }
   const _enfocarCantidad = () => {
     const cont = document.getElementById('resultados');
