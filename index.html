@@ -5725,7 +5725,7 @@ function renderPrincipal(){
       <h1><span class="paso-badge">2</span>Buscar productos</h1>
       <div class="buscador-row">
         <div class="buscador-input-wrap">
-          <input type="text" id="input-busqueda" placeholder="Nombre o SKU… (o dejá vacío para ver todo el catálogo)" oninput="onBusquedaInput(this.value)" onkeydown="if(event.key==='Enter'){ if(_navIdxSeleccionado < 0){ event.preventDefault(); agregarSiguienteResultado(); } /* si ya hay algo seleccionado con flechas, no se pisa: lo maneja el atajo de navegación */ } else if(event.key==='Tab' && event.shiftKey){ event.preventDefault(); deshacerUltimoAgregado(); }">
+          <input type="text" id="input-busqueda" placeholder="Nombre o SKU… (o dejá vacío para ver todo el catálogo)" oninput="onBusquedaInput(this.value)" onkeydown="if(event.key==='Tab' && event.shiftKey){ event.preventDefault(); deshacerUltimoAgregado(); }">
           <button type="button" id="btn-limpiar-busqueda" class="btn-limpiar-busqueda" onclick="limpiarBusqueda()" title="Borrar búsqueda" style="display:none;">✕</button>
         </div>
         <button class="btn-ir-final" onclick="irAlFinalDeLista()" title="Saltar al final de la lista">⬇ Ir al final</button>
@@ -7005,9 +7005,6 @@ document.addEventListener('keydown', (e) => {
   if (!tarjetas.length) return;
 
   if (e.key === 'Enter') {
-    // En el buscador, si todavía no se seleccionó nada con flechas, Enter sigue siendo el
-    // atajo propio de ahí ("agregar siguiente resultado") — no lo pisamos acá.
-    if (esBuscador && _navIdxSeleccionado < 0) return;
     e.preventDefault();
     if (_navIdxSeleccionado < 0 || !tarjetas[_navIdxSeleccionado]) { _navSeleccionar(0); return; } // primer Enter: solo selecciona, no agrega todavía
     const sku = tarjetas[_navIdxSeleccionado].dataset.sku;
@@ -7015,10 +7012,12 @@ document.addEventListener('keydown', (e) => {
     const yaEnCarrito = (carrito.get(sku) || 0) > 0;
     if (yaEnCarrito) {
       // Ya estaba en el carrito (lo agregó un Enter anterior): un Enter más lo saca del
-      // pedido y deselecciona — el mismo resultado que hacer doble clic sobre la tarjeta
-      // con el mouse (un clic la agrega, el siguiente clic la saca).
+      // pedido — mismo resultado que hacer doble clic sobre la tarjeta con el mouse (un
+      // clic la agrega, el siguiente clic la saca). El cursor de navegación se queda
+      // exactamente donde estaba (no se pierde la posición): solo desaparece solo si
+      // después de esto no se lo vuelve a tocar, igual que en cualquier otra selección.
       if (typeof quitarDelCarrito === 'function') quitarDelCarrito(sku);
-      _navDeseleccionar();
+      _navProgramarAutoDeseleccion();
     } else {
       if (typeof agregarAlCarrito === 'function') agregarAlCarrito(sku);
       _navProgramarAutoDeseleccion(); // sigue seleccionada, pero reinicia el reloj de inactividad
