@@ -5737,7 +5737,7 @@ function renderPrincipal(){
       <h1><span class="paso-badge">2</span>Buscar productos</h1>
       <div class="buscador-row">
         <div class="buscador-input-wrap">
-          <input type="text" id="input-busqueda" placeholder="Nombre o SKU… (o dejá vacío para ver todo el catálogo)" oninput="onBusquedaInput(this.value)" onkeydown="if(event.key==='Tab' && event.shiftKey){ event.preventDefault(); deshacerUltimoAgregado(); }">
+          <input type="text" id="input-busqueda" placeholder="Nombre o SKU… (o dejá vacío para ver todo el catálogo)" oninput="onBusquedaInput(this.value)" onkeydown="if(event.key==='Tab' && event.shiftKey){ event.preventDefault(); deshacerUltimoAgregado(); }"${esAdminCatalogo() ? ' autocomplete="off"' : ''}>
           <button type="button" id="btn-limpiar-busqueda" class="btn-limpiar-busqueda" onclick="limpiarBusqueda()" title="Borrar búsqueda" style="display:none;">✕</button>
         </div>
         <button class="btn-ir-final" onclick="irAlFinalDeLista()" title="Saltar al final de la lista">⬇ Ir al final</button>
