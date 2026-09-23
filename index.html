@@ -1860,7 +1860,7 @@ window.abrirZoomProducto = (sku) => {
   const precio = precioDe(it);
   const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
   const qtyEnCarrito = carrito.get(it.s) || 0;
-  const puedeAgregar = !!precio && !it.st;
+  const puedeAgregar = !!precio && (!it.st || esAdminCatalogo());
 
   const bd = document.createElement('div');
   bd.id = 'zoom-prod-backdrop';
@@ -4318,7 +4318,7 @@ function renderResultados(){
   const _avisosEsperandoSet = _avisosLlegadosSet();
   const filas = mostrados.map(it => {
     const precio = precioDe(it);
-    const puedeAgregar = !!precio && !it.st;
+    const puedeAgregar = !!precio && (!it.st || esAdminCatalogo());
     const qtyEnCarrito = carrito.get(it.s) || 0;
     const _limiteQtyTarjeta = _limiteQtyPara(it.s);
     const maxQtyAttr = isFinite(_limiteQtyTarjeta) ? ` max="${_limiteQtyTarjeta}"` : '';
@@ -4536,7 +4536,7 @@ function _controlHtmlPara(sku){
   const it = catalogoBySku.get(sku);
   if (!it) return '';
   const precio = precioDe(it);
-  const puedeAgregar = !!precio && !it.st;
+  const puedeAgregar = !!precio && (!it.st || esAdminCatalogo());
   const qtyEnCarrito = carrito.get(sku) || 0;
   const limite = _limiteQtyPara(sku);
   const maxQtyAttr = isFinite(limite) ? ` max="${limite}"` : '';
@@ -4557,7 +4557,7 @@ function _actualizarTarjetaProducto(sku){
   const it = catalogoBySku.get(sku);
   if (!it) return;
   const precio = precioDe(it);
-  const puedeAgregar = !!precio && !it.st;
+  const puedeAgregar = !!precio && (!it.st || esAdminCatalogo());
   const qtyEnCarrito = carrito.get(sku) || 0;
   const controlHtml = _controlHtmlPara(sku);
   document.querySelectorAll('.prod-card[data-sku], .prod-row[data-sku]').forEach(container => {
@@ -4609,7 +4609,7 @@ window.agregarSiguienteResultado = () => {
     return;
   }
   const precio = precioDe(it);
-  const puedeAgregar = !!precio && !it.st;
+  const puedeAgregar = !!precio && (!it.st || esAdminCatalogo());
   if (!puedeAgregar) return; // sin stock o sin precio: se saltea, el recorrido ya avanzó
   carrito.set(it.s, 1);
   _busquedaEnterHistorial.push({ sku: it.s, indice: _busquedaEnterIndex - 1 }); // el índice ya se incrementó arriba
@@ -7252,7 +7252,7 @@ document.addEventListener('keydown', (e) => {
   // cantidad, una vez que el campo ya existe en la página.
   const it = catalogoBySku.get(skuObjetivo);
   const precio = it ? precioDe(it) : 0;
-  const puedeAgregar = !!precio && !(it && it.st);
+  const puedeAgregar = !!precio && (!(it && it.st) || esAdminCatalogo());
   if (!puedeAgregar) return;
   carrito.set(skuObjetivo, 1);
   requestAnimationFrame(() => {
