@@ -1008,6 +1008,39 @@ function _restaurarCarritoLS(){
     if (carrito.size) _pedidoRestauradoDeLS = true;
   } catch(e) {}
 }
+
+// ── "Ocultar Agotado" por producto (solo admin) — para cuando el admin arma un pedido/
+// presupuesto para un cliente y ya resolvió el stock de algún producto puntual por otro
+// lado (por ejemplo, lo tiene reservado o lo va a conseguir aparte): oculta la etiqueta
+// roja "Agotado" de ESE producto nada más, en el carrito, en Pantalla completa y en el
+// PDF — el resto de los productos agotados del pedido la siguen mostrando normal. Viaja
+// guardado junto con el pedido (mismo criterio que el carrito), para no perderlo si
+// recarga la página antes de enviarlo. ──
+const LS_KEY_OCULTAR_AGOTADO = 'dentalab_pedido_ocultar_agotado_v1';
+let _ocultarAgotadoSet = new Set();
+function _guardarOcultarAgotadoLS(){
+  try {
+    if (_ocultarAgotadoSet.size) localStorage.setItem(LS_KEY_OCULTAR_AGOTADO, JSON.stringify(Array.from(_ocultarAgotadoSet)));
+    else localStorage.removeItem(LS_KEY_OCULTAR_AGOTADO);
+  } catch(e) {}
+}
+function _restaurarOcultarAgotadoLS(){
+  try {
+    const raw = localStorage.getItem(LS_KEY_OCULTAR_AGOTADO);
+    if (!raw) return;
+    const skus = JSON.parse(raw);
+    if (Array.isArray(skus)) skus.forEach(sku => _ocultarAgotadoSet.add(sku));
+  } catch(e) {}
+}
+window.toggleOcultarAgotado = (sku) => {
+  if (!esAdminCatalogo()) return;
+  if (_ocultarAgotadoSet.has(sku)) _ocultarAgotadoSet.delete(sku);
+  else _ocultarAgotadoSet.add(sku);
+  _guardarOcultarAgotadoLS();
+  renderCarrito();
+  if (document.getElementById('pedido-full-backdrop')) abrirVistaCompletaPedido(true);
+};
+
 function _guardarEstadoLS(){
   try { localStorage.setItem(LS_KEY_ESTADO, JSON.stringify({ modalidadEntrega, listaActiva, medioPagoContado, financiamientoTarjeta, transportistaElegido, recepcionEnvioTipo })); } catch(e) {}
 }
@@ -3843,6 +3876,7 @@ async function cargarCatalogo(){
     }
 
     _restaurarCarritoLS();
+    _restaurarOcultarAgotadoLS();
     const estadoGuardado = _restaurarEstadoLS();
     if (carrito.size && estadoGuardado && estadoGuardado.listaActiva) {
       modalidadEntrega = estadoGuardado.modalidadEntrega || null;
@@ -4739,7 +4773,11 @@ function renderCarrito(){
               <div class="ci-sku">SKU: ${escHtml(it.s)}</div>
               <div class="ci-precio">${fmtMoney(precio)} c/u</div>
               <div class="ci-stock-row">
-                ${it.st ? `<div class="prod-stock-agotado">Agotado</div>` : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>` : `<div class="prod-stock-en">En stock</div>`}
+                ${it.st
+                  ? (_ocultarAgotadoSet.has(sku)
+                      ? (esAdminCatalogo() ? `<button onclick="event.stopPropagation(); toggleOcultarAgotado('${escHtml(sku)}')" title="Volver a mostrar 'Agotado' a este producto" style="background:none;border:1px dashed var(--border);border-radius:6px;padding:2px 7px;font-size:10.5px;color:var(--text3);cursor:pointer;">🙈 Agotado oculto</button>` : '')
+                      : `<div class="prod-stock-agotado">Agotado</div>${esAdminCatalogo() ? `<button onclick="event.stopPropagation(); toggleOcultarAgotado('${escHtml(sku)}')" title="Ocultarle 'Agotado' a este producto (en el carrito, Pantalla completa y el PDF)" style="background:none;border:none;font-size:13px;cursor:pointer;padding:0 2px;line-height:1;">🙈</button>` : ''}`)
+                  : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>` : `<div class="prod-stock-en">En stock</div>`}
                 ${medioPagoBadgeCarrito}
               </div>
               ${medioPagoDetalleCarrito}
@@ -4837,7 +4875,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
     const foto = imgsArr.length
       ? `<img src="https://drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w400" alt="" style="width:100%;height:100%;object-fit:contain;background:#f4f6fa;">`
       : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;background:#f4f6fa;opacity:.35;">🦷</div>`;
-    const stockHtml = it.st ? `<div class="prod-stock-agotado">Agotado</div>` : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>` : `<div class="prod-stock-en">En stock</div>`;
+    const stockHtml = (it.st && !_ocultarAgotadoSet.has(sku)) ? `<div class="prod-stock-agotado">Agotado</div>` : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>` : it.st ? '' : `<div class="prod-stock-en">En stock</div>`;
     const _mostrarFormaPagoFila = !_esPresu || _pedidoFullMostrarFormaPago;
     const medioPagoBadge = (listaActiva && _adminVistaPrecio === 'normal' && _mostrarFormaPagoFila)
       ? (listaActiva === 'p1'
@@ -4852,7 +4890,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
           <div style="font-size:14.5px;font-weight:700;color:var(--text);line-height:1.3;">${escHtml(it.n)}</div>
           <div class="ci-sku" style="margin-top:2px;">SKU: ${escHtml(it.s)}</div>
           <div style="font-size:12px;color:var(--text3);margin-top:2px;">${fmtMoney(precio)} c/u × ${qty}</div>
-          <div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${stockHtml}${medioPagoBadge}</div>
+          <div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${stockHtml}${it.st && esAdmin ? `<button onclick="toggleOcultarAgotado('${escHtml(sku)}')" title="${_ocultarAgotadoSet.has(sku) ? 'Volver a mostrar \'Agotado\' a este producto' : 'Ocultarle \'Agotado\' a este producto (acá, en el carrito y en el PDF)'}" style="background:none;border:${_ocultarAgotadoSet.has(sku) ? '1px dashed var(--border)' : 'none'};border-radius:6px;padding:${_ocultarAgotadoSet.has(sku) ? '2px 7px' : '0 2px'};font-size:${_ocultarAgotadoSet.has(sku) ? '10.5px' : '13px'};color:var(--text3);cursor:pointer;line-height:1.4;">${_ocultarAgotadoSet.has(sku) ? '🙈 Agotado oculto' : '🙈'}</button>` : ''}${medioPagoBadge}</div>
           ${medioPagoDetalle}
         </div>
         <div class="${esAdmin ? 'ci-precio-col-hover' : ''}" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
@@ -5047,8 +5085,8 @@ async function _construirCanvasPedidoCompleto(){
     const textX = PAD + fotoSize + 16;
     const anchoTexto = W - textX - PAD - 90;
     const lineasNombre = _wrap(it.n, '700 14px DM Sans, sans-serif', anchoTexto).slice(0, 2);
-    const stockTxt = it.st ? 'Agotado' : it.sb ? 'Stock a confirmar' : 'En stock';
-    const stockColor = it.st ? '#dc2626' : it.sb ? '#d97706' : '#0ea968';
+    const stockTxt = (it.st && !_ocultarAgotadoSet.has(it.s)) ? 'Agotado' : it.sb ? 'Stock a confirmar' : (it.st ? '' : 'En stock');
+    const stockColor = (it.st && !_ocultarAgotadoSet.has(it.s)) ? '#dc2626' : it.sb ? '#d97706' : '#0ea968';
     const alto = Math.max(fotoSize, 18 + lineasNombre.length * 17 + 15 + 15 + 15) + filaGap;
     filas.push({ it, qty, precio, imgEl, lineasNombre, stockTxt, stockColor, alto });
   }
