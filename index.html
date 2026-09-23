@@ -4545,6 +4545,7 @@ window.irAPagina = (n) => {
 // todavía hay que confirmar con el proveedor.
 const LIMITE_QTY_STOCK_A_CONFIRMAR = 5;
 function _limiteQtyPara(sku){
+  if (typeof esAdminCatalogo === 'function' && esAdminCatalogo()) return Infinity; // el admin puede pedir la cantidad que quiera, sin importar el stock
   const it = catalogoBySku.get(sku);
   if (!it || it.st) return Infinity;
   if (it.sb) return LIMITE_QTY_STOCK_A_CONFIRMAR;
