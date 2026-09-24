@@ -7155,6 +7155,7 @@ document.addEventListener('keydown', (e) => {
   if (typeof esAdminCatalogo !== 'function' || !esAdminCatalogo()) return; // por ahora, solo admin
   if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return; // no pisar otros atajos (Ctrl+C, etc.)
+  if (e.key === 'Enter' && e.shiftKey) return; // Shift+Enter es otro atajo (abre la pantalla completa del producto), no lo pisamos acá
   const el = document.activeElement;
   const tag = (el && el.tagName) || '';
   // El buscador es la única excepción: ahí también queremos que funcionen las flechas +
@@ -7302,6 +7303,35 @@ document.addEventListener('keydown', (e) => {
     requestAnimationFrame(_enfocarCantidad);
   });
 
+});
+
+// Atajo de teclado: Shift + Enter — abre la vista en pantalla completa (con "Copiar" y
+// "Recortar") del producto sobre el que está el mouse, o si no hay mouse de por medio, del
+// que esté seleccionado con las flechas, o si tampoco hay eso, del primer resultado de la
+// búsqueda actual — mismo criterio y mismo orden de prioridad que ya usa Shift+Q.
+document.addEventListener('keydown', (e) => {
+  if (typeof esAdminCatalogo !== 'function' || !esAdminCatalogo()) return; // por ahora, solo admin
+  if (e.key !== 'Enter' || !e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+  const el = document.activeElement;
+  const tag = (el && el.tagName) || '';
+  const esBuscador = el && el.id === 'input-busqueda';
+  if (!esBuscador && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable))) return;
+  e.preventDefault();
+  let skuObjetivo = _skuHoverAdmin;
+  if (!skuObjetivo && typeof _navIdxSeleccionado !== 'undefined' && _navIdxSeleccionado >= 0) {
+    const tarjetaSel = _navTarjetas()[_navIdxSeleccionado];
+    if (tarjetaSel) skuObjetivo = tarjetaSel.dataset.sku;
+  }
+  if (!skuObjetivo && typeof buscarProductos === 'function') {
+    const resultados = buscarProductos();
+    if (resultados.length) skuObjetivo = resultados[0].s;
+  }
+  if (!skuObjetivo) {
+    const msg = '⚠ No hay ningún producto para abrir en pantalla completa.';
+    if (typeof showToast === 'function') showToast(msg, 'warn'); else alert(msg);
+    return;
+  }
+  if (typeof abrirZoomProducto === 'function') abrirZoomProducto(skuObjetivo);
 });
 
 // Atajo de teclado: con el mouse parado encima de un producto (tarjeta o fila, en
