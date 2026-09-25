@@ -5532,7 +5532,7 @@ function renderPrincipal(){
       <h1><span class="paso-badge">2</span>Buscar productos</h1>
       <div class="buscador-row">
         <div class="buscador-input-wrap">
-          <input type="text" id="input-busqueda" placeholder="Nombre o SKU… (o dejá vacío para ver todo el catálogo)" oninput="onBusquedaInput(this.value)" onkeydown="if(event.key==='Enter'){ event.preventDefault(); agregarSiguienteResultado(); } else if(event.key==='Tab' && event.shiftKey){ event.preventDefault(); deshacerUltimoAgregado(); }">
+          <input type="text" id="input-busqueda" placeholder="Nombre o SKU… (o dejá vacío para ver todo el catálogo)" oninput="onBusquedaInput(this.value)" onkeydown="if(event.key==='Tab' && event.shiftKey){ event.preventDefault(); deshacerUltimoAgregado(); }"${esAdminCatalogo() ? ' autocomplete="off"' : ''}>
           <button type="button" id="btn-limpiar-busqueda" class="btn-limpiar-busqueda" onclick="limpiarBusqueda()" title="Borrar búsqueda" style="display:none;">✕</button>
         </div>
         <button class="btn-ir-final" onclick="irAlFinalDeLista()" title="Saltar al final de la lista">⬇ Ir al final</button>
@@ -6816,7 +6816,21 @@ document.addEventListener('keydown', (e) => {
 
   if (e.key === 'Enter') {
     e.preventDefault();
-    if (_navIdxSeleccionado < 0 || !tarjetas[_navIdxSeleccionado]) { _navSeleccionar(0); } // si no había nada seleccionado, se selecciona el primero y seguimos abajo para agregarlo de una
+    if (_navIdxSeleccionado < 0 || !tarjetas[_navIdxSeleccionado]) {
+      // Si no había nada seleccionado todavía: si lo que se escribió en el buscador
+      // coincide EXACTO con el SKU de alguno de los resultados (por ejemplo "32791",
+      // aunque también aparezcan variantes como "32791-F"), se elige ese puntual — no
+      // cualquiera de las variantes, ni el primero de la lista porque sí.
+      let idxInicial = 0;
+      if (esBuscador) {
+        const consulta = (el.value || '').trim().toUpperCase();
+        if (consulta) {
+          const idxExacto = tarjetas.findIndex(t => (t.dataset.sku || '').toUpperCase() === consulta);
+          if (idxExacto >= 0) idxInicial = idxExacto;
+        }
+      }
+      _navSeleccionar(idxInicial);
+    } // si ya había algo seleccionado, seguimos abajo para agregarlo/sacarlo de una
     const idx = _navIdxSeleccionado;
     if (idx < 0 || !tarjetas[idx]) return;
     const sku = tarjetas[idx].dataset.sku;
