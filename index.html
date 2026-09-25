@@ -499,12 +499,17 @@
   .prod-stock-en{font-size:10px;color:var(--green);font-weight:600;margin-top:2px;}
   .prod-stock-admin{
     font-size:9.5px;color:#000;font-weight:700;margin-top:3px;
-    background:#7c3aed12;border:1px solid #7c3aed30;border-radius:5px;padding:3px 6px;
+    background:#0284c712;border:1px solid #0284c730;border-radius:5px;padding:3px 6px;
     display:inline-flex;flex-direction:column;gap:1px;font-family:'DM Mono',monospace;
   }
   html[data-theme="dark"] .prod-stock-admin{
-    color:#fff;background:#7c3aed26;border-color:#7c3aed55;
+    color:#fff;background:#38a5e626;border-color:#38a5e655;
   }
+  /* Modal "Tu pedido"/"Presupuesto": el botón "Quitar" del admin queda oculto hasta que
+     pasás el mouse por la columna del precio de esa fila — para el cliente no aplica,
+     ahí el botón se ve siempre (en celular no hay hover para revelarlo). */
+  .ci-precio-col-hover-btn{ opacity:0; pointer-events:none; transition:opacity .12s; }
+  .ci-precio-col-hover:hover .ci-precio-col-hover-btn{ opacity:1; pointer-events:auto; }
   .prod-restock-badge{
     display:inline-flex;align-items:center;font-size:10px;font-weight:800;color:var(--blue);
     background:rgba(2,132,199,.12);border:1px solid rgba(2,132,199,.4);border-radius:5px;
@@ -769,6 +774,7 @@
       <button class="btn-instalar" id="btn-qr-app" onclick="abrirModalQR()" title="Instalar en tu celular escaneando un QR" style="display:none;">📷 QR</button>
       <button class="btn-instalar" id="btn-historial-pedidos" onclick="abrirHistorialPedidos()" title="Ver mis pedidos anteriores">🕐 Mis pedidos</button>
       <button class="btn-tema" id="btn-tema" onclick="toggleTemaOscuro()" title="Cambiar a modo nocturno">🌙</button>
+      <span id="admin-presencia-badge" title="Dispositivos con esta página abierta ahora mismo" style="display:none;background:var(--panel2);border:1px solid var(--border);border-radius:20px;padding:6px 12px;font-size:12.5px;font-weight:700;color:var(--text2);white-space:nowrap;">👀 …</span>
     </div>
     <!-- ══ Modal: cómo instalar la app ══ -->
     <div id="instalar-backdrop" onclick="if(event.target===this)cerrarModalInstalar()">
@@ -879,6 +885,21 @@ const db = firebase.database();
 const auth = firebase.auth();
 const app = document.getElementById('app');
 
+// ── Presencia: cada pestaña/dispositivo que tiene la página abierta se registra acá
+// mientras dure la conexión, y se borra solo (onDisconnect) al cerrarla o perder la
+// conexión — así el admin puede ver cuánta gente tiene el catálogo abierto en vivo, sin
+// guardar nada permanente ni identificar a nadie. Corre para todos los visitantes (no
+// solo admin), porque hace falta contar a los clientes también, no solo a quien mira.
+try {
+  const _presenciaRef = db.ref('dentalab/presencia').push();
+  db.ref('.info/connected').on('value', (snap) => {
+    if (snap.val() === true) {
+      _presenciaRef.onDisconnect().remove();
+      _presenciaRef.set(Date.now());
+    }
+  });
+} catch (e) { /* si falla, no pasa nada — es solo un contador informativo */ }
+
 let catalogo = [];
 let catalogoBySku = new Map();
 let listaActiva = null; // 'p1' (Contado -10%) | 'p2' (Tarjeta 1 pago)
@@ -987,6 +1008,39 @@ function _restaurarCarritoLS(){
     if (carrito.size) _pedidoRestauradoDeLS = true;
   } catch(e) {}
 }
+
+// ── "Ocultar Agotado" por producto (solo admin) — para cuando el admin arma un pedido/
+// presupuesto para un cliente y ya resolvió el stock de algún producto puntual por otro
+// lado (por ejemplo, lo tiene reservado o lo va a conseguir aparte): oculta la etiqueta
+// roja "Agotado" de ESE producto nada más, en el carrito, en Pantalla completa y en el
+// PDF — el resto de los productos agotados del pedido la siguen mostrando normal. Viaja
+// guardado junto con el pedido (mismo criterio que el carrito), para no perderlo si
+// recarga la página antes de enviarlo. ──
+const LS_KEY_OCULTAR_AGOTADO = 'dentalab_pedido_ocultar_agotado_v1';
+let _ocultarAgotadoSet = new Set();
+function _guardarOcultarAgotadoLS(){
+  try {
+    if (_ocultarAgotadoSet.size) localStorage.setItem(LS_KEY_OCULTAR_AGOTADO, JSON.stringify(Array.from(_ocultarAgotadoSet)));
+    else localStorage.removeItem(LS_KEY_OCULTAR_AGOTADO);
+  } catch(e) {}
+}
+function _restaurarOcultarAgotadoLS(){
+  try {
+    const raw = localStorage.getItem(LS_KEY_OCULTAR_AGOTADO);
+    if (!raw) return;
+    const skus = JSON.parse(raw);
+    if (Array.isArray(skus)) skus.forEach(sku => _ocultarAgotadoSet.add(sku));
+  } catch(e) {}
+}
+window.toggleOcultarAgotado = (sku) => {
+  if (!esAdminCatalogo()) return;
+  if (_ocultarAgotadoSet.has(sku)) _ocultarAgotadoSet.delete(sku);
+  else _ocultarAgotadoSet.add(sku);
+  _guardarOcultarAgotadoLS();
+  renderCarrito();
+  if (document.getElementById('pedido-full-backdrop')) abrirVistaCompletaPedido(true);
+};
+
 function _guardarEstadoLS(){
   try { localStorage.setItem(LS_KEY_ESTADO, JSON.stringify({ modalidadEntrega, listaActiva, medioPagoContado, financiamientoTarjeta, transportistaElegido, recepcionEnvioTipo })); } catch(e) {}
 }
@@ -1096,6 +1150,32 @@ function _avisosLlegadosSet(){
   return set;
 }
 
+// ── Productos habituales de este cliente ────────────────────────────────────────
+// Cada vez que agrega algo al pedido (desde este mismo navegador, sin cuentas ni login),
+// se suma 1 al contador de ese SKU acá — así, si siempre pide lo mismo, se le puede
+// ofrecer un acceso directo a esos productos antes de que tenga que volver a buscarlos.
+// Es enteramente local a este dispositivo: no se comparte entre clientes ni se sube a
+// ningún lado, mismo criterio que "Recuperamos el pedido que tenías armado".
+const LS_KEY_FRECUENTES = 'dentalab_historial_compras';
+function _frecuentesGetMapa(){
+  try { return JSON.parse(localStorage.getItem(LS_KEY_FRECUENTES) || '{}'); } catch (e) { return {}; }
+}
+function _frecuentesRegistrar(sku){
+  try {
+    const mapa = _frecuentesGetMapa();
+    mapa[sku] = (mapa[sku] || 0) + 1;
+    localStorage.setItem(LS_KEY_FRECUENTES, JSON.stringify(mapa));
+  } catch (e) {}
+}
+// SKUs pedidos 2 veces o más (en cualquier momento, incluso en pedidos anteriores),
+// ordenados del que más pidió al que menos — un solo "1" no cuenta como hábito todavía.
+function _frecuentesSkusOrdenados(){
+  const mapa = _frecuentesGetMapa();
+  return Object.keys(mapa)
+    .filter(sku => mapa[sku] >= 2 && catalogoBySku.has(sku))
+    .sort((a, b) => mapa[b] - mapa[a]);
+}
+
 let paginaActual = 1;
 // Posición del próximo producto a agregar cuando el cliente aprieta Enter en el
 // buscador — se reinicia a 0 cada vez que cambia la búsqueda o los filtros (ver los
@@ -1110,6 +1190,7 @@ let POR_PAGINA = parseInt(localStorage.getItem('dentalab_por_pagina'), 10) || 50
 let filtroOrdenPrecio = ''; // '' | 'asc' | 'desc'
 let filtroSoloOfertas = false;
 let filtroSoloStock = false;
+let filtroSoloFrecuentes = false;
 let filtroMarca = 'todas';
 let filtroCategoria = 'todas';
 let filtroSubgrupo = 'todas';
@@ -1120,6 +1201,7 @@ let filtroSubgrupo = 'todas';
 // sin depender del orden en que se ejecuten los `<script>` más abajo.
 let _navIdxSeleccionado = -1;
 let _navAutoDeseleccionId = null;
+
 // Si todavía no eligió ninguna: arranca en "grilla" en PC (se aprovecha mejor el ancho de
 // pantalla) y en "lista" en mobile (más compacto, se ve más catálogo sin scrollear tanto).
 let vistaProductos = (() => {
@@ -1811,7 +1893,7 @@ window.abrirZoomProducto = (sku) => {
   const precio = precioDe(it);
   const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
   const qtyEnCarrito = carrito.get(it.s) || 0;
-  const puedeAgregar = !!precio && !it.st;
+  const puedeAgregar = !!precio && (!it.st || esAdminCatalogo());
 
   const bd = document.createElement('div');
   bd.id = 'zoom-prod-backdrop';
@@ -1866,7 +1948,10 @@ window.abrirZoomProducto = (sku) => {
           <div>
             <div style="font-size:26px;font-weight:800;color:#0f172a;">${it.cp ? '<span style="font-size:12px;color:#8592a6;font-style:italic;font-weight:500;">Consultar precio</span>' : fmtMoney(precio)}</div>
             ${(!it.cp && listaActiva === 'p1' && _adminVistaPrecio === 'normal') ? `<div style="font-size:11px;font-weight:700;color:#0ea968;margin-top:4px;">✓ Precios ya con 10% off</div>` : ''}
-            ${(!it.cp && _adminVistaPrecio === 'normal') ? `<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px;">${listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito — precio final, IVA incluido' : 'Tarjeta de crédito en 1 pago — precio final, IVA incluido'}</div>` : ''}
+            ${(!it.cp && _adminVistaPrecio === 'normal') ? `<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span>${listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago'}</span>
+              ${(listaActiva === 'p2' && precio && !it.st && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}', '${encodeURIComponent(it.s)}')">💳 Ver cuotas</button>` : ''}
+            </div>` : ''}
           </div>
           ${qtyEnCarrito > 0
             ? `<div class="qty-stepper prod-qty" style="transform:scale(1.15);transform-origin:right;">
@@ -2058,7 +2143,7 @@ async function _zoomConstruirTarjetaCanvas(it, idxFoto = 0){
   const precio = precioDe(it);
   const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
   const idFotoElegida = imgsArr[idxFoto] || imgsArr[0];
-  const notaPago = (it.cp || _adminVistaPrecio !== 'normal') ? '' : (listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito — precio final, IVA incluido' : 'Tarjeta de crédito en 1 pago — precio final, IVA incluido');
+  const notaPago = (it.cp || _adminVistaPrecio !== 'normal') ? '' : (listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago');
 
   // Cargar la foto (si tiene) antes de medir el alto total. Google Drive no da permiso
   // (CORS) para "leer" la imagen directo desde el navegador, así que la pasamos por un
@@ -2145,15 +2230,7 @@ async function _zoomConstruirTarjetaCanvas(it, idxFoto = 0){
   }
   if (notaPago) {
     y += 20;
-    ctx.fillStyle = '#475569';
-    // El texto ahora puede ser más largo (incluye la aclaración de IVA) — se reduce el
-    // tamaño de letra si hace falta para que entre en una sola línea sin cortarse.
-    let notaPagoSize = 12;
-    ctx.font = `600 ${notaPagoSize}px DM Sans, sans-serif`;
-    while (notaPagoSize > 8.5 && ctx.measureText(notaPago).width > (W - PAD * 2)) {
-      notaPagoSize -= 0.5;
-      ctx.font = `600 ${notaPagoSize}px DM Sans, sans-serif`;
-    }
+    ctx.fillStyle = '#475569'; ctx.font = '600 12px DM Sans, sans-serif';
     ctx.fillText(notaPago, PAD, y);
   }
 
@@ -2319,7 +2396,7 @@ function _pwEscucharFinanciamiento(){
 // ── Buscar la foto de un producto en Drive cuando todavía no está en caché ──
 // (mismo mecanismo que usa el CRM en la Lista de Precios: SKU exacto → raíz del SKU → nombre)
 const GDRIVE_FOLDER_ID = '1O7kDXI62BB7iZEjOav2kG-EwKLY-KHpP';
-const GDRIVE_API_KEY_DEFAULT = 'AIzaSyCxPFIMKITtq71XWV0q0fjq6qZUTuZzu6Y';
+const GDRIVE_API_KEY_DEFAULT = 'AIzaSyAekXeTlCRYrLfBCPRctA5Am9UnOWWkOmw';
 const GDRIVE_EXTS = ['jpg','jpeg','png','webp'];
 const SKU_RAIZ_OVERRIDE = {
   '1512-A1': '1512', '1512-A2': '1512', '1512-A3': '1512', '1512-A35': '1512',
@@ -2403,7 +2480,7 @@ window._logoAdminClickCount = function() {
     _abrirLoginAdminModal();
   }
 };
-auth.onAuthStateChanged(() => { _refrescarVistaAdmin(); });
+auth.onAuthStateChanged(() => { _refrescarVistaAdmin(); _actualizarContadorPresenciaAdmin(); });
 function _refrescarVistaAdmin() {
   if (typeof renderResultados === 'function') renderResultados();
   if (typeof renderCarrito === 'function') renderCarrito();
@@ -2411,6 +2488,29 @@ function _refrescarVistaAdmin() {
   _renderBarraAsignarManual();
   if (typeof _renderCarruselBanners === 'function') _renderCarruselBanners();
   if (typeof _renderCarruselMarcas === 'function') _renderCarruselMarcas();
+}
+
+// ── Contador de "gente con la página abierta ahora" — solo lo ve el admin. Cuenta las
+// entradas vivas de dentalab/presencia (una por cada pestaña/dispositivo conectado, de
+// cualquier visitante, no solo admins). Se prende/apaga el listener según entra o sale
+// del modo admin, para no dejar una conexión de Firebase abierta de más para el resto. ──
+let _presenciaListenerActivo = false;
+function _actualizarContadorPresenciaAdmin() {
+  const badge = document.getElementById('admin-presencia-badge');
+  if (!badge) return;
+  const esAdmin = esAdminCatalogo();
+  if (esAdmin && !_presenciaListenerActivo) {
+    _presenciaListenerActivo = true;
+    db.ref('dentalab/presencia').on('value', (snap) => {
+      const n = snap.numChildren();
+      const b = document.getElementById('admin-presencia-badge');
+      if (b) { b.style.display = ''; b.textContent = `👀 ${n} ${n === 1 ? 'persona' : 'personas'} ahora`; }
+    });
+  } else if (!esAdmin && _presenciaListenerActivo) {
+    _presenciaListenerActivo = false;
+    db.ref('dentalab/presencia').off('value');
+    badge.style.display = 'none';
+  }
 }
 
 // ── Editor de textos informativos (retiro, envío, formas de pago) — solo admin ──
@@ -2478,6 +2578,15 @@ window.guardarTextosCatalogo = async function() {
 let _modoSeleccionFotos = false;
 let _fotosSeleccionadas = new Set();
 
+// ── Selección múltiple de PRODUCTOS para agregarles una foto a cada uno, todos de
+// un saque (solo admin) — la inversa del modo de borrado de arriba: en vez de tildar
+// fotos existentes para eliminarlas, se tildan productos (con o sin foto todavía) y
+// después se eligen tantos archivos como productos tildados. El archivo N se asigna
+// al producto N ordenando ambas listas por SKU, para que el orden sea siempre
+// predecible — y antes de subir nada se muestra esa asignación para confirmarla. ──
+let _modoAgregarFotos = false;
+let _productosSeleccionadosAgregar = new Set();
+
 // ── Asignar un mismo manual ya subido a varios productos a la vez (solo admin) ──
 // Se dispara desde la ficha ampliada, junto a un manual ya cargado ("🔗 A otros productos").
 let _modoAsignarManual = false;
@@ -2487,6 +2596,7 @@ let _skusAsignarManual = new Set();
 
 window.toggleModoSeleccionFotos = function() {
   if (_modoAsignarManual) cancelarAsignarManual();
+  if (_modoAgregarFotos) toggleModoAgregarFotos();
   _modoSeleccionFotos = !_modoSeleccionFotos;
   if (!_modoSeleccionFotos) _fotosSeleccionadas.clear();
   const btn = document.getElementById('btn-modo-seleccion-fotos');
@@ -2504,19 +2614,53 @@ window.toggleSeleccionFoto = function(sku) {
   _refrescarVistaAdmin();
 };
 
+window.toggleModoAgregarFotos = function() {
+  if (_modoAsignarManual) cancelarAsignarManual();
+  if (_modoSeleccionFotos) toggleModoSeleccionFotos();
+  _modoAgregarFotos = !_modoAgregarFotos;
+  if (!_modoAgregarFotos) _productosSeleccionadosAgregar.clear();
+  const btn = document.getElementById('btn-modo-agregar-fotos');
+  if (btn) {
+    btn.textContent = _modoAgregarFotos ? '✕ Cancelar selección' : '☑️ Seleccionar productos para agregar fotos';
+    btn.style.background = _modoAgregarFotos ? '#0ea968' : 'var(--panel2)';
+    btn.style.color = _modoAgregarFotos ? '#fff' : 'var(--text)';
+  }
+  _refrescarVistaAdmin();
+};
+
+window.toggleSeleccionProductoAgregar = function(sku) {
+  if (_productosSeleccionadosAgregar.has(sku)) _productosSeleccionadosAgregar.delete(sku);
+  else _productosSeleccionadosAgregar.add(sku);
+  _refrescarVistaAdmin();
+};
+
 function _renderBarraSeleccionFotos() {
   document.getElementById('barra-seleccion-fotos')?.remove();
-  if (!_modoSeleccionFotos || !_fotosSeleccionadas.size) return;
-  const barra = document.createElement('div');
-  barra.id = 'barra-seleccion-fotos';
-  barra.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#1e293b;padding:12px 16px;display:flex;align-items:center;justify-content:center;gap:14px;box-shadow:0 -4px 20px rgba(0,0,0,.25);';
-  barra.innerHTML = `
-    <span style="color:#fff;font-size:13.5px;font-weight:700;">${_fotosSeleccionadas.size} foto${_fotosSeleccionadas.size === 1 ? '' : 's'} seleccionada${_fotosSeleccionadas.size === 1 ? '' : 's'}</span>
-    <button id="btn-borrar-seleccion" style="background:#dc2626;border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">🗑️ Borrar seleccionadas</button>
-    <button onclick="toggleModoSeleccionFotos()" style="background:none;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Cancelar</button>
-  `;
-  document.body.appendChild(barra);
-  barra.querySelector('#btn-borrar-seleccion').onclick = adminBorrarFotosSeleccionadas;
+  document.getElementById('barra-agregar-fotos')?.remove();
+  if (_modoSeleccionFotos && _fotosSeleccionadas.size) {
+    const barra = document.createElement('div');
+    barra.id = 'barra-seleccion-fotos';
+    barra.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#1e293b;padding:12px 16px;display:flex;align-items:center;justify-content:center;gap:14px;box-shadow:0 -4px 20px rgba(0,0,0,.25);';
+    barra.innerHTML = `
+      <span style="color:#fff;font-size:13.5px;font-weight:700;">${_fotosSeleccionadas.size} foto${_fotosSeleccionadas.size === 1 ? '' : 's'} seleccionada${_fotosSeleccionadas.size === 1 ? '' : 's'}</span>
+      <button id="btn-borrar-seleccion" style="background:#dc2626;border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">🗑️ Borrar seleccionadas</button>
+      <button onclick="toggleModoSeleccionFotos()" style="background:none;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Cancelar</button>
+    `;
+    document.body.appendChild(barra);
+    barra.querySelector('#btn-borrar-seleccion').onclick = adminBorrarFotosSeleccionadas;
+  }
+  if (_modoAgregarFotos && _productosSeleccionadosAgregar.size) {
+    const barra = document.createElement('div');
+    barra.id = 'barra-agregar-fotos';
+    barra.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#1e293b;padding:12px 16px;display:flex;align-items:center;justify-content:center;gap:14px;box-shadow:0 -4px 20px rgba(0,0,0,.25);';
+    barra.innerHTML = `
+      <span style="color:#fff;font-size:13.5px;font-weight:700;">${_productosSeleccionadosAgregar.size} producto${_productosSeleccionadosAgregar.size === 1 ? '' : 's'} seleccionado${_productosSeleccionadosAgregar.size === 1 ? '' : 's'}</span>
+      <button id="btn-agregar-seleccion" style="background:#0ea968;border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">📷 Elegir fotos</button>
+      <button onclick="toggleModoAgregarFotos()" style="background:none;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Cancelar</button>
+    `;
+    document.body.appendChild(barra);
+    barra.querySelector('#btn-agregar-seleccion').onclick = adminAgregarFotosSeleccionadas;
+  }
 }
 
 window.adminBorrarFotosSeleccionadas = async function() {
@@ -2559,6 +2703,62 @@ window.adminBorrarFotosSeleccionadas = async function() {
   }
 };
 
+window.adminAgregarFotosSeleccionadas = async function() {
+  const skus = Array.from(_productosSeleccionadosAgregar).sort(); // orden predecible: alfabético por SKU
+  if (!skus.length) return;
+
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.multiple = true;
+  input.onchange = async () => {
+    const files = Array.from(input.files || []).sort((a, b) => a.name.localeCompare(b.name)); // mismo criterio: alfabético por nombre de archivo
+    if (!files.length) return;
+
+    // Arma la asignación 1 a 1 (archivo N → producto N) y la muestra para confirmar
+    // antes de subir nada — así el admin puede frenar si el orden no es el esperado.
+    const n = Math.min(skus.length, files.length);
+    const pares = [];
+    for (let i = 0; i < n; i++) {
+      const itCat = catalogoBySku.get(skus[i]);
+      pares.push({ sku: skus[i], nombre: itCat?.n || skus[i], file: files[i] });
+    }
+    let mensaje = `Se va a asignar así (${n} foto${n === 1 ? '' : 's'}):\n\n`;
+    mensaje += pares.map(p => `${p.file.name}  →  ${p.sku} · ${p.nombre}`).join('\n');
+    if (skus.length !== files.length) {
+      mensaje += `\n\n⚠️ Elegiste ${files.length} foto${files.length === 1 ? '' : 's'} para ${skus.length} producto${skus.length === 1 ? '' : 's'} seleccionado${skus.length === 1 ? '' : 's'}. Solo se van a asignar los primeros ${n} pares de la lista de arriba.`;
+    }
+    mensaje += `\n\n¿Confirmás?`;
+    if (!confirm(mensaje)) return;
+
+    try {
+      await _pedirTokenEscrituraDrive();
+    } catch (e) {
+      alert('No se pudo autorizar el acceso a Drive: ' + e.message);
+      return;
+    }
+    const barra = document.getElementById('barra-agregar-fotos');
+    const btn = barra?.querySelector('#btn-agregar-seleccion');
+    let ok = 0, fallidas = 0;
+    for (let i = 0; i < pares.length; i++) {
+      if (btn) btn.textContent = `Subiendo… (${i + 1}/${pares.length})`;
+      const subida = await _subirFotoAlProducto(pares[i].sku, pares[i].file, true);
+      if (subida) ok++; else fallidas++;
+    }
+    alert(`Listo. Subidas: ${ok}${fallidas ? `, no se pudieron subir: ${fallidas}` : ''}.`);
+    _modoAgregarFotos = false;
+    _productosSeleccionadosAgregar.clear();
+    const boton = document.getElementById('btn-modo-agregar-fotos');
+    if (boton) {
+      boton.textContent = '☑️ Seleccionar productos para agregar fotos';
+      boton.style.background = 'var(--panel2)';
+      boton.style.color = 'var(--text)';
+    }
+    _refrescarVistaAdmin();
+  };
+  input.click();
+};
+
 // ══════════════════════════════════════════════════════
 //  Asignar un manual ya subido a otros productos que lo comparten (sin volver a subirlo)
 // ══════════════════════════════════════════════════════
@@ -2566,7 +2766,8 @@ window.iniciarAsignarManualAOtros = function(sku, idx) {
   const itCat = catalogoBySku.get(sku);
   const manual = itCat?.manuales?.[idx];
   if (!manual) return;
-  if (_modoSeleccionFotos) toggleModoSeleccionFotos(); // los dos modos de selección no conviven
+  if (_modoSeleccionFotos) toggleModoSeleccionFotos(); // los modos de selección no conviven
+  if (_modoAgregarFotos) toggleModoAgregarFotos();
   _manualParaAsignar = manual;
   _skuOrigenManual = sku;
   _skusAsignarManual = new Set();
@@ -2639,6 +2840,24 @@ let _bannersCarrusel = [];
 let _bannerActual = 0;
 let _bannerTimer = null;
 
+// Mismo mecanismo de reintento con espera creciente que usan las fotos de producto
+// (manejarErrorFotoProducto): cuando Google frena varios pedidos de miniaturas de
+// golpe, en vez de dejar el banner en blanco para siempre, reintenta un par de veces.
+window._manejarErrorBanner = function(imgEl) {
+  const intentos = parseInt(imgEl.dataset.reintentos || '0', 10);
+  if (intentos < 3) {
+    imgEl.dataset.reintentos = String(intentos + 1);
+    if (!imgEl.dataset.srcBase) imgEl.dataset.srcBase = imgEl.src;
+    const srcBase = imgEl.dataset.srcBase;
+    const espera = 700 + intentos * 900 + Math.random() * 500;
+    setTimeout(() => {
+      const sep = srcBase.includes('?') ? '&' : '?';
+      imgEl.src = srcBase + sep + '_r=' + Date.now();
+    }, espera);
+  }
+  // Agotados los reintentos: se deja el slide en blanco en vez de romper el carrusel.
+};
+
 async function _cargarCarruselBanners() {
   try {
     const snap = await db.ref('dentalab/banners_carousel').once('value');
@@ -2674,7 +2893,7 @@ function _renderCarruselBanners() {
   cont.innerHTML = `
     <div class="carrusel-banners">
       <div class="carrusel-track" id="carrusel-track" style="width:${_bannersCarrusel.length * 100}%;">
-        ${_bannersCarrusel.map(b => `<div class="carrusel-slide" style="width:${100 / _bannersCarrusel.length}%;"><img src="https://drive.google.com/thumbnail?id=${b.fileId}&sz=w1400" loading="lazy" alt=""></div>`).join('')}
+        ${_bannersCarrusel.map(b => `<div class="carrusel-slide" style="width:${100 / _bannersCarrusel.length}%;"><img src="https://drive.google.com/thumbnail?id=${b.fileId}&sz=w1400" loading="lazy" alt="" onerror="_manejarErrorBanner(this)"></div>`).join('')}
       </div>
       ${_bannersCarrusel.length > 1 ? `
       <button class="carrusel-arrow left" onclick="_moverCarrusel(-1)">‹</button>
@@ -2990,7 +3209,10 @@ let _driveWriteToken = null, _driveWriteTokenExp = 0;
 function _pedirTokenEscrituraDrive() {
   return new Promise((resolve, reject) => {
     if (_driveWriteToken && Date.now() < _driveWriteTokenExp) { resolve(_driveWriteToken); return; }
-    const clientId = localStorage.getItem('dentalab_gmail_client_id') || '327538440647-pvhrjvskjh9c9lr12eo6gdtlki48ng59.apps.googleusercontent.com';
+    // Client ID propio de Pedidos (separado del que usa el CRM para Gmail/Calendar/Sheets)
+    // — así Google nunca junta esos permisos sensibles con el simple pedido de Drive de
+    // acá, que fue justo lo que tiraba el error interno de Google al loguearse.
+    const clientId = localStorage.getItem('dentalab_gmail_client_id') || '347279474356-na44t4ttd1v31org13o66t6tqr7gf1bn.apps.googleusercontent.com';
     if (!window.google?.accounts?.oauth2) { reject(new Error('No está disponible el inicio de sesión de Google en este momento.')); return; }
     try {
       const client = google.accounts.oauth2.initTokenClient({
@@ -3067,9 +3289,13 @@ window.adminSubirFotoProducto = async function(sku) {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
-  input.onchange = () => {
-    const file = input.files[0];
-    if (file) _subirFotoAlProducto(sku, file, false);
+  input.multiple = true; // se pueden elegir varias fotos juntas en el selector (Ctrl/Cmd+clic o arrastrando la selección)
+  input.onchange = async () => {
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+    for (const file of files) {
+      await _subirFotoAlProducto(sku, file, true); // silencioso=true: muestra un toast por foto con el conteo acumulado ("2 en total", "3 en total"...)
+    }
   };
   input.click();
 };
@@ -3650,6 +3876,7 @@ async function cargarCatalogo(){
     }
 
     _restaurarCarritoLS();
+    _restaurarOcultarAgotadoLS();
     const estadoGuardado = _restaurarEstadoLS();
     if (carrito.size && estadoGuardado && estadoGuardado.listaActiva) {
       modalidadEntrega = estadoGuardado.modalidadEntrega || null;
@@ -3904,6 +4131,7 @@ function buscarProductos(){
   }
   if (filtroSoloOfertas) base = base.filter(it => it.of);
   if (filtroSoloStock) base = base.filter(it => !it.st);
+  if (filtroSoloFrecuentes) { const _fs = new Set(_frecuentesSkusOrdenados()); base = base.filter(it => _fs.has(it.s)); }
 
   const tokens = tokensPre;
   let ordenados;
@@ -3931,6 +4159,7 @@ function buscarProductos(){
       // búsqueda es universal sobre todo el catálogo.
       if (filtroSoloOfertas) candidatos = candidatos.filter(it => it.of);
       if (filtroSoloStock) candidatos = candidatos.filter(it => !it.st);
+      if (filtroSoloFrecuentes) { const _fs = new Set(_frecuentesSkusOrdenados()); candidatos = candidatos.filter(it => _fs.has(it.s)); }
       ordenados = candidatos.sort((a, b) => a.n.localeCompare(b.n, 'es'));
     } else {
       const resultados = base.filter(it => {
@@ -3957,6 +4186,11 @@ function buscarProductos(){
         return a.n.localeCompare(b.n, 'es');
       });
     }
+  } else if (filtroSoloFrecuentes) {
+    // Sin búsqueda de por medio: se ven en el orden en que más los pidió, no alfabético —
+    // es justo el sentido de este filtro (repetir el pedido de siempre lo más rápido posible).
+    const _ordenFrec = _frecuentesSkusOrdenados();
+    ordenados = base.slice().sort((a, b) => _ordenFrec.indexOf(a.s) - _ordenFrec.indexOf(b.s));
   } else if (filtroCategoria !== 'todas') {
     // Solo priorizamos stock cuando se está navegando DENTRO de una categoría puntual
     // (ej: Fresas y Piedras) — en "Todas las categorías" el catálogo se ve en su orden normal.
@@ -4118,7 +4352,7 @@ function renderResultados(){
   const _avisosEsperandoSet = _avisosLlegadosSet();
   const filas = mostrados.map(it => {
     const precio = precioDe(it);
-    const puedeAgregar = !!precio && !it.st;
+    const puedeAgregar = !!precio && (!it.st || esAdminCatalogo());
     const qtyEnCarrito = carrito.get(it.s) || 0;
     const _limiteQtyTarjeta = _limiteQtyPara(it.s);
     const maxQtyAttr = isFinite(_limiteQtyTarjeta) ? ` max="${_limiteQtyTarjeta}"` : '';
@@ -4146,6 +4380,11 @@ function renderResultados(){
     const stockAdminHtml = esAdminCatalogo() && (it.d1 !== undefined || it.dc !== undefined)
       ? `<div class="prod-stock-admin" title="Solo vos ves esto — stock real por depósito">📦 <span>Local: <b>${it.d1 ?? 0}</b></span><span>Depósito: <b>${it.dc ?? 0}</b></span></div>`
       : '';
+    // Solo para admin: el proveedor del SKU (tampoco se le muestra al cliente), mismo
+    // criterio que el stock de arriba.
+    const proveedorAdminHtml = esAdminCatalogo() && it.prov
+      ? `<div class="prod-stock-admin" title="Solo vos ves esto — proveedor">🏭 <span>${escHtml(it.prov)}</span></div>`
+      : '';
     const cuotasHtml = (listaActiva === 'p2' && precio && !it.cp && !it.st && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}', '${encodeURIComponent(it.s)}')">💳 Ver cuotas</button>` : '';
     const categoriaHtml = it.g
       ? `<div class="prod-categoria">
@@ -4165,6 +4404,8 @@ function renderResultados(){
           : `<div style="display:flex;align-items:center;margin-right:4px;"><input type="checkbox" ${_skusAsignarManual.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSkuAsignarManual('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>`)
         : _modoSeleccionFotos
         ? (it.img ? `<div style="display:flex;align-items:center;margin-right:4px;"><input type="checkbox" ${_fotosSeleccionadas.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionFoto('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>` : '')
+        : _modoAgregarFotos
+        ? `<div style="display:flex;align-items:center;margin-right:4px;"><input type="checkbox" ${_productosSeleccionadosAgregar.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionProductoAgregar('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>`
         : `<div style="display:flex;flex-direction:column;gap:3px;margin-right:4px;">
             <button onclick="event.stopPropagation(); adminSubirFotoProducto('${escHtml(it.s)}')" title="Agregar/cambiar foto" style="background:none;border:none;font-size:13px;cursor:pointer;padding:1px;line-height:1;">✏️</button>
             ${it.img ? `<button onclick="event.stopPropagation(); adminBorrarFotoProducto('${escHtml(it.s)}')" title="Borrar foto" style="background:none;border:none;font-size:13px;cursor:pointer;padding:1px;line-height:1;">🗑️</button>` : ''}
@@ -4180,6 +4421,7 @@ function renderResultados(){
             ${it.of ? `<div class="prod-oferta">🏷️ Oferta</div>` : ''}
             ${stockHtml}
             ${stockAdminHtml}
+            ${proveedorAdminHtml}
           </div>
           <div class="prod-precio-col">
             <div class="prod-precio">${it.cp ? '<span class="prod-consultar">Consultar precio</span>' : fmtMoney(precio)}</div>
@@ -4210,6 +4452,8 @@ function renderResultados(){
         : `<div class="prod-card-admin"><input type="checkbox" ${_skusAsignarManual.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSkuAsignarManual('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>`)
       : _modoSeleccionFotos
       ? (it.img ? `<div class="prod-card-admin"><input type="checkbox" ${_fotosSeleccionadas.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionFoto('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>` : '')
+      : _modoAgregarFotos
+      ? `<div class="prod-card-admin"><input type="checkbox" ${_productosSeleccionadosAgregar.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionProductoAgregar('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>`
       : `<div class="prod-card-admin">
           <button onclick="event.stopPropagation(); adminSubirFotoProducto('${escHtml(it.s)}')" title="${imgsArr.length ? 'Agregar otra foto' : 'Agregar foto'} (también podés arrastrarla acá o pegarla con Ctrl+V)">✏️</button>
           ${imgsArr.length ? `<button onclick="event.stopPropagation(); adminBorrarFotoProducto('${escHtml(it.s)}')" title="Borrar foto${imgsArr.length > 1 ? ' (elegir cuál)' : ''}">🗑️</button>` : ''}
@@ -4225,6 +4469,7 @@ function renderResultados(){
           ${it.of ? `<div class="prod-oferta">🏷️ Oferta</div>` : ''}
           ${stockHtml}
           ${stockAdminHtml}
+          ${proveedorAdminHtml}
           <div class="prod-card-precio-row">
             <div class="prod-precio">${it.cp ? '<span class="prod-consultar">Consultar precio</span>' : fmtMoney(precio)}</div>
             ${qtyEnCarrito === 0 ? control : ''}
@@ -4300,6 +4545,7 @@ window.irAPagina = (n) => {
 // todavía hay que confirmar con el proveedor.
 const LIMITE_QTY_STOCK_A_CONFIRMAR = 5;
 function _limiteQtyPara(sku){
+  if (typeof esAdminCatalogo === 'function' && esAdminCatalogo()) return Infinity; // el admin puede pedir la cantidad que quiera, sin importar el stock
   const it = catalogoBySku.get(sku);
   if (!it || it.st) return Infinity;
   if (it.sb) return LIMITE_QTY_STOCK_A_CONFIRMAR;
@@ -4325,7 +4571,7 @@ function _controlHtmlPara(sku){
   const it = catalogoBySku.get(sku);
   if (!it) return '';
   const precio = precioDe(it);
-  const puedeAgregar = !!precio && !it.st;
+  const puedeAgregar = !!precio && (!it.st || esAdminCatalogo());
   const qtyEnCarrito = carrito.get(sku) || 0;
   const limite = _limiteQtyPara(sku);
   const maxQtyAttr = isFinite(limite) ? ` max="${limite}"` : '';
@@ -4346,7 +4592,7 @@ function _actualizarTarjetaProducto(sku){
   const it = catalogoBySku.get(sku);
   if (!it) return;
   const precio = precioDe(it);
-  const puedeAgregar = !!precio && !it.st;
+  const puedeAgregar = !!precio && (!it.st || esAdminCatalogo());
   const qtyEnCarrito = carrito.get(sku) || 0;
   const controlHtml = _controlHtmlPara(sku);
   document.querySelectorAll('.prod-card[data-sku], .prod-row[data-sku]').forEach(container => {
@@ -4373,6 +4619,7 @@ window.agregarAlCarrito = (sku) => {
   const limite = _limiteQtyPara(sku);
   if (actual + 1 > limite) { _avisarLimiteQty(sku); return; }
   carrito.set(sku, actual + 1);
+  _frecuentesRegistrar(sku);
   requestAnimationFrame(() => { _actualizarTarjetaProducto(sku); renderCarrito(); });
 };
 
@@ -4397,7 +4644,7 @@ window.agregarSiguienteResultado = () => {
     return;
   }
   const precio = precioDe(it);
-  const puedeAgregar = !!precio && !it.st;
+  const puedeAgregar = !!precio && (!it.st || esAdminCatalogo());
   if (!puedeAgregar) return; // sin stock o sin precio: se saltea, el recorrido ya avanzó
   carrito.set(it.s, 1);
   _busquedaEnterHistorial.push({ sku: it.s, indice: _busquedaEnterIndex - 1 }); // el índice ya se incrementó arriba
@@ -4503,6 +4750,8 @@ function renderCarrito(){
         : `<div class="prod-foto prod-foto-vacia" style="cursor:pointer;" title="Buscar foto en Drive" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirFotoProducto(this)">🦷</div>`;
       const adminIconsCarrito = !esAdminCatalogo() ? '' : _modoSeleccionFotos
         ? (it.img ? `<div style="display:flex;align-items:center;margin-right:4px;"><input type="checkbox" ${_fotosSeleccionadas.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionFoto('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>` : '')
+        : _modoAgregarFotos
+        ? `<div style="display:flex;align-items:center;margin-right:4px;"><input type="checkbox" ${_productosSeleccionadosAgregar.has(it.s) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSeleccionProductoAgregar('${escHtml(it.s)}')" style="width:18px;height:18px;cursor:pointer;"></div>`
         : `<div style="display:flex;flex-direction:column;gap:3px;margin-right:4px;">
             <button onclick="event.stopPropagation(); adminSubirFotoProducto('${escHtml(it.s)}')" title="Agregar/cambiar foto" style="background:none;border:none;font-size:13px;cursor:pointer;padding:1px;line-height:1;">✏️</button>
             ${it.img ? `<button onclick="event.stopPropagation(); adminBorrarFotoProducto('${escHtml(it.s)}')" title="Borrar foto" style="background:none;border:none;font-size:13px;cursor:pointer;padding:1px;line-height:1;">🗑️</button>` : ''}
@@ -4515,9 +4764,7 @@ function renderCarrito(){
             ? `<span class="ci-medio-pago medio-contado">✓ Precios ya con 10% off</span>`
             : `<span class="ci-medio-pago medio-tarjeta">💳 Tarjeta — 1 pago</span>`)
         : '';
-      const medioPagoDetalleCarrito = (listaActiva === 'p1' && _adminVistaPrecio === 'normal')
-        ? `<div class="ci-medio-pago-detalle">Efectivo, débito o transferencia — precio final, IVA incluido</div>`
-        : (listaActiva === 'p2' && _adminVistaPrecio === 'normal') ? `<div class="ci-medio-pago-detalle">Precio final, IVA incluido</div>` : '';
+      const medioPagoDetalleCarrito = (listaActiva === 'p1' && _adminVistaPrecio === 'normal') ? `<div class="ci-medio-pago-detalle">Efectivo, débito o transferencia</div>` : '';
       return `
         <div class="carrito-item">
           <div class="ci-top">
@@ -4527,7 +4774,11 @@ function renderCarrito(){
               <div class="ci-sku">SKU: ${escHtml(it.s)}</div>
               <div class="ci-precio">${fmtMoney(precio)} c/u</div>
               <div class="ci-stock-row">
-                ${it.st ? `<div class="prod-stock-agotado">Agotado</div>` : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>` : `<div class="prod-stock-en">En stock</div>`}
+                ${it.st
+                  ? (_ocultarAgotadoSet.has(sku)
+                      ? (esAdminCatalogo() ? `<button onclick="event.stopPropagation(); toggleOcultarAgotado('${escHtml(sku)}')" title="Volver a mostrar 'Agotado' a este producto" style="background:none;border:none;font-size:13px;cursor:pointer;padding:0 2px;line-height:1;opacity:.5;">🙈</button>` : '')
+                      : `<div class="prod-stock-agotado">Agotado</div>${esAdminCatalogo() ? `<button onclick="event.stopPropagation(); toggleOcultarAgotado('${escHtml(sku)}')" title="Ocultarle 'Agotado' a este producto (en el carrito, Pantalla completa y el PDF)" style="background:none;border:none;font-size:13px;cursor:pointer;padding:0 2px;line-height:1;">🙈</button>` : ''}`)
+                  : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>` : `<div class="prod-stock-en">En stock</div>`}
                 ${medioPagoBadgeCarrito}
               </div>
               ${medioPagoDetalleCarrito}
@@ -4580,18 +4831,33 @@ let _pedidoFullModo = 'pedido';
 let _pedidoFullMostrarTotal = true;
 let _pedidoFullMostrarFormaPago = true;
 let _pedidoFullOrden = 'original'; // 'original' | 'precio_asc' | 'precio_desc' — solo aplica en modo Presupuesto
+// Costo de envío que el admin puede sumarle a "Tu pedido" — misma estrategia que
+// Presupuestos: Envío en el CRM (toggle activo + tipo + monto), simplificada acá.
+// Solo lo puede tocar el admin (esAdminCatalogo()) y se refleja tanto en el total
+// que se ve en pantalla como en el PDF que se descarga. "editando" controla si se
+// ve el panel completo (checkbox+selector+monto) o el resumen colapsado — apenas
+// se carga un monto válido se colapsa solo, para que la captura le quede limpia
+// al cliente. Solo existe en modo "Pedido": en "Presupuesto" no se ofrece.
+let _pedidoEnvioAdmin = { activo: false, tipo: 'Envío a domicilio', costo: '', editando: false };
 window.abrirVistaCompletaPedido = (preservarEstado) => {
   if (!preservarEstado) {
     _pedidoFullModo = esAdminCatalogo() ? 'presupuesto' : 'pedido';
     _pedidoFullMostrarTotal = !esAdminCatalogo(); // admin arranca en "sin total"; el cliente siempre lo ve
     _pedidoFullMostrarFormaPago = true;
     _pedidoFullOrden = 'original';
+    _pedidoEnvioAdmin = { activo: false, tipo: 'Envío a domicilio', costo: '', editando: false };
   }
   document.getElementById('pedido-full-backdrop')?.remove();
   if (!carrito.size) return;
 
   const esAdmin = esAdminCatalogo();
   const _esPresu = esAdmin && _pedidoFullModo === 'presupuesto';
+  // El costo de envío solo se ofrece y solo suma en modo "Pedido" — en "Presupuesto"
+  // la opción no aparece en absoluto.
+  const _envioTieneMonto = parseFloat(_pedidoEnvioAdmin.costo) > 0;
+  const _mostrarPanelEnvio = esAdmin && !_esPresu && (!_pedidoEnvioAdmin.activo || _pedidoEnvioAdmin.editando || !_envioTieneMonto);
+  const _mostrarResumenEnvio = esAdmin && !_esPresu && _pedidoEnvioAdmin.activo && !_pedidoEnvioAdmin.editando && _envioTieneMonto;
+  const _envioMontoActual = (esAdmin && !_esPresu && _pedidoEnvioAdmin.activo) ? (parseFloat(_pedidoEnvioAdmin.costo) || 0) : 0;
 
   let entradasCarrito = Array.from(carrito.entries());
   if (_esPresu && _pedidoFullOrden !== 'original') {
@@ -4610,18 +4876,16 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
     const foto = imgsArr.length
       ? `<img src="https://drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w400" alt="" style="width:100%;height:100%;object-fit:contain;background:#f4f6fa;">`
       : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;background:#f4f6fa;opacity:.35;">🦷</div>`;
-    const stockHtml = it.st ? `<div class="prod-stock-agotado">Agotado</div>` : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>` : `<div class="prod-stock-en">En stock</div>`;
+    const stockHtml = it.st
+      ? (_ocultarAgotadoSet.has(sku) ? '' : `<div class="prod-stock-agotado">Agotado</div>`)
+      : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>` : `<div class="prod-stock-en">En stock</div>`;
     const _mostrarFormaPagoFila = !_esPresu || _pedidoFullMostrarFormaPago;
     const medioPagoBadge = (listaActiva && _adminVistaPrecio === 'normal' && _mostrarFormaPagoFila)
       ? (listaActiva === 'p1'
           ? `<span class="ci-medio-pago medio-contado">✓ Precios ya con 10% off</span>`
           : `<span class="ci-medio-pago medio-tarjeta">💳 Tarjeta — 1 pago</span>`)
       : '';
-    const medioPagoDetalle = (_adminVistaPrecio === 'normal' && _mostrarFormaPagoFila)
-      ? (listaActiva === 'p1'
-          ? `<div class="ci-medio-pago-detalle">Efectivo, débito o transferencia — precio final, IVA incluido</div>`
-          : `<div class="ci-medio-pago-detalle">Precio final, IVA incluido</div>`)
-      : '';
+    const medioPagoDetalle = (listaActiva === 'p1' && _adminVistaPrecio === 'normal' && _mostrarFormaPagoFila) ? `<div class="ci-medio-pago-detalle">Efectivo, débito o transferencia</div>` : '';
     return `
       <div style="display:flex;gap:14px;align-items:center;padding:14px 4px;border-bottom:1px solid var(--border);">
         <div style="width:88px;height:88px;flex-shrink:0;border-radius:12px;overflow:hidden;border:1px solid var(--border);">${foto}</div>
@@ -4629,12 +4893,12 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
           <div style="font-size:14.5px;font-weight:700;color:var(--text);line-height:1.3;">${escHtml(it.n)}</div>
           <div class="ci-sku" style="margin-top:2px;">SKU: ${escHtml(it.s)}</div>
           <div style="font-size:12px;color:var(--text3);margin-top:2px;">${fmtMoney(precio)} c/u × ${qty}</div>
-          <div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${stockHtml}${medioPagoBadge}</div>
+          <div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${stockHtml}${it.st && esAdmin ? `<button onclick="toggleOcultarAgotado('${escHtml(sku)}')" title="${_ocultarAgotadoSet.has(sku) ? 'Volver a mostrar \'Agotado\' a este producto' : 'Ocultarle \'Agotado\' a este producto (acá, en el carrito y en el PDF)'}" style="background:none;border:none;font-size:13px;cursor:pointer;padding:0 2px;line-height:1;${_ocultarAgotadoSet.has(sku) ? 'opacity:.5;' : ''}">🙈</button>` : ''}${medioPagoBadge}</div>
           ${medioPagoDetalle}
         </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+        <div class="${esAdmin ? 'ci-precio-col-hover' : ''}" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
           <div style="font-size:16px;font-weight:800;color:var(--text);white-space:nowrap;">${fmtMoney(precio * qty)}</div>
-          <button onclick="quitarDelPedidoCompleto('${escHtml(sku)}')" title="Quitar del pedido" style="
+          <button onclick="quitarDelPedidoCompleto('${escHtml(sku)}')" title="Quitar del pedido" class="${esAdmin ? 'ci-precio-col-hover-btn' : ''}" style="
             background:none;border:1px solid var(--border);border-radius:8px;color:var(--red,#dc2626);
             font-size:12px;padding:4px 8px;cursor:pointer;white-space:nowrap;
           ">🗑 Quitar</button>
@@ -4684,8 +4948,27 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
       </div>` : ''}
       <div id="pedido-full-body" style="overflow-y:auto;padding:4px 20px;flex:1;">${filas}</div>
       <div id="pedido-full-footer" style="padding:16px 20px;border-top:1px solid var(--border);">
+        ${_mostrarPanelEnvio ? `<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;background:var(--panel2);">
+          <label style="display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;">
+            <span style="font-size:12.5px;font-weight:700;color:var(--text2);">🚚 Agregar costo de envío</span>
+            <input type="checkbox" id="pedido-envio-toggle" ${_pedidoEnvioAdmin.activo ? 'checked' : ''} onchange="_pedidoToggleEnvio(this.checked)" style="width:17px;height:17px;cursor:pointer;">
+          </label>
+          ${_pedidoEnvioAdmin.activo ? `<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+            <select id="pedido-envio-tipo" onchange="_pedidoCambiarTipoEnvio(this.value)" style="flex:1;min-width:150px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px;background:var(--panel);color:var(--text);">
+              ${['Envío a domicilio', 'Retiro en sucursal', 'Envío por transporte', 'Envío rápido (CABA)', 'Financiamiento'].map(t => `<option value="${escHtml(t)}" ${_pedidoEnvioAdmin.tipo === t ? 'selected' : ''}>${escHtml(t)}</option>`).join('')}
+            </select>
+            <input type="text" inputmode="numeric" id="pedido-envio-costo" placeholder="Monto, ej: 2500" value="${escHtml(String(_pedidoEnvioAdmin.costo || ''))}" onblur="_pedidoCommitCostoEnvio(this.value)" onkeydown="if(event.key==='Enter')this.blur()" style="width:130px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px;background:var(--panel);color:var(--text);">
+          </div>` : ''}
+        </div>` : ''}
+        ${_mostrarResumenEnvio ? `<div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--text2);margin-bottom:6px;">
+          <span>Envío (${escHtml(_pedidoEnvioAdmin.tipo)})</span>
+          <span style="display:flex;align-items:center;gap:7px;">
+            ${fmtMoney(_envioMontoActual)}
+            <button onclick="_pedidoEditarEnvio()" title="Editar envío" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:0;line-height:1;">✏️</button>
+          </span>
+        </div>` : ''}
         ${(!_esPresu || _pedidoFullMostrarTotal) ? `<div style="display:flex;align-items:center;justify-content:space-between;font-size:16px;font-weight:800;color:var(--text);margin-bottom:12px;">
-          <span>Total</span><span>${document.getElementById('carrito-total')?.textContent || ''}</span>
+          <span>Total</span><span>${fmtMoney(calcularTotal() + _envioMontoActual)}</span>
         </div>` : ''}
         <button id="btn-descargar-pedido-pdf" onclick="descargarPedidoPDFConFotos()" style="
           width:100%;background:var(--green,#0ea968);color:#fff;border:none;border-radius:10px;
@@ -4715,6 +4998,34 @@ window._pedidoToggleMostrarFormaPago = (mostrar) => {
 };
 window._pedidoCambiarOrden = (orden) => {
   _pedidoFullOrden = orden;
+  abrirVistaCompletaPedido(true);
+};
+// Envío (solo admin, solo modo "Pedido") — mismo mecanismo de "commit al confirmar"
+// que usa el CRM: el tipo y el toggle vuelven a armar la vista al toque, el monto
+// recién al perder el foco o apretar Enter. Apenas se carga un monto válido, el
+// panel se colapsa solo en un resumen de una línea (para la captura al cliente);
+// el ✏️ del resumen lo reabre si hay que corregir algo.
+window._pedidoToggleEnvio = (activo) => {
+  if (!esAdminCatalogo()) return;
+  _pedidoEnvioAdmin.activo = activo;
+  _pedidoEnvioAdmin.editando = activo; // al activar entra en modo edición; al desactivar no hay nada que mostrar
+  abrirVistaCompletaPedido(true);
+};
+window._pedidoCambiarTipoEnvio = (tipo) => {
+  if (!esAdminCatalogo()) return;
+  _pedidoEnvioAdmin.tipo = tipo;
+  abrirVistaCompletaPedido(true);
+};
+window._pedidoCommitCostoEnvio = (v) => {
+  if (!esAdminCatalogo()) return;
+  const num = parseFloat(String(v || '').replace(/[^0-9.]/g, '')) || 0;
+  _pedidoEnvioAdmin.costo = num || '';
+  if (num > 0) _pedidoEnvioAdmin.editando = false; // monto cargado → colapsar el panel
+  abrirVistaCompletaPedido(true);
+};
+window._pedidoEditarEnvio = () => {
+  if (!esAdminCatalogo()) return;
+  _pedidoEnvioAdmin.editando = true;
   abrirVistaCompletaPedido(true);
 };
 
@@ -4777,8 +5088,8 @@ async function _construirCanvasPedidoCompleto(){
     const textX = PAD + fotoSize + 16;
     const anchoTexto = W - textX - PAD - 90;
     const lineasNombre = _wrap(it.n, '700 14px DM Sans, sans-serif', anchoTexto).slice(0, 2);
-    const stockTxt = it.st ? 'Agotado' : it.sb ? 'Stock a confirmar' : 'En stock';
-    const stockColor = it.st ? '#dc2626' : it.sb ? '#d97706' : '#0ea968';
+    const stockTxt = (it.st && !_ocultarAgotadoSet.has(it.s)) ? 'Agotado' : it.sb ? 'Stock a confirmar' : (it.st ? '' : 'En stock');
+    const stockColor = (it.st && !_ocultarAgotadoSet.has(it.s)) ? '#dc2626' : it.sb ? '#d97706' : '#0ea968';
     const alto = Math.max(fotoSize, 18 + lineasNombre.length * 17 + 15 + 15 + 15) + filaGap;
     filas.push({ it, qty, precio, imgEl, lineasNombre, stockTxt, stockColor, alto });
   }
@@ -4930,6 +5241,7 @@ window.descargarPedidoPDFConFotos = async () => {
     const _esPresu = esAdminCatalogo() && _pedidoFullModo === 'presupuesto';
     const mostrarMedioPago = _adminVistaPrecio === 'normal' && (!_esPresu || _pedidoFullMostrarFormaPago);
     const filaAlto = mostrarMedioPago ? 39 : 31;
+    const _envioMontoPDF = (esAdminCatalogo() && !_esPresu && _pedidoEnvioAdmin.activo) ? (parseFloat(_pedidoEnvioAdmin.costo) || 0) : 0;
     let y = margin;
 
     if (_esPresu) {
@@ -4970,6 +5282,18 @@ window.descargarPedidoPDFConFotos = async () => {
         return _pedidoFullOrden === 'precio_asc' ? subtotalA - subtotalB : subtotalB - subtotalA;
       });
     }
+
+    // Encabezado simple ("PRODUCTO" / "SUBTOTAL") para ordenar un poco la lista — mismos
+    // textos que ya usa el PDF de Presupuestos del CRM, alineados con el nombre y el
+    // precio de cada fila.
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(130, 140, 160);
+    doc.text('PRODUCTO', margin + fotoSize + 6, y);
+    doc.text('SUBTOTAL', pageW - margin, y, { align: 'right' });
+    y += 3;
+    doc.setDrawColor(210, 214, 224); doc.setLineWidth(0.3);
+    doc.line(margin, y, pageW - margin, y);
+    y += 6;
+
     for (const [sku, qty] of entradasCarritoPDF) {
       const it = catalogoBySku.get(sku);
       if (!it) continue;
@@ -5008,10 +5332,10 @@ window.descargarPedidoPDFConFotos = async () => {
           doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(14, 169, 104);
           doc.text('✓ Precios ya con 10% off', textX, y + offsetY + 13.5);
           doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130, 140, 160);
-          doc.text('Efectivo, débito o transferencia — precio final, IVA incluido', textX, y + offsetY + 17.5);
+          doc.text('Efectivo, débito o transferencia', textX, y + offsetY + 17.5);
         } else {
           doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130, 140, 160);
-          doc.text('Tarjeta de crédito en 1 pago — precio final, IVA incluido', textX, y + offsetY + 13.5);
+          doc.text('Tarjeta de crédito en 1 pago', textX, y + offsetY + 13.5);
         }
       }
 
@@ -5024,14 +5348,20 @@ window.descargarPedidoPDFConFotos = async () => {
     }
 
     if (!_esPresu || _pedidoFullMostrarTotal) {
-      if (y + 14 > pageH - margin) { doc.addPage(); y = margin; }
+      if (y + (_envioMontoPDF > 0 ? 22 : 14) > pageH - margin) { doc.addPage(); y = margin; }
       y += 4;
+      if (_envioMontoPDF > 0) {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(80, 90, 110);
+        doc.text(`Envío (${_pedidoEnvioAdmin.tipo})`, margin, y);
+        doc.text(fmtMoney(_envioMontoPDF), pageW - margin, y, { align: 'right' });
+        y += 7;
+      }
       doc.setDrawColor(15, 23, 42); doc.setLineWidth(0.4);
       doc.line(margin, y, pageW - margin, y);
       y += 8;
       doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(15, 23, 42);
       doc.text('Total', margin, y);
-      doc.text(document.getElementById('carrito-total')?.textContent || '', pageW - margin, y, { align: 'right' });
+      doc.text(fmtMoney(calcularTotal() + _envioMontoPDF), pageW - margin, y, { align: 'right' });
     }
 
     doc.save(_esPresu ? 'Presupuesto_Dentalab.pdf' : 'Pedido_Dentalab.pdf');
@@ -5491,6 +5821,29 @@ window._avisosDescartarTodos = () => {
   renderResultados();
 };
 
+// Aviso arriba del buscador para que un cliente que siempre pide lo mismo pueda ir
+// directo a sus productos habituales sin tener que escribir nada primero. Solo aparece
+// si ya hay al menos un producto pedido 2 veces o más, y no si ya está usando ese filtro
+// o si ya escribió algo en el buscador (ahí no aporta, molesta).
+function _htmlFrecuentesBanner(){
+  if (filtroSoloFrecuentes || busqueda.trim()) return '';
+  const skus = _frecuentesSkusOrdenados();
+  if (!skus.length) return '';
+  return `
+    <div id="frecuentes-banner" style="display:flex;align-items:center;gap:10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);color:#b45309;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.4;margin-bottom:12px;">
+      <span style="flex:1;">⭐ <b>¿Pedís siempre lo mismo?</b> Tenés ${skus.length} producto${skus.length === 1 ? '' : 's'} habitual${skus.length === 1 ? '' : 'es'} — te los mostramos primero, sin tener que buscarlos de nuevo.</span>
+      <button onclick="_frecuentesVerHabituales()" style="background:none;border:1px solid currentColor;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:inherit;cursor:pointer;flex-shrink:0;white-space:nowrap;">Ver los míos</button>
+    </div>`;
+}
+window._frecuentesVerHabituales = () => {
+  filtroSoloFrecuentes = true;
+  const chk = document.getElementById('chk-frecuentes');
+  if (chk) chk.checked = true;
+  paginaActual = 1;
+  renderResultados();
+  document.getElementById('resultados')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
 function renderPrincipal(){
   if (typeof _renderCarruselBanners === 'function') _renderCarruselBanners();
   const mapSec = document.querySelector('.map-footer-section');
@@ -5501,13 +5854,12 @@ function renderPrincipal(){
     <div class="badge-sin-registro">✨ No necesitás crear una cuenta ni registrarte — elegís los productos y coordinamos todo por WhatsApp</div>
     ${_htmlBienvenida()}
     ${_htmlAvisosLlegadosBanner()}
+    ${_htmlFrecuentesBanner()}
     ${_pedidoRestauradoDeLS ? `<div class="banner-info-suave" style="border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600;margin-bottom:12px;">🔄 Recuperamos el pedido que tenías armado.</div>` : ''}
-    <div class="pago-activo pago-activo-pago" onclick="cambiarPago()" style="cursor:pointer;flex-wrap:wrap;row-gap:4px;">
+    <div class="pago-activo pago-activo-pago" onclick="cambiarPago()" style="cursor:pointer;${listaActiva === 'p1' ? 'flex-wrap:wrap;row-gap:4px;' : ''}">
       <span id="pago-activo-label"><span class="paso-badge">1</span>Forma de pago: <b>${listaLabel}</b></span>
       <button onclick="cambiarPago()">Cambiar</button>
-      ${listaActiva === 'p1'
-        ? `<div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--green);">✓ Los precios que ves ya tienen el 10% off aplicado — son precios finales, con IVA incluido</div>`
-        : `<div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--green);">✓ Los precios que ves son precios finales, con IVA incluido</div>`}
+      ${listaActiva === 'p1' ? `<div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--green);">✓ Los precios que ves ya tienen el 10% off aplicado</div>` : ''}
     </div>
 
     ${esAdminCatalogo() ? `
@@ -5557,7 +5909,9 @@ function renderPrincipal(){
             </select>
             <label class="chk-ofertas"><input type="checkbox" id="chk-ofertas" onchange="onFiltroChange()"> Solo en ofertas</label>
             <label class="chk-ofertas"><input type="checkbox" id="chk-stock" onchange="onFiltroChange()"> Solo en stock</label>
+            ${_frecuentesSkusOrdenados().length ? `<label class="chk-ofertas"><input type="checkbox" id="chk-frecuentes" onchange="onFiltroChange()"> ⭐ Solo lo que pedís seguido</label>` : ''}
             ${esAdminCatalogo() ? `<button id="btn-modo-seleccion-fotos" onclick="toggleModoSeleccionFotos()" style="background:${_modoSeleccionFotos ? '#dc2626' : 'var(--panel2)'};color:${_modoSeleccionFotos ? '#fff' : 'var(--text)'};border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">${_modoSeleccionFotos ? '✕ Cancelar selección' : '☑️ Seleccionar fotos para borrar'}</button>` : ''}
+            ${esAdminCatalogo() ? `<button id="btn-modo-agregar-fotos" onclick="toggleModoAgregarFotos()" style="background:${_modoAgregarFotos ? '#0ea968' : 'var(--panel2)'};color:${_modoAgregarFotos ? '#fff' : 'var(--text)'};border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">${_modoAgregarFotos ? '✕ Cancelar selección' : '☑️ Seleccionar productos para agregar fotos'}</button>` : ''}
           </div>
           <div class="resultados" id="resultados"></div>
         </div>
@@ -5683,6 +6037,7 @@ window.onFiltroChange = () => {
   filtroCategoria = document.getElementById('sel-categoria')?.value || 'todas';
   filtroSoloOfertas = document.getElementById('chk-ofertas')?.checked || false;
   filtroSoloStock = document.getElementById('chk-stock')?.checked || false;
+  filtroSoloFrecuentes = document.getElementById('chk-frecuentes')?.checked || false;
   paginaActual = 1;
   _busquedaEnterIndex = 0; // se reinicia el recorrido de 'Enter' al cambiar la búsqueda/filtros
   _busquedaEnterHistorial = [];
@@ -6691,9 +7046,13 @@ if ('serviceWorker' in navigator) {
 document.addEventListener('keydown', (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.key !== 'Backspace') return;
   // No interceptar si el foco está en un campo de texto donde Ctrl+Backspace se usa para
-  // borrar la palabra anterior (comportamiento nativo del navegador).
-  const tag = (document.activeElement && document.activeElement.tagName) || '';
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || (document.activeElement && document.activeElement.isContentEditable)) return;
+  // borrar la palabra anterior (comportamiento nativo del navegador) — excepto en el
+  // buscador de productos, donde también queremos que vacíe el carrito sin tener que
+  // hacer clic afuera primero (mismo criterio que los demás atajos de esta página).
+  const el = document.activeElement;
+  const tag = (el && el.tagName) || '';
+  const esBuscador = !!(el && el.id === 'input-busqueda');
+  if (!esBuscador && (tag === 'INPUT' || tag === 'TEXTAREA' || (el && el.isContentEditable))) return;
   if (typeof carrito === 'undefined' || !carrito.size) return;
   e.preventDefault();
   if (typeof confirmarVaciarCarrito === 'function') confirmarVaciarCarrito();
@@ -6816,21 +7175,7 @@ document.addEventListener('keydown', (e) => {
 
   if (e.key === 'Enter') {
     e.preventDefault();
-    if (_navIdxSeleccionado < 0 || !tarjetas[_navIdxSeleccionado]) {
-      // Si no había nada seleccionado todavía: si lo que se escribió en el buscador
-      // coincide EXACTO con el SKU de alguno de los resultados (por ejemplo "32791",
-      // aunque también aparezcan variantes como "32791-F"), se elige ese puntual — no
-      // cualquiera de las variantes, ni el primero de la lista porque sí.
-      let idxInicial = 0;
-      if (esBuscador) {
-        const consulta = (el.value || '').trim().toUpperCase();
-        if (consulta) {
-          const idxExacto = tarjetas.findIndex(t => (t.dataset.sku || '').toUpperCase() === consulta);
-          if (idxExacto >= 0) idxInicial = idxExacto;
-        }
-      }
-      _navSeleccionar(idxInicial);
-    } // si ya había algo seleccionado, seguimos abajo para agregarlo/sacarlo de una
+    if (_navIdxSeleccionado < 0 || !tarjetas[_navIdxSeleccionado]) { _navSeleccionar(0); } // si no había nada seleccionado, se selecciona el primero y seguimos abajo para agregarlo de una
     const idx = _navIdxSeleccionado;
     if (idx < 0 || !tarjetas[idx]) return;
     const sku = tarjetas[idx].dataset.sku;
@@ -6908,11 +7253,15 @@ document.addEventListener('keydown', (e) => {
   // el producto, para que nunca se termine escribiendo en el buscador (antes, si no se
   // encontraba un único resultado, la tecla se dejaba pasar y quedaba tipeada).
   e.preventDefault();
-  // Si el mouse no está sobre ningún producto, se usa el primer resultado que aparece en
-  // pantalla de la búsqueda actual (por SKU o por nombre) — mismo orden en que se listan,
-  // así el atajo funciona sin necesidad de mover el mouse hasta la tarjeta, sea cual sea
-  // la cantidad de resultados.
+  // Si el mouse no está sobre ningún producto, se usa el que esté seleccionado por
+  // teclado (flechas) en este momento; si tampoco hay eso, se cae al primer resultado que
+  // aparece en pantalla de la búsqueda actual (por SKU o por nombre) — mismo orden en que
+  // se listan, así el atajo funciona sin necesidad de mover el mouse ni las flechas.
   let skuObjetivo = _skuHoverAdmin;
+  if (!skuObjetivo && typeof _navIdxSeleccionado !== 'undefined' && _navIdxSeleccionado >= 0) {
+    const tarjetaSel = _navTarjetas()[_navIdxSeleccionado];
+    if (tarjetaSel) skuObjetivo = tarjetaSel.dataset.sku;
+  }
   let resultados = null;
   if (!skuObjetivo && typeof buscarProductos === 'function') {
     resultados = buscarProductos();
@@ -6922,6 +7271,14 @@ document.addEventListener('keydown', (e) => {
     const msg = '⚠ No hay ningún producto para aplicar Shift+Q.';
     if (typeof showToast === 'function') showToast(msg, 'warn'); else alert(msg);
     return;
+  }
+  // Sincronizar el cursor de navegación (flechas) con el producto que Shift+Q terminó
+  // usando — así, si llegaste con el mouse (no con las flechas), la próxima flecha que
+  // toques sigue desde ACÁ y no desde donde había quedado antes (que era el bug: parecía
+  // que "volvía al principio de la columna" porque el cursor nunca se había movido).
+  if (typeof _navTarjetas === 'function' && typeof _navSeleccionar === 'function') {
+    const idxObjetivo = _navTarjetas().findIndex(t => t.dataset.sku === skuObjetivo);
+    if (idxObjetivo >= 0) _navSeleccionar(idxObjetivo);
   }
   const _enfocarCantidad = () => {
     const cont = document.getElementById('resultados');
@@ -6937,7 +7294,7 @@ document.addEventListener('keydown', (e) => {
   // cantidad, una vez que el campo ya existe en la página.
   const it = catalogoBySku.get(skuObjetivo);
   const precio = it ? precioDe(it) : 0;
-  const puedeAgregar = !!precio && !(it && it.st);
+  const puedeAgregar = !!precio && (!(it && it.st) || esAdminCatalogo());
   if (!puedeAgregar) return;
   carrito.set(skuObjetivo, 1);
   requestAnimationFrame(() => {
@@ -6948,24 +7305,22 @@ document.addEventListener('keydown', (e) => {
 
 });
 
-// Atajo de teclado: Shift + Enter — abre directo la pantalla completa (zoom) del
-// producto, con el mismo criterio de prioridad que ya usa Shift+Q: 1) el producto con
-// el mouse encima, 2) si no, el que esté seleccionado con las flechas del teclado, 3) si
-// tampoco hay eso, el primer resultado de la búsqueda actual. Funciona igual parado en
-// el buscador que en cualquier otro lado, y solo en modo admin.
+// Atajo de teclado: Shift + Enter — abre la vista en pantalla completa (con "Copiar" y
+// "Recortar") del producto sobre el que está el mouse, o si no hay mouse de por medio, del
+// que esté seleccionado con las flechas, o si tampoco hay eso, del primer resultado de la
+// búsqueda actual — mismo criterio y mismo orden de prioridad que ya usa Shift+Q.
 document.addEventListener('keydown', (e) => {
-  if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.key !== 'Enter') return;
-  if (typeof esAdminCatalogo !== 'function' || !esAdminCatalogo()) return;
+  if (typeof esAdminCatalogo !== 'function' || !esAdminCatalogo()) return; // por ahora, solo admin
+  if (e.key !== 'Enter' || !e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
   const el = document.activeElement;
   const tag = (el && el.tagName) || '';
   const esBuscador = el && el.id === 'input-busqueda';
   if (!esBuscador && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable))) return;
   e.preventDefault();
   let skuObjetivo = _skuHoverAdmin;
-  if (!skuObjetivo && typeof _navIdxSeleccionado !== 'undefined' && _navIdxSeleccionado >= 0 && typeof _navTarjetas === 'function') {
-    const tarjetas = _navTarjetas();
-    skuObjetivo = tarjetas[_navIdxSeleccionado]?.dataset.sku || null;
+  if (!skuObjetivo && typeof _navIdxSeleccionado !== 'undefined' && _navIdxSeleccionado >= 0) {
+    const tarjetaSel = _navTarjetas()[_navIdxSeleccionado];
+    if (tarjetaSel) skuObjetivo = tarjetaSel.dataset.sku;
   }
   if (!skuObjetivo && typeof buscarProductos === 'function') {
     const resultados = buscarProductos();
@@ -6988,6 +7343,10 @@ document.addEventListener('keydown', (e) => {
 // el otro recién había agregado.
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+  // Si hay un producto seleccionado por teclado (flechas), ese Enter ya lo maneja el atajo
+  // de navegación de arriba — no lo procesamos acá también, o se terminaría agregando o
+  // sacando el producto DOS veces (una por cada atajo) en el mismo Enter.
+  if (typeof _navIdxSeleccionado !== 'undefined' && _navIdxSeleccionado >= 0) return;
   const el = document.activeElement;
   const tag = (el && el.tagName) || '';
   if (el && el.id === 'input-busqueda') return;
