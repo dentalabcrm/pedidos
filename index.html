@@ -1041,6 +1041,59 @@ window.toggleOcultarAgotado = (sku) => {
   if (document.getElementById('pedido-full-backdrop')) abrirVistaCompletaPedido(true);
 };
 
+// ── Precio manual por producto, solo para ESTE pedido (solo admin) — para cuando hay que
+// ajustar el precio de un ítem puntual del pedido/presupuesto que se está armando (un
+// descuento especial, una corrección, etc.) sin tocar el precio real del catálogo. Afecta
+// únicamente a este carrito: en la grilla de búsqueda el producto sigue mostrando su
+// precio de lista de siempre. Viaja guardado junto con el pedido, igual que el carrito y
+// "Ocultar Agotado". ──
+const LS_KEY_PRECIO_MANUAL = 'dentalab_pedido_precio_manual_v1';
+let _preciosManualesCarrito = new Map(); // sku -> precio unitario manual
+function _guardarPreciosManualesLS(){
+  try {
+    if (_preciosManualesCarrito.size) localStorage.setItem(LS_KEY_PRECIO_MANUAL, JSON.stringify(Array.from(_preciosManualesCarrito.entries())));
+    else localStorage.removeItem(LS_KEY_PRECIO_MANUAL);
+  } catch(e) {}
+}
+function _restaurarPreciosManualesLS(){
+  try {
+    const raw = localStorage.getItem(LS_KEY_PRECIO_MANUAL);
+    if (!raw) return;
+    const entradas = JSON.parse(raw);
+    if (Array.isArray(entradas)) entradas.forEach(([sku, precio]) => {
+      if (Number.isFinite(precio) && precio >= 0) _preciosManualesCarrito.set(sku, precio);
+    });
+  } catch(e) {}
+}
+// Precio a usar para un producto DENTRO del carrito/pedido — si tiene un precio manual
+// cargado, ese; si no, el precio normal de catálogo (precioDe). La grilla de búsqueda
+// sigue usando precioDe directamente, nunca esta función.
+function precioCarritoDe(sku){
+  if (_preciosManualesCarrito.has(sku)) return _preciosManualesCarrito.get(sku);
+  const it = catalogoBySku.get(sku);
+  return it ? precioDe(it) : 0;
+}
+window.setPrecioManual = (sku, valorTexto) => {
+  if (!esAdminCatalogo()) return;
+  const n = parseFloat(String(valorTexto).replace(/\./g, '').replace(',', '.'));
+  if (!Number.isFinite(n) || n < 0) {
+    // Vacío o inválido: se borra el precio manual y vuelve a usar el de catálogo.
+    _preciosManualesCarrito.delete(sku);
+  } else {
+    _preciosManualesCarrito.set(sku, n);
+  }
+  _guardarPreciosManualesLS();
+  renderCarrito();
+  if (document.getElementById('pedido-full-backdrop')) abrirVistaCompletaPedido(true);
+};
+window.quitarPrecioManual = (sku) => {
+  if (!esAdminCatalogo()) return;
+  _preciosManualesCarrito.delete(sku);
+  _guardarPreciosManualesLS();
+  renderCarrito();
+  if (document.getElementById('pedido-full-backdrop')) abrirVistaCompletaPedido(true);
+};
+
 function _guardarEstadoLS(){
   try { localStorage.setItem(LS_KEY_ESTADO, JSON.stringify({ modalidadEntrega, listaActiva, medioPagoContado, financiamientoTarjeta, transportistaElegido, recepcionEnvioTipo })); } catch(e) {}
 }
@@ -1270,6 +1323,7 @@ function precioDe(item){
 // (comparten el mismo tipo de equipo/accesorio que ya tiene esa opción habilitada).
 const SKUS_TERMINAL_MP_EXTRA = new Set([
   '1384', '1382', '1386-bla', '1386-neg', '1380', '42007', '1381', '1383-bla', '1383-neg', '1385-bla', '1385-neg',
+  '1386-BLA', '1385-BLA', '1385-NEG', '1386-NEG', '1383-BLA', '1383-NEG', // mismos SKUs de arriba, en mayúscula por las dudas
   '8021', '8017', '3060', '8773-e', '8774-e', '8770', '8771', '8776', '8781', '8777', '8782', '8778', '8779',
   '8100', '8111', '8115', '8176', '8160', '8175', '8101', '8308', '3065', '3064', '8043', '8044', '8092', '8090-pb',
   '8094', '8093', '8804', '8808', '8809', '8819', '59994', '8010', '8005', '8009', '8007', '8000', '8002', '59999',
@@ -1547,7 +1601,7 @@ function _presuItems(){
   return [...carrito.entries()].map(([sku, qty]) => {
     const it = catalogoBySku.get(sku);
     if (!it) return null;
-    const precio = precioDe(it);
+    const precio = precioCarritoDe(sku);
     return { sku, nombre: it.n, qty, precio: precio || 0, subtotal: (precio || 0) * qty };
   }).filter(Boolean);
 }
@@ -3877,6 +3931,7 @@ async function cargarCatalogo(){
 
     _restaurarCarritoLS();
     _restaurarOcultarAgotadoLS();
+    _restaurarPreciosManualesLS();
     const estadoGuardado = _restaurarEstadoLS();
     if (carrito.size && estadoGuardado && estadoGuardado.listaActiva) {
       modalidadEntrega = estadoGuardado.modalidadEntrega || null;
@@ -4692,8 +4747,7 @@ window.quitarDelCarrito = (sku) => {
 function calcularTotal(){
   let total = 0;
   carrito.forEach((qty, sku) => {
-    const it = catalogoBySku.get(sku);
-    if (it) total += precioDe(it) * qty;
+    if (catalogoBySku.has(sku)) total += precioCarritoDe(sku) * qty;
   });
   return total;
 }
@@ -4744,7 +4798,7 @@ function renderCarrito(){
     cont.innerHTML = Array.from(carrito.entries()).map(([sku, qty]) => {
       const it = catalogoBySku.get(sku);
       if (!it) return '';
-      const precio = precioDe(it);
+      const precio = precioCarritoDe(sku);
       const foto = it.img
         ? `<img class="prod-foto" src="https://drive.google.com/thumbnail?id=${it.img}&sz=w150" alt="" loading="lazy" title="Ver más grande" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirZoomProducto('${escHtml(it.s)}'); _zoomCopiarTarjeta('${escHtml(it.s)}')" onerror="manejarErrorFotoProducto(this)">`
         : `<div class="prod-foto prod-foto-vacia" style="cursor:pointer;" title="Buscar foto en Drive" data-sku="${escHtml(it.s)}" data-nombre="${escHtml(it.n)}" onclick="event.stopPropagation(); abrirFotoProducto(this)">🦷</div>`;
@@ -4764,7 +4818,7 @@ function renderCarrito(){
             ? `<span class="ci-medio-pago medio-contado">✓ Precios ya con 10% off</span>`
             : `<span class="ci-medio-pago medio-tarjeta">💳 Tarjeta — 1 pago</span>`)
         : '';
-      const medioPagoDetalleCarrito = (listaActiva === 'p1' && _adminVistaPrecio === 'normal') ? `<div class="ci-medio-pago-detalle">Efectivo, débito o transferencia</div>` : '';
+      const medioPagoDetalleCarrito = (listaActiva && _adminVistaPrecio === 'normal') ? `<div class="ci-medio-pago-detalle">${listaActiva === 'p1' ? 'Efectivo, débito o transferencia' : 'Tarjeta de crédito en 1 pago'} — precio final, IVA incluido</div>` : '';
       return `
         <div class="carrito-item">
           <div class="ci-top">
@@ -4772,7 +4826,7 @@ function renderCarrito(){
             <div class="ci-info">
               <div class="ci-nombre">${escHtml(it.n)}</div>
               <div class="ci-sku">SKU: ${escHtml(it.s)}</div>
-              <div class="ci-precio">${fmtMoney(precio)} c/u</div>
+              <div class="ci-precio">${fmtMoney(precio)} c/u${_preciosManualesCarrito.has(sku) ? ' <span style="color:var(--blue);font-weight:700;">✏️ precio a medida</span>' : ''}</div>
               <div class="ci-stock-row">
                 ${it.st
                   ? (_ocultarAgotadoSet.has(sku)
@@ -4841,6 +4895,9 @@ let _pedidoFullOrden = 'original'; // 'original' | 'precio_asc' | 'precio_desc' 
 // se carga un monto válido se colapsa solo, para que la captura le quede limpia
 // al cliente. Solo existe en modo "Pedido": en "Presupuesto" no se ofrece.
 let _pedidoEnvioAdmin = { activo: false, tipo: 'Envío a domicilio', costo: '', editando: false };
+// SKU cuyo precio se está editando a mano ahora mismo en el modal "Pantalla completa"
+// (solo puede haber uno a la vez, como con el envío) — null cuando no se está editando nada.
+let _pedidoEditandoPrecioSku = null;
 window.abrirVistaCompletaPedido = (preservarEstado) => {
   if (!preservarEstado) {
     _pedidoFullModo = esAdminCatalogo() ? 'presupuesto' : 'pedido';
@@ -4848,6 +4905,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
     _pedidoFullMostrarFormaPago = true;
     _pedidoFullOrden = 'original';
     _pedidoEnvioAdmin = { activo: false, tipo: 'Envío a domicilio', costo: '', editando: false };
+    _pedidoEditandoPrecioSku = null;
   }
   document.getElementById('pedido-full-backdrop')?.remove();
   if (!carrito.size) return;
@@ -4873,7 +4931,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
   const filas = entradasCarrito.map(([sku, qty]) => {
     const it = catalogoBySku.get(sku);
     if (!it) return '';
-    const precio = precioDe(it);
+    const precio = precioCarritoDe(sku);
     const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
     const foto = imgsArr.length
       ? `<img src="https://drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w400" alt="" style="width:100%;height:100%;object-fit:contain;background:#f4f6fa;">`
@@ -4887,7 +4945,9 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
           ? `<span class="ci-medio-pago medio-contado">✓ Precios ya con 10% off</span>`
           : `<span class="ci-medio-pago medio-tarjeta">💳 Tarjeta — 1 pago</span>`)
       : '';
-    const medioPagoDetalle = (listaActiva === 'p1' && _adminVistaPrecio === 'normal' && _mostrarFormaPagoFila) ? `<div class="ci-medio-pago-detalle">Efectivo, débito o transferencia</div>` : '';
+    const medioPagoDetalle = (listaActiva && _adminVistaPrecio === 'normal' && _mostrarFormaPagoFila)
+      ? `<div class="ci-medio-pago-detalle">${listaActiva === 'p1' ? 'Efectivo, débito o transferencia' : 'Tarjeta de crédito en 1 pago'} — precio final, IVA incluido</div>`
+      : '';
     return `
       <div style="display:flex;gap:14px;align-items:center;padding:14px 4px;border-bottom:1px solid var(--border);">
         <div style="width:88px;height:88px;flex-shrink:0;border-radius:12px;overflow:hidden;border:1px solid var(--border);">${foto}</div>
@@ -4899,7 +4959,17 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
           ${medioPagoDetalle}
         </div>
         <div class="${esAdmin ? 'ci-precio-col-hover' : ''}" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
-          <div style="font-size:16px;font-weight:800;color:var(--text);white-space:nowrap;">${fmtMoney(precio * qty)}</div>
+          ${esAdmin && _pedidoEditandoPrecioSku === sku
+            ? `<div style="display:flex;align-items:center;gap:4px;">
+                <span style="font-size:12px;color:var(--text3);">$</span>
+                <input type="text" inputmode="decimal" autofocus value="${_preciosManualesCarrito.has(sku) ? _preciosManualesCarrito.get(sku) : precioDe(it)}" onblur="_pedidoCommitPrecioManual('${escHtml(sku)}', this.value)" onkeydown="if(event.key==='Enter')this.blur(); if(event.key==='Escape'){_pedidoEditandoPrecioSku=null; abrirVistaCompletaPedido(true);}" onclick="this.select()" style="width:90px;border:1px solid var(--blue);border-radius:6px;padding:4px 6px;font-size:14px;font-weight:700;text-align:right;background:var(--panel);color:var(--text);">
+              </div>`
+            : `<div style="display:flex;align-items:center;gap:6px;">
+                ${_preciosManualesCarrito.has(sku) ? `<span style="font-size:11px;color:var(--text3);text-decoration:line-through;">${fmtMoney(precioDe(it) * qty)}</span>` : ''}
+                <div style="font-size:16px;font-weight:800;color:${_preciosManualesCarrito.has(sku) ? 'var(--blue)' : 'var(--text)'};white-space:nowrap;">${fmtMoney(precio * qty)}</div>
+                ${esAdmin ? `<button onclick="_pedidoEditandoPrecioSku='${escHtml(sku)}'; abrirVistaCompletaPedido(true);" title="Cambiar el precio de este producto a mano, solo para este pedido" style="background:none;border:none;font-size:12px;cursor:pointer;padding:0 2px;line-height:1;">✏️</button>` : ''}
+              </div>
+              ${_preciosManualesCarrito.has(sku) ? `<button onclick="quitarPrecioManual('${escHtml(sku)}')" title="Volver al precio de catálogo" style="background:none;border:none;font-size:10px;color:var(--text3);cursor:pointer;padding:0;text-decoration:underline;">↺ precio de catálogo</button>` : ''}`}
           <button onclick="quitarDelPedidoCompleto('${escHtml(sku)}')" title="Quitar del pedido" class="${esAdmin ? 'ci-precio-col-hover-btn' : ''}" style="
             background:none;border:1px solid var(--border);border-radius:8px;color:var(--red,#dc2626);
             font-size:12px;padding:4px 8px;cursor:pointer;white-space:nowrap;
@@ -5032,6 +5102,14 @@ window._pedidoEditarEnvio = () => {
   abrirVistaCompletaPedido(true);
 };
 
+// Confirma el precio manual escrito para un producto puntual del pedido (o lo borra si
+// quedó vacío/ inválido) y cierra el modo edición de esa fila.
+window._pedidoCommitPrecioManual = (sku, valorTexto) => {
+  if (!esAdminCatalogo()) return;
+  _pedidoEditandoPrecioSku = null;
+  setPrecioManual(sku, valorTexto); // ya guarda, re-renderiza el carrito y la Pantalla completa
+};
+
 // Quitar un producto directamente desde la vista completa del pedido — saca el ítem del
 // carrito y vuelve a armar esta misma vista con lo que queda (o la cierra si ya no queda
 // nada, ya que abrirVistaCompletaPedido no hace nada si el carrito está vacío).
@@ -5068,7 +5146,7 @@ async function _construirCanvasPedidoCompleto(){
   for (const [sku, qty] of carrito.entries()) {
     const it = catalogoBySku.get(sku);
     if (!it) continue;
-    const precio = precioDe(it);
+    const precio = precioCarritoDe(sku);
     const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
     let imgEl = null;
     if (imgsArr.length) {
@@ -5302,7 +5380,7 @@ window.descargarPedidoPDFConFotos = async () => {
       if (!it) continue;
       if (y + filaAlto > pageH - margin - 16) { doc.addPage(); y = margin; }
 
-      const precio = precioDe(it);
+      const precio = precioCarritoDe(sku);
       const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
       doc.setDrawColor(220, 224, 232);
       doc.rect(margin, y, fotoSize, fotoSize);
@@ -5335,10 +5413,10 @@ window.descargarPedidoPDFConFotos = async () => {
           doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(14, 169, 104);
           doc.text('✓ Precios ya con 10% off', textX, y + offsetY + 13.5);
           doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130, 140, 160);
-          doc.text('Efectivo, débito o transferencia', textX, y + offsetY + 17.5);
+          doc.text('Efectivo, débito o transferencia — precio final, IVA incluido', textX, y + offsetY + 17.5);
         } else {
           doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130, 140, 160);
-          doc.text('Tarjeta de crédito en 1 pago', textX, y + offsetY + 13.5);
+          doc.text('Tarjeta de crédito en 1 pago — precio final, IVA incluido', textX, y + offsetY + 13.5);
         }
       }
 
