@@ -490,7 +490,8 @@
   .prod-foto{width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;background:var(--border);}
   img.prod-foto{cursor:zoom-in;}
   .prod-foto-vacia{display:flex;align-items:center;justify-content:center;font-size:18px;opacity:.4;}
-  .prod-sku{font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--blue);letter-spacing:.2px;}
+  .prod-sku{font-family:'DM Mono',monospace;font-size:10.5px;color:var(--text3);}
+  .prod-sku-admin{font-size:11px;font-weight:700;color:var(--blue);letter-spacing:.2px;}
   .prod-nombre{font-size:13px;font-weight:600;color:var(--text);line-height:1.3;}
   .prod-stock-bajo{font-size:10px;color:var(--amber);font-weight:600;margin-top:2px;}
   .prod-stock-agotado{font-size:10px;color:var(--red);font-weight:600;margin-top:2px;}
@@ -571,7 +572,7 @@
   .ci-bottom{display:flex;align-items:center;gap:10px;flex-shrink:0;}
   .ci-info{flex:1;min-width:0;}
   .ci-nombre{font-size:13px;font-weight:600;color:var(--text);line-height:1.3;}
-  .ci-sku{font-family:'DM Mono',monospace;font-size:10.5px;font-weight:700;color:var(--blue);margin-top:1px;letter-spacing:.2px;}
+  .ci-sku{font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);margin-top:1px;}
   .ci-precio{font-size:11px;color:var(--text3);margin-top:1px;}
   .qty-stepper{display:flex;align-items:center;gap:0;background:var(--panel2);border:1px solid var(--border);border-radius:10px;overflow:hidden;flex-shrink:0;}
   .qty-stepper button{background:none;border:none;color:var(--text);width:30px;height:30px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
@@ -4470,7 +4471,7 @@ function renderResultados(){
         <div class="${claseFila}" data-sku="${escHtml(it.s)}"${clickeable} onmouseenter="_fotoHoverSet('${escHtml(it.s)}')" onmouseleave="_fotoHoverClear('${escHtml(it.s)}')">
           ${adminIcons}${foto}
           <div class="prod-info">
-            <div class="prod-sku">${escHtml(it.s)}</div>
+            <div class="prod-sku${esAdminCatalogo() ? ' prod-sku-admin' : ''}">${escHtml(it.s)}</div>
             <div class="prod-nombre">${escHtml(it.n)}</div>
             ${categoriaHtml}
             ${it.of ? `<div class="prod-oferta">🏷️ Oferta</div>` : ''}
@@ -4518,7 +4519,7 @@ function renderResultados(){
       <div class="${claseTarjeta}" data-sku="${escHtml(it.s)}"${clickeable} ondragover="_fotoDragOver(event, this)" ondragleave="_fotoDragLeave(this)" ondrop="_fotoDrop(event, '${escHtml(it.s)}', this)" onmouseenter="_fotoHoverSet('${escHtml(it.s)}')" onmouseleave="_fotoHoverClear('${escHtml(it.s)}')">
         <div style="position:relative;">${foto}${adminIcons}</div>
         <div class="prod-card-body">
-          <div class="prod-sku">${escHtml(it.s)}</div>
+          <div class="prod-sku${esAdminCatalogo() ? ' prod-sku-admin' : ''}">${escHtml(it.s)}</div>
           <div class="prod-nombre">${escHtml(it.n)}</div>
           ${categoriaHtml}
           ${it.of ? `<div class="prod-oferta">🏷️ Oferta</div>` : ''}
