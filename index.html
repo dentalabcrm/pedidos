@@ -5400,11 +5400,13 @@ window.descargarPedidoPDFConFotos = async () => {
       doc.text(`SKU: ${it.s}`, textX, y + offsetY);
       doc.text(`${fmtMoney(precio)} c/u × ${qty}`, textX, y + offsetY + 4.5);
 
-      // Estado de stock — mismo texto y criterio que se ve en pantalla (Agotado /
-      // Stock a confirmar / En stock), para que el presupuesto no genere falsas
-      // expectativas de disponibilidad inmediata.
-      const stockTexto = it.st ? 'Agotado' : it.sb ? 'Stock a confirmar' : 'En stock';
-      const stockColor = it.st ? [220, 38, 38] : it.sb ? [217, 119, 6] : [14, 169, 104];
+      // Estado de stock — mismo texto y criterio que se ve en pantalla, salvo que acá
+      // "Agotado" se muestra como "Stock a confirmar" (mismo texto y color naranja que ya
+      // usa esa etiqueta en otros productos), para no generar falsas expectativas de que
+      // no hay forma de conseguirlo. Si el admin ocultó el "Agotado" de este producto en
+      // particular, tampoco se muestra nada acá (mismo criterio que en pantalla).
+      const stockTexto = it.st ? (_ocultarAgotadoSet.has(sku) ? '' : 'Stock a confirmar') : it.sb ? 'Stock a confirmar' : 'En stock';
+      const stockColor = it.st ? [217, 119, 6] : it.sb ? [217, 119, 6] : [14, 169, 104];
       doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...stockColor);
       doc.text(stockTexto, textX, y + offsetY + 9);
 
