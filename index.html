@@ -1949,7 +1949,7 @@ window.abrirZoomProducto = (sku) => {
             <div style="font-size:26px;font-weight:800;color:#0f172a;">${it.cp ? '<span style="font-size:12px;color:#8592a6;font-style:italic;font-weight:500;">Consultar precio</span>' : fmtMoney(precio)}</div>
             ${(!it.cp && listaActiva === 'p1' && _adminVistaPrecio === 'normal') ? `<div style="font-size:11px;font-weight:700;color:#0ea968;margin-top:4px;">✓ Precios ya con 10% off</div>` : ''}
             ${(!it.cp && _adminVistaPrecio === 'normal') ? `<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-              <span>${listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago'}</span>
+              <span>${listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago'} — precio final, IVA incluido</span>
               ${(listaActiva === 'p2' && precio && !it.st && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}', '${encodeURIComponent(it.s)}')">💳 Ver cuotas</button>` : ''}
             </div>` : ''}
           </div>
@@ -3970,8 +3970,8 @@ function renderSeleccionPago(){
         ${esAdminCatalogo() ? `<button onclick="abrirEditorTextosCatalogo()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap;">✏️ Editar textos</button>` : ''}
       </div>
       <div class="pago-opciones">
-        ${_tarjetaCard('contado', 'p1', '💵', 'Contado (10% off)', _textosCatalogo.contado, '<span class="pc-badge">✓ Precios ya con 10% off</span>')}
-        ${_tarjetaCard('tarjeta', 'p2', '💳', 'Tarjeta de crédito — 1 pago', _textosCatalogo.tarjeta, '')}
+        ${_tarjetaCard('contado', 'p1', '💵', 'Contado (10% off)', _textosCatalogo.contado, '<span class="pc-badge">✓ Precios ya con 10% off — son precios finales, con IVA incluido</span>')}
+        ${_tarjetaCard('tarjeta', 'p2', '💳', 'Tarjeta de crédito — 1 pago', _textosCatalogo.tarjeta, '<span class="pc-badge">✓ Precios finales, con IVA incluido</span>')}
       </div>
     </div>`;
 }
@@ -4815,6 +4815,8 @@ function renderCarrito(){
   if (btnVaciar) btnVaciar.style.display = carrito.size ? 'inline-flex' : 'none';
   const btnVerFull = document.getElementById('btn-ver-pedido-full');
   if (btnVerFull) btnVerFull.style.display = carrito.size ? 'inline-flex' : 'none';
+  const notaPrecioFinal = document.getElementById('nota-precio-final-carrito');
+  if (notaPrecioFinal) notaPrecioFinal.style.display = carrito.size ? 'block' : 'none';
   _actualizarBarraCarritoFlotante();
   _guardarCarritoLS();
 }
@@ -4967,9 +4969,10 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
             <button onclick="_pedidoEditarEnvio()" title="Editar envío" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:0;line-height:1;">✏️</button>
           </span>
         </div>` : ''}
-        ${(!_esPresu || _pedidoFullMostrarTotal) ? `<div style="display:flex;align-items:center;justify-content:space-between;font-size:16px;font-weight:800;color:var(--text);margin-bottom:12px;">
+        ${(!_esPresu || _pedidoFullMostrarTotal) ? `<div style="display:flex;align-items:center;justify-content:space-between;font-size:16px;font-weight:800;color:var(--text);margin-bottom:2px;">
           <span>Total</span><span>${fmtMoney(calcularTotal() + _envioMontoActual)}</span>
-        </div>` : ''}
+        </div>
+        <div style="font-size:10.5px;font-weight:600;color:var(--text3);margin-bottom:12px;">✓ Precio final, con IVA incluido</div>` : ''}
         <button id="btn-descargar-pedido-pdf" onclick="descargarPedidoPDFConFotos()" style="
           width:100%;background:var(--green,#0ea968);color:#fff;border:none;border-radius:10px;
           padding:12px;font-size:14px;font-weight:700;cursor:pointer;
@@ -5362,6 +5365,9 @@ window.descargarPedidoPDFConFotos = async () => {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(15, 23, 42);
       doc.text('Total', margin, y);
       doc.text(fmtMoney(calcularTotal() + _envioMontoPDF), pageW - margin, y, { align: 'right' });
+      if (y + 8 > pageH - margin) { doc.addPage(); y = margin; } else { y += 7; }
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(100, 110, 130);
+      doc.text('Precios finales, con IVA incluido.', margin, y);
     }
 
     doc.save(_esPresu ? 'Presupuesto_Dentalab.pdf' : 'Pedido_Dentalab.pdf');
@@ -5856,10 +5862,10 @@ function renderPrincipal(){
     ${_htmlAvisosLlegadosBanner()}
     ${_htmlFrecuentesBanner()}
     ${_pedidoRestauradoDeLS ? `<div class="banner-info-suave" style="border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600;margin-bottom:12px;">🔄 Recuperamos el pedido que tenías armado.</div>` : ''}
-    <div class="pago-activo pago-activo-pago" onclick="cambiarPago()" style="cursor:pointer;${listaActiva === 'p1' ? 'flex-wrap:wrap;row-gap:4px;' : ''}">
+    <div class="pago-activo pago-activo-pago" onclick="cambiarPago()" style="cursor:pointer;flex-wrap:wrap;row-gap:4px;">
       <span id="pago-activo-label"><span class="paso-badge">1</span>Forma de pago: <b>${listaLabel}</b></span>
       <button onclick="cambiarPago()">Cambiar</button>
-      ${listaActiva === 'p1' ? `<div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--green);">✓ Los precios que ves ya tienen el 10% off aplicado</div>` : ''}
+      ${listaActiva === 'p1' ? `<div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--green);">✓ Los precios que ves ya tienen el 10% off aplicado — son precios finales, con IVA incluido</div>` : `<div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--text2);">✓ Precios finales, con IVA incluido</div>`}
     </div>
 
     ${esAdminCatalogo() ? `
@@ -5929,6 +5935,7 @@ function renderPrincipal(){
       <div id="carrito-items"></div>
       <div class="totales">
         <div class="row"><span>Total</span><span id="carrito-total">$0</span></div>
+        <div id="nota-precio-final-carrito" style="display:none;font-size:11px;font-weight:600;color:var(--text3);margin-top:2px;">✓ Precio final, con IVA incluido</div>
         <div class="row" id="fila-envio-caba" style="display:none;font-size:13.5px;font-weight:700;"><span>Envío</span><span id="envio-caba-monto"></span></div>
         <div class="row" id="fila-envio-transportista" style="display:none;font-size:13.5px;font-weight:700;"><span>Envío</span><span>A confirmar por WhatsApp</span></div>
         <div class="row" id="fila-total-con-envio" style="display:none;border-top:1px solid var(--border);padding-top:8px;margin-top:4px;"><span>Total con envío</span><span id="total-con-envio-monto"></span></div>
