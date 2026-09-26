@@ -2197,7 +2197,7 @@ async function _zoomConstruirTarjetaCanvas(it, idxFoto = 0){
   const precio = precioDe(it);
   const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
   const idFotoElegida = imgsArr[idxFoto] || imgsArr[0];
-  const notaPago = (it.cp || _adminVistaPrecio !== 'normal') ? '' : (listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago');
+  const notaPago = (it.cp || _adminVistaPrecio !== 'normal') ? '' : (listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago') + ' — precio final, IVA incluido';
 
   // Cargar la foto (si tiene) antes de medir el alto total. Google Drive no da permiso
   // (CORS) para "leer" la imagen directo desde el navegador, así que la pasamos por un
@@ -2240,9 +2240,10 @@ async function _zoomConstruirTarjetaCanvas(it, idxFoto = 0){
   };
 
   const lineasNombre = _wrap(it.n, '800 21px DM Sans, sans-serif', W - PAD * 2);
+  const lineasNotaPago = notaPago ? _wrap(notaPago, '600 12px DM Sans, sans-serif', W - PAD * 2) : [];
   const imgH = imgEl ? W : 0; // la foto se muestra cuadrada (1:1), igual que en el modal
   const mostrarOffBadge = !it.cp && listaActiva === 'p1' && _adminVistaPrecio === 'normal';
-  let alto = imgH + PAD * 1.4 + 16 /*sku*/ + lineasNombre.length * 27 + (it.g ? 20 : 0) + 14 + 40 /*precio*/ + (mostrarOffBadge ? 18 : 0) + (notaPago ? 20 : 0) + PAD;
+  let alto = imgH + PAD * 1.4 + 16 /*sku*/ + lineasNombre.length * 27 + (it.g ? 20 : 0) + 14 + 40 /*precio*/ + (mostrarOffBadge ? 18 : 0) + (lineasNotaPago.length * 16) + PAD;
 
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = Math.ceil(alto);
@@ -2282,10 +2283,9 @@ async function _zoomConstruirTarjetaCanvas(it, idxFoto = 0){
     ctx.fillStyle = '#0ea968'; ctx.font = '700 11px DM Sans, sans-serif';
     ctx.fillText('✓ Precios ya con 10% off', PAD, y);
   }
-  if (notaPago) {
-    y += 20;
+  if (lineasNotaPago.length) {
     ctx.fillStyle = '#475569'; ctx.font = '600 12px DM Sans, sans-serif';
-    ctx.fillText(notaPago, PAD, y);
+    lineasNotaPago.forEach(linea => { y += 16; ctx.fillText(linea, PAD, y); });
   }
 
   canvas._tuvoFoto = imgsArr.length ? !!imgEl : true; // marca si la foto se pudo bajar bien (para el aviso de "Copiado sin la foto")
