@@ -4965,11 +4965,10 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
                 <input type="text" inputmode="decimal" autofocus value="${_preciosManualesCarrito.has(sku) ? _preciosManualesCarrito.get(sku) : precioDe(it)}" onblur="_pedidoCommitPrecioManual('${escHtml(sku)}', this.value)" onkeydown="if(event.key==='Enter')this.blur(); if(event.key==='Escape'){_pedidoEditandoPrecioSku=null; abrirVistaCompletaPedido(true);}" onclick="this.select()" style="width:90px;border:1px solid var(--blue);border-radius:6px;padding:4px 6px;font-size:14px;font-weight:700;text-align:right;background:var(--panel);color:var(--text);">
               </div>`
             : `<div style="display:flex;align-items:center;gap:6px;">
-                ${_preciosManualesCarrito.has(sku) ? `<span style="font-size:11px;color:var(--text3);text-decoration:line-through;">${fmtMoney(precioDe(it) * qty)}</span>` : ''}
-                <div style="font-size:16px;font-weight:800;color:${_preciosManualesCarrito.has(sku) ? 'var(--blue)' : 'var(--text)'};white-space:nowrap;">${fmtMoney(precio * qty)}</div>
-                ${esAdmin ? `<button onclick="_pedidoEditandoPrecioSku='${escHtml(sku)}'; abrirVistaCompletaPedido(true);" title="Cambiar el precio de este producto a mano, solo para este pedido" style="background:none;border:none;font-size:12px;cursor:pointer;padding:0 2px;line-height:1;">✏️</button>` : ''}
+                <div style="font-size:16px;font-weight:800;color:var(--text);white-space:nowrap;">${fmtMoney(precio * qty)}</div>
+                ${esAdmin ? `<button onclick="_pedidoEditandoPrecioSku='${escHtml(sku)}'; abrirVistaCompletaPedido(true);" title="Cambiar el precio de este producto a mano, solo para este pedido" class="ci-precio-col-hover-btn" style="background:none;border:none;font-size:12px;cursor:pointer;padding:0 2px;line-height:1;">✏️</button>` : ''}
               </div>
-              ${_preciosManualesCarrito.has(sku) ? `<button onclick="quitarPrecioManual('${escHtml(sku)}')" title="Volver al precio de catálogo" style="background:none;border:none;font-size:10px;color:var(--text3);cursor:pointer;padding:0;text-decoration:underline;">↺ precio de catálogo</button>` : ''}`}
+              ${_preciosManualesCarrito.has(sku) ? `<button onclick="quitarPrecioManual('${escHtml(sku)}')" title="Volver al precio de catálogo" class="ci-precio-col-hover-btn" style="background:none;border:none;font-size:10px;color:var(--text3);cursor:pointer;padding:0;text-decoration:underline;">↺ precio de catálogo</button>` : ''}`}
           <button onclick="quitarDelPedidoCompleto('${escHtml(sku)}')" title="Quitar del pedido" class="${esAdmin ? 'ci-precio-col-hover-btn' : ''}" style="
             background:none;border:1px solid var(--border);border-radius:8px;color:var(--red,#dc2626);
             font-size:12px;padding:4px 8px;cursor:pointer;white-space:nowrap;
@@ -5047,6 +5046,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
           width:100%;background:var(--green,#0ea968);color:#fff;border:none;border-radius:10px;
           padding:12px;font-size:14px;font-weight:700;cursor:pointer;
         ">⬇ Descargar PDF con fotos</button>
+        <button onclick="abrirVistaPresupuesto()" style="width:100%;margin-top:10px;background:transparent;border:1px dashed var(--border);border-radius:10px;padding:10px;color:var(--text2);font-size:13px;font-weight:700;cursor:pointer;">📄 Ver como Presupuesto</button>
       </div>
     </div>`;
   document.body.appendChild(bd);
