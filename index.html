@@ -1194,12 +1194,22 @@ function _avisosQuitar(sku){
     localStorage.setItem(LS_KEY_AVISOS_NOTIFICADOS, JSON.stringify(notif.filter(s => s !== sku)));
   } catch (e) {}
 }
-// Devuelve el Set de SKUs que este cliente está esperando y YA están en stock ahora.
+// Devuelve el Set de SKUs que este cliente está esperando y YA tienen 3 unidades o más
+// en stock (Depósito 1 + Depósito Central) — antes alcanzaba con que dejara de estar
+// completamente en 0 ("Agotado"), pero eso avisaba con solo 1 o 2 unidades disponibles,
+// muy poco para armar un pedido real. Si por algún motivo no llegara el dato de stock
+// (item viejo, error puntual de publicación), se cae al criterio anterior (que no esté
+// agotado) para no dejar de avisar nunca.
+const UMBRAL_AVISOS_STOCK = 3;
 function _avisosLlegadosSet(){
   const set = new Set();
   _avisosGetLista().forEach(a => {
     const it = catalogoBySku.get(a.sku);
-    if (it && !it.st) set.add(a.sku);
+    if (!it) return;
+    const hayDatoStock = typeof it.d1 === 'number' || typeof it.dc === 'number';
+    const stockTotal = (it.d1 || 0) + (it.dc || 0);
+    const llego = hayDatoStock ? stockTotal >= UMBRAL_AVISOS_STOCK : !it.st;
+    if (llego) set.add(a.sku);
   });
   return set;
 }
@@ -6380,7 +6390,7 @@ if (_avisosGetLista().length) {
   db.ref('dentalab/catalogo_publico').on('value', snap => {
     const data = snap.val();
     if (!data || !Array.isArray(data.items)) return;
-    data.items.forEach(it => { if (catalogoBySku.has(it.s)) catalogoBySku.set(it.s, { ...catalogoBySku.get(it.s), st: it.st, sb: it.sb }); });
+    data.items.forEach(it => { if (catalogoBySku.has(it.s)) catalogoBySku.set(it.s, { ...catalogoBySku.get(it.s), st: it.st, sb: it.sb, d1: it.d1, dc: it.dc }); });
     if (_avisosPrimeraCarga) {
       // La primera vez ya se refleja en el banner/badge de la página — no hace falta
       // además una notificación nativa redundante. Solo marcamos como "ya visto".
