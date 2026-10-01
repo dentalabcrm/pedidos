@@ -1095,6 +1095,50 @@ window.quitarPrecioManual = (sku) => {
   if (document.getElementById('pedido-full-backdrop')) abrirVistaCompletaPedido(true);
 };
 
+// ── Orden manual de productos dentro de "Presupuesto" (solo admin) — igual idea que ya
+// usa el CRM en su propia pestaña Presupuestos (flechitas ▲▼ por fila): el admin puede
+// acomodar los productos en el orden que más le convenga para mostrárselo al cliente, en
+// vez de depender del orden en que los fue agregando o de ordenar por precio. Se guarda
+// junto con el resto del pedido (precio manual, ocultar agotado, etc.), así no se pierde
+// si recarga la página antes de enviarlo. ──
+const LS_KEY_ORDEN_MANUAL = 'dentalab_pedido_orden_manual_v1';
+let _pedidoOrdenManual = []; // array de SKUs, en el orden elegido a mano
+function _guardarOrdenManualLS(){
+  try {
+    if (_pedidoOrdenManual.length) localStorage.setItem(LS_KEY_ORDEN_MANUAL, JSON.stringify(_pedidoOrdenManual));
+    else localStorage.removeItem(LS_KEY_ORDEN_MANUAL);
+  } catch(e) {}
+}
+function _restaurarOrdenManualLS(){
+  try {
+    const raw = localStorage.getItem(LS_KEY_ORDEN_MANUAL);
+    if (!raw) return;
+    const skus = JSON.parse(raw);
+    if (Array.isArray(skus)) _pedidoOrdenManual = skus.filter(s => typeof s === 'string');
+  } catch(e) {}
+}
+// Arma el orden efectivo: primero los SKUs ya ubicados a mano (que sigan en el carrito),
+// y al final cualquier SKU del carrito que todavía no se haya acomodado (recién agregado,
+// por ejemplo) — así nunca desaparece nada, solo se agrega al final hasta que se lo mueva.
+function _pedidoOrdenManualEfectivo(skusEnCarrito){
+  const enCarrito = new Set(skusEnCarrito);
+  const ordenados = _pedidoOrdenManual.filter(s => enCarrito.has(s));
+  const faltantes = skusEnCarrito.filter(s => !ordenados.includes(s));
+  return [...ordenados, ...faltantes];
+}
+window._pedidoMoverItemManual = (sku, direccion) => {
+  if (!esAdminCatalogo()) return;
+  const skusEnCarrito = Array.from(carrito.keys());
+  const orden = _pedidoOrdenManualEfectivo(skusEnCarrito);
+  const idx = orden.indexOf(sku);
+  const nuevoIdx = idx + direccion;
+  if (idx < 0 || nuevoIdx < 0 || nuevoIdx >= orden.length) return;
+  [orden[idx], orden[nuevoIdx]] = [orden[nuevoIdx], orden[idx]];
+  _pedidoOrdenManual = orden;
+  _guardarOrdenManualLS();
+  abrirVistaCompletaPedido(true);
+};
+
 function _guardarEstadoLS(){
   try { localStorage.setItem(LS_KEY_ESTADO, JSON.stringify({ modalidadEntrega, listaActiva, medioPagoContado, financiamientoTarjeta, transportistaElegido, recepcionEnvioTipo })); } catch(e) {}
 }
@@ -3943,6 +3987,7 @@ async function cargarCatalogo(){
     _restaurarCarritoLS();
     _restaurarOcultarAgotadoLS();
     _restaurarPreciosManualesLS();
+    _restaurarOrdenManualLS();
     const estadoGuardado = _restaurarEstadoLS();
     if (carrito.size && estadoGuardado && estadoGuardado.listaActiva) {
       modalidadEntrega = estadoGuardado.modalidadEntrega || null;
@@ -4897,7 +4942,7 @@ function renderCarrito(){
 let _pedidoFullModo = 'pedido';
 let _pedidoFullMostrarTotal = true;
 let _pedidoFullMostrarFormaPago = true;
-let _pedidoFullOrden = 'original'; // 'original' | 'precio_asc' | 'precio_desc' — solo aplica en modo Presupuesto
+let _pedidoFullOrden = 'original'; // 'original' | 'precio_asc' | 'precio_desc' | 'manual' — solo aplica en modo Presupuesto
 // Costo de envío que el admin puede sumarle a "Tu pedido" — misma estrategia que
 // Presupuestos: Envío en el CRM (toggle activo + tipo + monto), simplificada acá.
 // Solo lo puede tocar el admin (esAdminCatalogo()) y se refleja tanto en el total
@@ -4931,7 +4976,10 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
   const _envioMontoActual = (esAdmin && !_esPresu && _pedidoEnvioAdmin.activo) ? (parseFloat(_pedidoEnvioAdmin.costo) || 0) : 0;
 
   let entradasCarrito = Array.from(carrito.entries());
-  if (_esPresu && _pedidoFullOrden !== 'original') {
+  if (_esPresu && _pedidoFullOrden === 'manual') {
+    const ordenEfectivo = _pedidoOrdenManualEfectivo(entradasCarrito.map(([sku]) => sku));
+    entradasCarrito = ordenEfectivo.map(sku => entradasCarrito.find(([s]) => s === sku)).filter(Boolean);
+  } else if (_esPresu && _pedidoFullOrden !== 'original') {
     entradasCarrito = entradasCarrito.slice().sort(([skuA, qtyA], [skuB, qtyB]) => {
       const itA = catalogoBySku.get(skuA), itB = catalogoBySku.get(skuB);
       const subtotalA = (itA ? precioDe(itA) : 0) * qtyA;
@@ -4939,7 +4987,8 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
       return _pedidoFullOrden === 'precio_asc' ? subtotalA - subtotalB : subtotalB - subtotalA;
     });
   }
-  const filas = entradasCarrito.map(([sku, qty]) => {
+  const _modoOrdenManual = _esPresu && _pedidoFullOrden === 'manual' && esAdmin;
+  const filas = entradasCarrito.map(([sku, qty], idxFila) => {
     const it = catalogoBySku.get(sku);
     if (!it) return '';
     const precio = precioCarritoDe(sku);
@@ -4947,6 +4996,10 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
     const foto = imgsArr.length
       ? `<img src="https://drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w400" alt="" style="width:100%;height:100%;object-fit:contain;background:#f4f6fa;">`
       : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;background:#f4f6fa;opacity:.35;">🦷</div>`;
+    const flechasOrden = _modoOrdenManual ? `<div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;">
+      <button onclick="_pedidoMoverItemManual('${escHtml(sku)}', -1)" title="Subir" ${idxFila === 0 ? 'disabled' : ''} style="background:var(--panel2);border:1px solid var(--border);border-radius:5px;width:22px;height:20px;font-size:10px;cursor:${idxFila === 0 ? 'default' : 'pointer'};opacity:${idxFila === 0 ? '.35' : '1'};color:var(--text2);">▲</button>
+      <button onclick="_pedidoMoverItemManual('${escHtml(sku)}', 1)" title="Bajar" ${idxFila === entradasCarrito.length - 1 ? 'disabled' : ''} style="background:var(--panel2);border:1px solid var(--border);border-radius:5px;width:22px;height:20px;font-size:10px;cursor:${idxFila === entradasCarrito.length - 1 ? 'default' : 'pointer'};opacity:${idxFila === entradasCarrito.length - 1 ? '.35' : '1'};color:var(--text2);">▼</button>
+    </div>` : '';
     const stockHtml = it.st
       ? (_ocultarAgotadoSet.has(sku) ? '' : `<div class="prod-stock-agotado">Agotado</div>`)
       : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>` : `<div class="prod-stock-en">En stock</div>`;
@@ -4961,6 +5014,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
       : '';
     return `
       <div style="display:flex;gap:14px;align-items:center;padding:14px 4px;border-bottom:1px solid var(--border);">
+        ${flechasOrden}
         <div style="width:88px;height:88px;flex-shrink:0;border-radius:12px;overflow:hidden;border:1px solid var(--border);">${foto}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:14.5px;font-weight:700;color:var(--text);line-height:1.3;">${escHtml(it.n)}</div>
@@ -5020,11 +5074,12 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
           Mostrar forma de pago
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--text2);">
-          Ordenar por precio:
+          Orden:
           <select onchange="_pedidoCambiarOrden(this.value)" style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--panel);color:var(--text);cursor:pointer;">
             <option value="original" ${_pedidoFullOrden === 'original' ? 'selected' : ''}>Original</option>
-            <option value="precio_asc" ${_pedidoFullOrden === 'precio_asc' ? 'selected' : ''}>Menor a mayor</option>
-            <option value="precio_desc" ${_pedidoFullOrden === 'precio_desc' ? 'selected' : ''}>Mayor a menor</option>
+            <option value="precio_asc" ${_pedidoFullOrden === 'precio_asc' ? 'selected' : ''}>Precio: menor a mayor</option>
+            <option value="precio_desc" ${_pedidoFullOrden === 'precio_desc' ? 'selected' : ''}>Precio: mayor a menor</option>
+            <option value="manual" ${_pedidoFullOrden === 'manual' ? 'selected' : ''}>Manual (con flechitas)</option>
           </select>
         </label>
       </div>` : ''}
@@ -5366,7 +5421,10 @@ window.descargarPedidoPDFConFotos = async () => {
     }
 
     let entradasCarritoPDF = Array.from(carrito.entries());
-    if (_esPresu && _pedidoFullOrden !== 'original') {
+    if (_esPresu && _pedidoFullOrden === 'manual') {
+      const ordenEfectivoPDF = _pedidoOrdenManualEfectivo(entradasCarritoPDF.map(([sku]) => sku));
+      entradasCarritoPDF = ordenEfectivoPDF.map(sku => entradasCarritoPDF.find(([s]) => s === sku)).filter(Boolean);
+    } else if (_esPresu && _pedidoFullOrden !== 'original') {
       entradasCarritoPDF = entradasCarritoPDF.slice().sort(([skuA, qtyA], [skuB, qtyB]) => {
         const itA = catalogoBySku.get(skuA), itB = catalogoBySku.get(skuB);
         const subtotalA = (itA ? precioDe(itA) : 0) * qtyA;
