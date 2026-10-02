@@ -4098,6 +4098,12 @@ window.elegirPago = (lista) => {
 };
 
 window.cambiarPago = () => {
+  // Con Lista Reventa/Mayorista activa, la forma de pago no aplica — son precios fijos
+  // propios (item.p3 / item.p4), no dependen de Contado ni Tarjeta.
+  if (esAdminCatalogo() && _adminVistaPrecio !== 'normal') {
+    if (typeof showToast === 'function') showToast('🔒 Forma de pago bloqueada mientras estás viendo precios de Reventa/Mayorista', 'warn');
+    return;
+  }
   renderSeleccionPago();
 };
 
@@ -6011,11 +6017,16 @@ function renderPrincipal(){
     ${_htmlAvisosLlegadosBanner()}
     ${_htmlFrecuentesBanner()}
     ${_pedidoRestauradoDeLS ? `<div class="banner-info-suave" style="border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600;margin-bottom:12px;">🔄 Recuperamos el pedido que tenías armado.</div>` : ''}
+    ${(esAdminCatalogo() && _adminVistaPrecio !== 'normal') ? `
+    <div class="pago-activo pago-activo-pago" style="cursor:default;flex-wrap:wrap;row-gap:4px;opacity:.75;border-left-color:var(--text3);">
+      <span><span class="paso-badge" style="background:var(--text3);">🔒</span>Forma de pago: <b>bloqueada</b></span>
+      <div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--text2);">Estás viendo precios de ${_adminVistaPrecio === 'reventa' ? 'Reventa' : 'Mayorista'} — son precios fijos propios, no dependen de Contado/Tarjeta. Volvé a Lista 1 o Lista 2 para elegir forma de pago.</div>
+    </div>` : `
     <div class="pago-activo pago-activo-pago" onclick="cambiarPago()" style="cursor:pointer;flex-wrap:wrap;row-gap:4px;">
       <span id="pago-activo-label"><span class="paso-badge">1</span>Forma de pago: <b>${listaLabel}</b></span>
       <button onclick="cambiarPago()">Cambiar</button>
       ${listaActiva === 'p1' ? `<div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--green);">✓ Los precios que ves ya tienen el 10% off aplicado — son precios finales, con IVA incluido</div>` : `<div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--text2);">Precios de Lista — ✓ precios finales, con IVA incluido</div>`}
-    </div>
+    </div>`}
 
     ${esAdminCatalogo() ? `
     <div style="background:#7c3aed12;border:1px solid #7c3aed40;border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
