@@ -1377,7 +1377,15 @@ window.cambiarListaAdmin = (n) => {
   }
   document.body.classList.toggle('vista-reventa', _adminVistaPrecio === 'reventa');
   document.body.classList.toggle('vista-mayorista', _adminVistaPrecio === 'mayorista');
+  const _zoomAbierto = !!document.getElementById('zoom-prod-backdrop');
+  const _scrollY = window.scrollY;
   renderPrincipal(); // re-dibuja todo (banner incluido) para que se note el cambio de vista
+  if (_zoomAbierto) {
+    // Con la pantalla completa de un producto abierta: la página de atrás conserva su
+    // lugar y el propio modal se vuelve a dibujar con el precio de la lista nueva.
+    requestAnimationFrame(() => window.scrollTo(0, _scrollY));
+    _zoomRefrescarSiAbierto();
+  }
   const msg = `👁 ${_LISTA_ADMIN_LABEL[n]}`;
   if (typeof showToast === 'function') showToast(msg, 'ok');
 };
@@ -2008,6 +2016,22 @@ window.descargarPresupuestoPDF = async () => {
 // ── Ver producto en grande (lupa sobre la foto) ──
 // Muestra la foto a pantalla completa junto con el nombre completo (sin cortar) y el
 // precio, para que el cliente pueda ver bien el detalle antes de agregarlo.
+// Si la pantalla completa de un producto está abierta, la vuelve a dibujar (mismo producto)
+// para que tome el precio/lista vigente — por ejemplo, después de cambiar de lista con
+// Shift+1..4. Conserva hasta dónde había bajado adentro del panel.
+window._zoomRefrescarSiAbierto = () => {
+  const bd = document.getElementById('zoom-prod-backdrop');
+  if (!bd || !_zoomProductoActual) return;
+  const scrollPanel = bd.firstElementChild ? bd.firstElementChild.scrollTop : 0;
+  abrirZoomProducto(_zoomProductoActual.s);
+  const restaurar = () => {
+    const panel = document.getElementById('zoom-prod-backdrop')?.firstElementChild;
+    if (panel) panel.scrollTop = scrollPanel;
+  };
+  restaurar();
+  requestAnimationFrame(restaurar);
+};
+
 window.abrirZoomProducto = (sku) => {
   const it = catalogoBySku.get(sku);
   if (!it) return;
