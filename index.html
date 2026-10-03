@@ -282,6 +282,22 @@
   .pago-activo b{color:var(--text);font-weight:800;font-size:14.5px;}
   .pago-activo button{background:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:11.5px;font-weight:700;color:var(--text2);cursor:pointer;white-space:nowrap;}
   .pago-activo.pago-activo-pago{border-left-color:var(--green);}
+  /* Selector de forma de pago directo en la página: las dos opciones a la vista, la activa
+     resaltada — así el cliente cambia con un solo clic, sin pasar por otra pantalla. */
+  .pago-toggle{display:flex;gap:6px;flex-wrap:wrap;flex:1;justify-content:flex-end;}
+  .pago-activo .pago-toggle-btn{
+    padding:8px 14px;font-size:12.5px;font-weight:700;border-radius:9px;
+    background:var(--panel);border:1.5px solid var(--border);color:var(--text2);
+    cursor:pointer;white-space:nowrap;transition:background .12s,border-color .12s,color .12s;
+  }
+  .pago-activo .pago-toggle-btn:hover{border-color:var(--blue);color:var(--text);}
+  .pago-activo .pago-toggle-btn.activo{cursor:default;color:#fff;}
+  .pago-activo .pago-toggle-btn.activo.t-contado{background:var(--green);border-color:var(--green);}
+  .pago-activo .pago-toggle-btn.activo.t-tarjeta{background:var(--blue);border-color:var(--blue);}
+  @media (max-width:600px){
+    .pago-toggle{flex-basis:100%;justify-content:stretch;}
+    .pago-activo .pago-toggle-btn{flex:1;white-space:normal;padding:9px 8px;}
+  }
 
   /* ── Buscador ── */
   .buscador-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
@@ -3999,9 +4015,11 @@ async function cargarCatalogo(){
       renderPrincipal();
       _initBarrasFlotantes();
     } else {
-      // Forma de pago predeterminada: Contado (10% off). El cliente puede cambiarla
-      // en cualquier momento con el botón "Cambiar" (renderSeleccionPago).
-      listaActiva = 'p1';
+      // Forma de pago precargada: la última que el cliente eligió en una visita anterior
+      // (si hay), o Contado (10% off) por defecto. Las dos opciones quedan siempre a la
+      // vista en la parte de arriba de la página para cambiarla con un solo clic.
+      const _prefPrev = _restaurarUltimaPrefLS();
+      listaActiva = (_prefPrev && (_prefPrev.listaActiva === 'p1' || _prefPrev.listaActiva === 'p2')) ? _prefPrev.listaActiva : 'p1';
       medioPagoContado = null;
       _guardarEstadoLS();
       renderPrincipal();
@@ -4095,6 +4113,19 @@ window.elegirPago = (lista) => {
   _guardarUltimaPrefLS();
   renderPrincipal();
   _initBarrasFlotantes();
+};
+
+// Cambio directo desde el selector de la página (sin pasar por la pantalla "¿Cómo vas a
+// pagar?"): mismo efecto que elegirPago, pero sin tocar nada si ya era la opción activa,
+// y conservando el scroll para que el cliente no pierda el lugar donde estaba.
+window.elegirPagoInline = (lista) => {
+  if (lista === listaActiva) return;
+  const _scrollY = window.scrollY;
+  elegirPago(lista);
+  requestAnimationFrame(() => window.scrollTo(0, _scrollY));
+  if (carrito.size && typeof showToast === 'function') {
+    showToast(lista === 'p1' ? '💵 Precios actualizados: Contado (10% off)' : '💳 Precios actualizados: Tarjeta — 1 pago', 'ok');
+  }
 };
 
 window.cambiarPago = () => {
@@ -6012,19 +6043,20 @@ function renderPrincipal(){
   const listaLabel = listaActiva === 'p1' ? 'Contado (10% off)' : 'Tarjeta — 1 pago';
   app.innerHTML = `
     <h1 class="page-title">Armá tu pedido</h1>
-    <div class="badge-sin-registro">✨ No necesitás crear una cuenta ni registrarte — elegís los productos y coordinamos todo por WhatsApp</div>
     ${_htmlBienvenida()}
     ${_htmlAvisosLlegadosBanner()}
-    ${_htmlFrecuentesBanner()}
     ${_pedidoRestauradoDeLS ? `<div class="banner-info-suave" style="border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600;margin-bottom:12px;">🔄 Recuperamos el pedido que tenías armado.</div>` : ''}
     ${(esAdminCatalogo() && _adminVistaPrecio !== 'normal') ? `
     <div class="pago-activo pago-activo-pago" style="cursor:default;flex-wrap:wrap;row-gap:4px;opacity:.75;border-left-color:var(--text3);">
       <span><span class="paso-badge" style="background:var(--text3);">🔒</span>Forma de pago: <b>bloqueada</b></span>
       <div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--text2);">Estás viendo precios de ${_adminVistaPrecio === 'reventa' ? 'Reventa' : 'Mayorista'} — son precios fijos propios, no dependen de Contado/Tarjeta. Volvé a Lista 1 o Lista 2 para elegir forma de pago.</div>
     </div>` : `
-    <div class="pago-activo pago-activo-pago" onclick="cambiarPago()" style="cursor:pointer;flex-wrap:wrap;row-gap:4px;">
-      <span id="pago-activo-label"><span class="paso-badge">1</span>Forma de pago: <b>${listaLabel}</b></span>
-      <button onclick="cambiarPago()">Cambiar</button>
+    <div class="pago-activo pago-activo-pago" style="cursor:default;flex-wrap:wrap;row-gap:8px;">
+      <span id="pago-activo-label"><span class="paso-badge">1</span>Forma de pago:</span>
+      <div class="pago-toggle" role="group" aria-label="Forma de pago">
+        <button type="button" class="pago-toggle-btn t-contado${listaActiva === 'p1' ? ' activo' : ''}" aria-pressed="${listaActiva === 'p1'}" onclick="elegirPagoInline('p1')">💵 Contado (10% off)</button>
+        <button type="button" class="pago-toggle-btn t-tarjeta${listaActiva === 'p2' ? ' activo' : ''}" aria-pressed="${listaActiva === 'p2'}" onclick="elegirPagoInline('p2')">💳 Tarjeta — 1 pago</button>
+      </div>
       ${listaActiva === 'p1' ? `<div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--green);">✓ Los precios que ves ya tienen el 10% off aplicado — son precios finales, con IVA incluido</div>` : `<div style="flex-basis:100%;font-size:11.5px;font-weight:600;color:var(--text2);">Precios de Lista — ✓ precios finales, con IVA incluido</div>`}
     </div>`}
 
