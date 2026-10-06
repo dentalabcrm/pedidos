@@ -912,9 +912,14 @@ const firebaseConfig = {
   appId: "1:654358567235:web:6cd3ac0c6efd7dba5077f6",
   measurementId: "G-E1WMGLKN6V"
 };
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-const auth = firebase.auth();
+// App de Firebase PROPIA de Pedidos (nombre "pedidos"). El CRM vive en el mismo dominio y usa la
+// app por defecto: si Pedidos usara también la por defecto, las dos compartirían dónde se guarda
+// la sesión, y cada vez que el CRM se abre o se recarga (fuerza "solo esta pestaña") le sacaría la
+// sesión a Pedidos y habría que volver a loguearse. Con una app propia, la sesión de Pedidos no
+// la toca nadie más.
+const _fbApp = firebase.initializeApp(firebaseConfig, 'pedidos');
+const db = _fbApp.database();
+const auth = _fbApp.auth();
 const app = document.getElementById('app');
 
 // ── Presencia: cada pestaña/dispositivo que tiene la página abierta se registra acá
@@ -2584,6 +2589,7 @@ function _buscarEnDriveCliente(encodedQ) {
 
 const LS_KEY_MANTENER_SESION = 'dentalab_pedido_mantener_sesion';
 let _mantenerSesion = false;
+let _salidaManual = false; // true cuando el admin cierra la sesión a propósito (5 toques al logo)
 try { _mantenerSesion = localStorage.getItem(LS_KEY_MANTENER_SESION) === '1'; } catch (e) {}
 try { auth.setPersistence(_mantenerSesion ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION); } catch (e) {}
 
@@ -2641,6 +2647,7 @@ window._logoAdminClickCount = function() {
     if (esAdminCatalogo()) {
       if (confirm('¿Salir del modo administrador?')) {
         try { localStorage.removeItem(LS_KEY_MANTENER_SESION); } catch (e) {}
+        _salidaManual = true;
         auth.signOut().then(_refrescarVistaAdmin);
       }
       return;
@@ -6538,6 +6545,13 @@ function _renderGate(modo) {
   ['gate-email', 'gate-pass'].forEach(id => {
     document.getElementById(id)?.addEventListener('keydown', e => { if (e.key === 'Enter') _gateIngresar(); });
   });
+  try {
+    if (sessionStorage.getItem('dentalab_pedido_sesion_perdida') === '1') {
+      sessionStorage.removeItem('dentalab_pedido_sesion_perdida');
+      const aviso = document.getElementById('gate-msg');
+      if (aviso) { aviso.style.color = 'var(--text2)'; aviso.textContent = 'Se cerró tu sesión. Volvé a ingresar.'; }
+    }
+  } catch (e) {}
   setTimeout(() => document.getElementById('gate-email')?.focus(), 50);
 }
 
@@ -6547,6 +6561,7 @@ window._gateIngresar = async function () {
   const mantener = !!document.getElementById('gate-mantener')?.checked;
   const msg = document.getElementById('gate-msg');
   const btn = document.getElementById('gate-btn');
+  if (msg) msg.style.color = ''; // vuelve al color de error por si antes se mostró el aviso en gris
   if (!email || !pass) { if (msg) msg.textContent = 'Completá email y contraseña.'; return; }
   if (msg) msg.textContent = '';
   if (btn) { btn.disabled = true; btn.textContent = 'Verificando…'; }
@@ -6581,7 +6596,12 @@ function _iniciarConAcceso() {
       document.body.classList.remove('gate-activo');
       if (!catalogoIniciado) { catalogoIniciado = true; cargarCatalogo(); }
     } else {
-      if (huboSesion) { location.reload(); return; } // cerró sesión: se vuelve a la pantalla de acceso
+      if (huboSesion) {
+        // La sesión se cerró: se vuelve a la pantalla de acceso. Si no fue a propósito, se deja un aviso.
+        if (!_salidaManual) { try { sessionStorage.setItem('dentalab_pedido_sesion_perdida', '1'); } catch (e) {} }
+        location.reload();
+        return;
+      }
       document.body.classList.add('gate-activo');
       _renderGate('login');
     }
