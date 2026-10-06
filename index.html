@@ -3773,8 +3773,12 @@ window._moverFotoIndividual = async function(sku, idx, direccion){
   }
 };
 
+// SKUs cuya foto ya se buscó sola en esta sesión sin encontrar nada: no se vuelve a buscar
+// cada vez que se redibuja la lista (evita miles de pedidos a Drive si la carpeta no está).
+const _fotoBusquedaFallida = new Set();
 window.abrirFotoProducto = async function(el, autoAbrir = true) {
   const sku = el.dataset.sku, nombre = el.dataset.nombre;
+  if (!autoAbrir && _fotoBusquedaFallida.has(sku)) return;
   const original = el.textContent;
   el.textContent = '⏳';
   try {
@@ -3824,13 +3828,19 @@ window.abrirFotoProducto = async function(el, autoAbrir = true) {
       } catch (e) { /* silencioso */ }
       return; // el placeholder ya no existe, no restaurar texto en el finally
     } else {
-      // No se encontró nada: si había una foto guardada que ya no existe en Drive, la borramos
-      // de la caché para que no quede apuntando a un archivo muerto.
-      try {
-        const key = String(sku).trim().replace(/[.#$\[\]/]/g, '_');
-        if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_imagenes/' + key).remove();
-      } catch (e) { /* silencioso */ }
-      if (autoAbrir) alert('No encontramos una foto para este producto en Drive.');
+      // No se encontró nada. IMPORTANTE: si la búsqueda la disparamos solos (una miniatura que no
+      // cargó), NO se borra el vínculo guardado: si la carpeta se borró, se movió a la papelera,
+      // cambió sus permisos o Drive falló justo ahora, borrarlo acá haría perder para siempre el
+      // vínculo SKU → foto de cada producto que se vaya mirando (y recuperar los archivos no
+      // alcanzaría para recuperar los vínculos). Solo se limpia si alguien pidió la búsqueda a mano.
+      _fotoBusquedaFallida.add(sku);
+      if (autoAbrir) {
+        try {
+          const key = String(sku).trim().replace(/[.#$\[\]/]/g, '_');
+          if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_imagenes/' + key).remove();
+        } catch (e) { /* silencioso */ }
+        alert('No encontramos una foto para este producto en Drive.');
+      }
     }
   } catch (e) {
     if (autoAbrir) alert('No se pudo buscar la foto (revisá tu conexión).');
