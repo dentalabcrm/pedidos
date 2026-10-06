@@ -239,6 +239,20 @@
   .card .sub{font-size:12.5px;color:var(--text3);line-height:1.5;}
 
   .loading, .error-box{text-align:center;padding:60px 20px;color:var(--text3);font-size:14px;}
+  /* Acceso restringido: mientras no haya sesión iniciada se ocultan los accesos que no
+     tienen sentido sin catálogo (instalar app, QR, historial, chatbot). El horario, el
+     cartel de promos y los datos de contacto del pie quedan visibles. */
+  body.gate-activo #btn-instalar-app, body.gate-activo #btn-qr-app, body.gate-activo #btn-historial-pedidos,
+  body.gate-activo #admin-presencia-badge, body.gate-activo #chatbot-toggle, body.gate-activo #chatbot-panel,
+  body.gate-activo #carrusel-banners{display:none !important;}
+  .gate-card{max-width:380px;margin:36px auto 48px;background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:28px 24px 24px;box-shadow:0 8px 28px rgba(15,23,42,.08);}
+  .gate-card .gate-icon{font-size:30px;text-align:center;margin-bottom:6px;}
+  .gate-card .gate-title{font-size:19px;font-weight:800;color:var(--text);text-align:center;margin:0 0 6px;}
+  .gate-card .gate-sub{font-size:13px;color:var(--text3);text-align:center;margin:0 0 18px;line-height:1.45;}
+  .gate-card .field{margin-bottom:12px;}
+  .gate-card .gate-check{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text2);margin:2px 0 14px;cursor:pointer;}
+  .gate-card .btn-enviar{width:100%;}
+  .gate-card #gate-msg{font-size:12.5px;margin-top:10px;text-align:center;min-height:16px;color:var(--red,#dc2626);}
   .error-box{color:#b91c1c;}
   .spinner{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;margin:0 auto 14px;animation:spin .8s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
@@ -752,7 +766,7 @@
   #pdf-pedido-drop-overlay .caja .sub{font-size:12.5px;color:#64748b;margin-top:4px;}
 </style>
 </head>
-<body>
+<body class="gate-activo">
 <div id="pdf-pedido-drop-overlay">
   <div class="caja">
     <div class="emoji">📄</div>
@@ -2568,7 +2582,10 @@ function _buscarEnDriveCliente(encodedQ) {
   return fetch(url).then(r => r.json()).then(data => { if (data.error) throw new Error(data.error.message || 'api_error'); return data.files || []; });
 }
 
-try { auth.setPersistence(firebase.auth.Auth.Persistence.SESSION); } catch (e) {}
+const LS_KEY_MANTENER_SESION = 'dentalab_pedido_mantener_sesion';
+let _mantenerSesion = false;
+try { _mantenerSesion = localStorage.getItem(LS_KEY_MANTENER_SESION) === '1'; } catch (e) {}
+try { auth.setPersistence(_mantenerSesion ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION); } catch (e) {}
 
 function esAdminCatalogo() { return !!auth.currentUser; }
 
@@ -2623,10 +2640,12 @@ window._logoAdminClickCount = function() {
     _logoClicks = 0;
     if (esAdminCatalogo()) {
       if (confirm('¿Salir del modo administrador?')) {
+        try { localStorage.removeItem(LS_KEY_MANTENER_SESION); } catch (e) {}
         auth.signOut().then(_refrescarVistaAdmin);
       }
       return;
     }
+    if (typeof ACCESO_SOLO_CON_LOGIN !== 'undefined' && ACCESO_SOLO_CON_LOGIN) { document.getElementById('gate-email')?.focus(); return; }
     _abrirLoginAdminModal();
   }
 };
@@ -6482,7 +6501,83 @@ window.toggleTemaOscuro = () => {
 };
 _pwActualizarBotonTema();
 
-cargarCatalogo();
+// ── Acceso restringido ──────────────────────────────────────────────────────────
+// Por ahora el catálogo solo se puede ver iniciando sesión con email y contraseña (los
+// mismos usuarios del modo administrador). Para volver a abrirlo al público alcanza con
+// poner ACCESO_SOLO_CON_LOGIN en false: arranca directo, como antes.
+// OJO: esto oculta la pantalla, pero no protege los datos por sí solo — para eso hay que
+// cerrar la lectura en las reglas de Firebase.
+const ACCESO_SOLO_CON_LOGIN = true;
+
+function _renderGate(modo) {
+  if (modo === 'verificando') {
+    app.innerHTML = '<div class="loading"><div class="spinner"></div>Verificando acceso…</div>';
+    return;
+  }
+  app.innerHTML = `
+    <div class="gate-card">
+      <div class="gate-icon">🔒</div>
+      <h1 class="gate-title">Acceso restringido</h1>
+      <p class="gate-sub">Por el momento el catálogo solo está disponible con usuario y contraseña.</p>
+      <div class="field"><label for="gate-email">Email</label><input type="email" id="gate-email" autocomplete="username" placeholder="tu-email@ejemplo.com"></div>
+      <div class="field"><label for="gate-pass">Contraseña</label><input type="password" id="gate-pass" autocomplete="current-password"></div>
+      <label class="gate-check"><input type="checkbox" id="gate-mantener" checked> Mantener la sesión iniciada en este equipo</label>
+      <button type="button" class="btn-enviar" id="gate-btn" onclick="_gateIngresar()">Ingresar</button>
+      <div id="gate-msg" role="alert"></div>
+    </div>`;
+  ['gate-email', 'gate-pass'].forEach(id => {
+    document.getElementById(id)?.addEventListener('keydown', e => { if (e.key === 'Enter') _gateIngresar(); });
+  });
+  setTimeout(() => document.getElementById('gate-email')?.focus(), 50);
+}
+
+window._gateIngresar = async function () {
+  const email = document.getElementById('gate-email')?.value.trim();
+  const pass = document.getElementById('gate-pass')?.value;
+  const mantener = !!document.getElementById('gate-mantener')?.checked;
+  const msg = document.getElementById('gate-msg');
+  const btn = document.getElementById('gate-btn');
+  if (!email || !pass) { if (msg) msg.textContent = 'Completá email y contraseña.'; return; }
+  if (msg) msg.textContent = '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Verificando…'; }
+  try {
+    await auth.setPersistence(mantener ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION);
+    await auth.signInWithEmailAndPassword(email, pass);
+    try { localStorage.setItem(LS_KEY_MANTENER_SESION, mantener ? '1' : '0'); } catch (e) {}
+    // El resto lo hace el listener de _iniciarConAcceso (carga el catálogo al detectar la sesión).
+  } catch (err) {
+    const code = (err && err.code) || '';
+    if (msg) {
+      msg.textContent =
+        code === 'auth/too-many-requests' ? 'Demasiados intentos. Esperá unos minutos y volvé a probar.' :
+        code === 'auth/network-request-failed' ? 'No hay conexión. Revisá tu internet e intentá de nuevo.' :
+        'Email o contraseña incorrectos.';
+    }
+    if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
+  }
+};
+
+function _iniciarConAcceso() {
+  if (!ACCESO_SOLO_CON_LOGIN) {
+    document.body.classList.remove('gate-activo');
+    cargarCatalogo();
+    return;
+  }
+  _renderGate('verificando'); // hasta que Firebase diga si hay una sesión guardada
+  let catalogoIniciado = false, huboSesion = false;
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      huboSesion = true;
+      document.body.classList.remove('gate-activo');
+      if (!catalogoIniciado) { catalogoIniciado = true; cargarCatalogo(); }
+    } else {
+      if (huboSesion) { location.reload(); return; } // cerró sesión: se vuelve a la pantalla de acceso
+      document.body.classList.add('gate-activo');
+      _renderGate('login');
+    }
+  });
+}
+_iniciarConAcceso();
 
 // ── Aviso en vivo mientras la página sigue abierta ──
 // Solo tiene sentido si hay algo en la lista de espera. Escucha cambios del catálogo público
