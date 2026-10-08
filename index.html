@@ -6151,7 +6151,7 @@ function renderPrincipal(){
       <div class="buscador-row">
         <div class="buscador-input-wrap">
           <input type="text" id="input-busqueda" placeholder="Nombre o SKU… (o dejá vacío para ver todo el catálogo)" oninput="onBusquedaInput(this.value)" onkeydown="if(event.key==='Tab' && event.shiftKey){ event.preventDefault(); deshacerUltimoAgregado(); }"${esAdminCatalogo() ? ' autocomplete="off"' : ''}>
-          <button type="button" id="btn-voz-busqueda" class="btn-voz-busqueda" onclick="vozBuscar()" title="Buscar por voz" style="display:${_vozSoportado() ? 'block' : 'none'};">🎤</button>
+          <button type="button" id="btn-voz-busqueda" class="btn-voz-busqueda" onclick="vozBuscar()" title="Buscar y controlar por voz (decí &quot;ayuda&quot; para ver los comandos)" style="display:${_vozSoportado() ? 'block' : 'none'};">🎤</button>
           <button type="button" id="btn-limpiar-busqueda" class="btn-limpiar-busqueda" onclick="limpiarBusqueda()" title="Borrar búsqueda" style="display:none;">✕</button>
         </div>
         <button class="btn-ir-final" onclick="irAlFinalDeLista()" title="Saltar al final de la lista">⬇ Ir al final</button>
@@ -6258,47 +6258,186 @@ function _actualizarBtnLimpiarBusqueda(){
   const btn = document.getElementById('btn-limpiar-busqueda');
   if (btn) btn.style.display = (document.getElementById('input-busqueda')?.value || '') ? 'block' : 'none';
 }
-// ── Búsqueda por voz (Web Speech API: Chrome, Edge, Safari). Necesita internet y permiso de micrófono. ──
+// ── Búsqueda y comandos por voz (Web Speech API: Chrome, Edge, Safari). Necesita internet y
+// permiso de micrófono. Modo "manos libres": queda escuchando hasta que lo apagues (tocando el
+// 🎤 de nuevo o diciendo "parar"). Lo que digas se interpreta así:
+//   · Si la frase ENTERA es un comando (ej: "borrar", "agregar", "siguiente") → lo ejecuta.
+//   · Si no, se escribe en el buscador y busca (como dictado).
+// Los comandos solo se reconocen si son la frase completa, así un producto que contenga una
+// palabra parecida no dispara nada por error. ──
 let _vozRec = null;
+let _vozActivo = false;
 function _vozSoportado(){ return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
 function _vozNormalizar(t){
-  // El reconocedor suele escribir "siete mil uno" como "7001" ya bien, pero agrega punto final y mayúsculas.
-  return String(t || '').replace(/[.,;¡!¿?]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return String(t || '').replace(/[.,;:¡!¿?]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function _vozLimpiarComando(t){
+  return _vozNormalizar(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+const _VOZ_NUMEROS = { cero:0, un:1, uno:1, una:1, dos:2, tres:3, cuatro:4, cinco:5, seis:6, siete:7, ocho:8, nueve:9, diez:10,
+  once:11, doce:12, trece:13, catorce:14, quince:15, dieciseis:16, diecisiete:17, dieciocho:18, diecinueve:19, veinte:20,
+  veintiuno:21, veintiun:21, veintidos:22, veintitres:23, veinticuatro:24, veinticinco:25, veintiseis:26, veintisiete:27,
+  veintiocho:28, veintinueve:29, treinta:30, cuarenta:40, cincuenta:50, sesenta:60, setenta:70, ochenta:80, noventa:90, cien:100 };
+function _vozNumero(t){
+  t = String(t || '').trim();
+  if (/^\d+$/.test(t)) return parseInt(t, 10);
+  const partes = t.split(/\s+y\s+|\s+/).filter(Boolean);
+  if (!partes.length) return null;
+  let total = 0;
+  for (const p of partes) { if (!(p in _VOZ_NUMEROS)) return null; total += _VOZ_NUMEROS[p]; }
+  return total;
+}
+function _vozEstado(msg, tipo){
+  let el = document.getElementById('voz-estado');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'voz-estado';
+    el.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:100000;max-width:90vw;padding:8px 16px;border-radius:999px;font:700 13px "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);pointer-events:none;transition:opacity .25s;';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.background = tipo === 'warn' ? '#dc2626' : (tipo === 'ok' ? '#16a34a' : '#1e293b');
+  el.style.color = '#fff';
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  if (tipo !== 'fijo') el._t = setTimeout(() => { el.style.opacity = '0'; }, 2600);
+}
+function _vozSkuObjetivo(){
+  if (typeof _navIdxSeleccionado !== 'undefined' && _navIdxSeleccionado >= 0) {
+    const t = _navTarjetas()[_navIdxSeleccionado];
+    if (t && t.dataset.sku) return t.dataset.sku;
+  }
+  const r = (typeof buscarProductos === 'function') ? buscarProductos() : [];
+  return r.length ? r[0].s : null;
+}
+function _vozSoloAdmin(){
+  if (typeof esAdminCatalogo === 'function' && esAdminCatalogo()) return true;
+  _vozEstado('🔒 Ese comando es solo para el modo admin', 'warn');
+  return false;
+}
+const _VOZ_COMANDOS = [
+  // [regex de la frase completa, función(match), texto a mostrar]
+  [/^(parar|para|detener|apagar microfono|dejar de escuchar|chau|listo)$/, () => { vozBuscar(); }, 'Micrófono apagado'],
+  [/^(ayuda|comandos|que puedo decir)$/, () => { _vozEstado('Decí: borrar · agregar · siguiente/anterior · arriba/abajo · deshacer · cantidad 5 · ver producto · mi pedido · cerrar · lista 1/2/3/4 · pagina 2 · ir al final · parar', 'fijo'); setTimeout(()=>{const e=document.getElementById('voz-estado'); if(e) e.style.opacity='0';}, 9000); }, 'Ayuda'],
+  [/^(vaciar|borrar|limpiar|sacar) (el )?(pedido|carrito)$/, () => { if (typeof confirmarVaciarCarrito === 'function') confirmarVaciarCarrito(); }, 'Vaciar pedido'],
+  [/^(borrar|borra|limpiar|limpia|vaciar|borrar todo|borra todo|limpiar todo|limpia todo|vaciar busqueda|borrar busqueda)$/, () => { limpiarBusqueda(); }, 'Búsqueda borrada'],
+  [/^(enter|entrar|intro|agregar|agrega|sumar|suma|seleccionar|selecciona|elegir|elegi|ok|dale)$/, () => {
+      const idx = (typeof _navIdxSeleccionado !== 'undefined') ? _navIdxSeleccionado : -1;
+      if (idx >= 0 && _navTarjetas()[idx]) {
+        const sku = _navTarjetas()[idx].dataset.sku;
+        if (sku) { if ((carrito.get(sku) || 0) > 0) quitarDelCarrito(sku); else agregarAlCarrito(sku); }
+      } else agregarSiguienteResultado();
+    }, 'Agregar'],
+  [/^(deshacer|deshaz|atras|volver atras|sacar el ultimo|quitar el ultimo)$/, () => { deshacerUltimoAgregado(); }, 'Deshacer'],
+  [/^(siguiente|proximo|derecha|adelante)$/, () => { if (!_vozSoloAdmin()) return; _navSeleccionar((_navIdxSeleccionado < 0 ? -1 : _navIdxSeleccionado) + 1); }, 'Siguiente'],
+  [/^(anterior|previo|izquierda)$/, () => { if (!_vozSoloAdmin()) return; _navSeleccionar(_navIdxSeleccionado < 0 ? 0 : _navIdxSeleccionado - 1); }, 'Anterior'],
+  [/^(abajo|bajar)$/, () => { if (!_vozSoloAdmin()) return; _navSeleccionar(_navIdxSeleccionado < 0 ? 0 : _navIdxSeleccionado + _navColumnas()); }, 'Abajo'],
+  [/^(arriba|subir)$/, () => { if (!_vozSoloAdmin()) return; _navSeleccionar(_navIdxSeleccionado < 0 ? 0 : _navIdxSeleccionado - _navColumnas()); }, 'Arriba'],
+  [/^(ver producto|pantalla completa|ampliar|zoom|ver en grande|abrir producto)$/, () => {
+      const sku = _vozSkuObjetivo();
+      if (!sku) { _vozEstado('No hay ningún producto para abrir', 'warn'); return; }
+      abrirZoomProducto(sku);
+    }, 'Producto en pantalla completa'],
+  [/^(cerrar|cierra|salir|volver)$/, () => {
+      ['zoom-prod-backdrop', 'pedido-full-backdrop'].forEach(id => document.getElementById(id)?.remove());
+    }, 'Cerrado'],
+  [/^(ver pedido|mi pedido|ver mi pedido|abrir pedido|ver carrito|abrir carrito|presupuesto)$/, () => {
+      if (!carrito.size) { _vozEstado('El pedido está vacío', 'warn'); return; }
+      abrirVistaCompletaPedido();
+    }, 'Mi pedido'],
+  [/^(?:cantidad|poner|pone|unidades)\s+(.+)$/, (m) => {
+      const n = _vozNumero(m[1]);
+      if (n === null) { _vozEstado('No entendí la cantidad: "' + m[1] + '"', 'warn'); return; }
+      const sku = _vozSkuObjetivo();
+      if (!sku) { _vozEstado('No hay ningún producto', 'warn'); return; }
+      const it = catalogoBySku.get(sku);
+      if (!it || !precioDe(it)) { _vozEstado('Ese producto no tiene precio', 'warn'); return; }
+      setQtyCarrito(sku, n);
+    }, 'Cantidad'],
+  [/^lista\s+(.+)$/, (m) => {
+      if (!_vozSoloAdmin()) return;
+      const t = m[1].trim();
+      const mapa = { contado:1, efectivo:1, tarjeta:2, general:2, reventa:3, mayorista:4 };
+      const n = (t in mapa) ? mapa[t] : _vozNumero(t);
+      if (![1, 2, 3, 4].includes(n)) { _vozEstado('No entendí la lista: "' + t + '"', 'warn'); return; }
+      cambiarListaAdmin(n);
+    }, 'Lista'],
+  [/^(ir al final|final|fin|ultimo)$/, () => { irAlFinalDeLista(); }, 'Final de la lista'],
+  [/^(ir al inicio|inicio|principio|ir arriba)$/, () => { irAlInicioDeLista(); }, 'Inicio de la lista'],
+  [/^pagina\s+(.+)$/, (m) => {
+      const n = _vozNumero(m[1]);
+      if (!n || n < 1) { _vozEstado('No entendí la página', 'warn'); return; }
+      irAPagina(n);
+    }, 'Página'],
+];
+// Devuelve true si la frase era un comando (y lo ejecuta).
+window._vozEjecutarComando = (texto) => {
+  const t = _vozLimpiarComando(texto);
+  if (!t) return false;
+  for (const [re, fn, etiqueta] of _VOZ_COMANDOS) {
+    const m = t.match(re);
+    if (!m) continue;
+    try { fn(m); _vozEstado('🎤 ' + etiqueta, 'ok'); }
+    catch (e) { console.warn('[voz] comando falló:', e); _vozEstado('No se pudo ejecutar: ' + etiqueta, 'warn'); }
+    return true;
+  }
+  return false;
+};
+function _vozPintarBoton(){
+  const btn = document.getElementById('btn-voz-busqueda');
+  const input = document.getElementById('input-busqueda');
+  if (btn) { btn.classList.toggle('escuchando', _vozActivo); btn.title = _vozActivo ? 'Escuchando… tocá para apagar (o decí "parar")' : 'Buscar y controlar por voz (decí "ayuda" para ver los comandos)'; }
+  if (input) input.placeholder = _vozActivo ? '🎤 Escuchando… decí un producto o un comando' : 'Nombre o SKU… (o dejá vacío para ver todo el catálogo)';
 }
 window.vozBuscar = () => {
-  const btn = document.getElementById('btn-voz-busqueda');
-  if (_vozRec) { try { _vozRec.stop(); } catch(e){} return; }
+  if (_vozActivo) {   // apagar
+    _vozActivo = false;
+    try { _vozRec && _vozRec.stop(); } catch (e) {}
+    _vozRec = null;
+    _vozPintarBoton();
+    _vozEstado('🎤 Micrófono apagado');
+    return;
+  }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { alert('Tu navegador no permite búsqueda por voz. Probá con Chrome, Edge o Safari.'); return; }
-  const rec = new SR();
-  rec.lang = 'es-AR';
-  rec.interimResults = true;
-  rec.maxAlternatives = 1;
-  rec.continuous = false;
+  _vozActivo = true;
+  _vozPintarBoton();
   const input = document.getElementById('input-busqueda');
-  _vozRec = rec;
-  if (btn) { btn.classList.add('escuchando'); btn.title = 'Escuchando… tocá para parar'; }
-  if (input) input.placeholder = '🎤 Escuchando… decí el producto';
-  const placeholderOrig = 'Nombre o SKU… (o dejá vacío para ver todo el catálogo)';
-  const fin = () => {
-    _vozRec = null;
-    if (btn) { btn.classList.remove('escuchando'); btn.title = 'Buscar por voz'; }
-    if (input) input.placeholder = placeholderOrig;
+  const iniciar = () => {
+    if (!_vozActivo) return;
+    const rec = new SR();
+    rec.lang = 'es-AR';
+    rec.interimResults = true;
+    rec.continuous = true;
+    rec.maxAlternatives = 1;
+    _vozRec = rec;
+    rec.onresult = (ev) => {
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const texto = _vozNormalizar(ev.results[i][0].transcript);
+        if (!texto) continue;
+        if (ev.results[i].isFinal) {
+          if (_vozEjecutarComando(texto)) continue;
+          if (input) { input.value = texto; onBusquedaInput(texto); }
+        } else if (input && !_vozLimpiarComando(texto).match(/^(borrar|borra|limpiar|limpia|agregar|agrega|enter|siguiente|anterior|deshacer|parar|ok|dale)$/)) {
+          input.value = texto; // vista previa mientras hablás (se confirma al terminar la frase)
+        }
+      }
+    };
+    rec.onerror = (ev) => {
+      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
+        _vozActivo = false; _vozPintarBoton();
+        alert('El navegador no tiene permiso para usar el micrófono. Habilitalo en el candado de la barra de direcciones.');
+      } else if (ev.error === 'network') {
+        _vozActivo = false; _vozPintarBoton();
+        alert('La búsqueda por voz necesita internet.');
+      }
+    };
+    // El navegador corta solo cada tanto: si seguimos en modo manos libres, se vuelve a prender.
+    rec.onend = () => { if (_vozActivo) setTimeout(iniciar, 250); };
+    try { rec.start(); } catch (e) { setTimeout(iniciar, 500); }
   };
-  rec.onresult = (ev) => {
-    let texto = '';
-    for (let i = 0; i < ev.results.length; i++) texto += ev.results[i][0].transcript + ' ';
-    texto = _vozNormalizar(texto);
-    if (input && texto) { input.value = texto; onBusquedaInput(texto); }
-  };
-  rec.onerror = (ev) => {
-    fin();
-    if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') alert('El navegador no tiene permiso para usar el micrófono. Habilitalo en el candado de la barra de direcciones.');
-    else if (ev.error === 'no-speech') { /* no se escuchó nada */ }
-    else if (ev.error === 'network') alert('La búsqueda por voz necesita internet.');
-  };
-  rec.onend = fin;
-  try { rec.start(); } catch(e) { fin(); }
+  iniciar();
+  _vozEstado('🎤 Escuchando… decí "ayuda" para ver los comandos');
 };
 window.limpiarBusqueda = () => {
   const input = document.getElementById('input-busqueda');
