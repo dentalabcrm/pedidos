@@ -330,7 +330,7 @@
   .prod-consultar{font-size:12px;color:var(--text3);font-style:italic;font-family:'DM Sans',sans-serif;font-weight:500;}
   .buscador-input-wrap{position:relative;flex:1;min-width:200px;}
   .buscador-row input[type="text"]{
-    width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:10px;padding:10px 34px 10px 12px;
+    width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:10px;padding:10px 70px 10px 12px;
     font-size:13.5px;background:var(--panel2);color:var(--text);
   }
   .buscador-row input[type="text"]:focus{outline:2px solid var(--blue);outline-offset:-1px;background:#fff;}
@@ -340,6 +340,13 @@
     padding:5px 7px;line-height:1;border-radius:6px;
   }
   .btn-limpiar-busqueda:hover{background:var(--border);color:var(--text);}
+  .btn-voz-busqueda{
+    position:absolute;right:32px;top:50%;transform:translateY(-50%);
+    background:none;border:none;font-size:15px;cursor:pointer;padding:4px 6px;line-height:1;border-radius:6px;
+  }
+  .btn-voz-busqueda:hover{background:var(--border);}
+  .btn-voz-busqueda.escuchando{background:#dc2626;color:#fff;animation:vozPulso 1s infinite;}
+  @keyframes vozPulso{0%,100%{opacity:1}50%{opacity:.55}}
   .btn-vaciar-carrito{
     display:inline-flex;align-items:center;gap:5px;background:none;border:1px solid var(--border);
     color:var(--red,#dc2626);border-radius:8px;padding:6px 11px;font-size:12px;font-weight:700;
@@ -6144,6 +6151,7 @@ function renderPrincipal(){
       <div class="buscador-row">
         <div class="buscador-input-wrap">
           <input type="text" id="input-busqueda" placeholder="Nombre o SKU… (o dejá vacío para ver todo el catálogo)" oninput="onBusquedaInput(this.value)" onkeydown="if(event.key==='Tab' && event.shiftKey){ event.preventDefault(); deshacerUltimoAgregado(); }"${esAdminCatalogo() ? ' autocomplete="off"' : ''}>
+          <button type="button" id="btn-voz-busqueda" class="btn-voz-busqueda" onclick="vozBuscar()" title="Buscar por voz" style="display:${_vozSoportado() ? 'block' : 'none'};">🎤</button>
           <button type="button" id="btn-limpiar-busqueda" class="btn-limpiar-busqueda" onclick="limpiarBusqueda()" title="Borrar búsqueda" style="display:none;">✕</button>
         </div>
         <button class="btn-ir-final" onclick="irAlFinalDeLista()" title="Saltar al final de la lista">⬇ Ir al final</button>
@@ -6245,9 +6253,53 @@ window.onBusquedaInput = (val) => {
   _busquedaTimer = setTimeout(renderResultados, 150);
 };
 function _actualizarBtnLimpiarBusqueda(){
+  const bv = document.getElementById('btn-voz-busqueda');
+  if (bv) bv.style.display = _vozSoportado() ? 'block' : 'none';
   const btn = document.getElementById('btn-limpiar-busqueda');
   if (btn) btn.style.display = (document.getElementById('input-busqueda')?.value || '') ? 'block' : 'none';
 }
+// ── Búsqueda por voz (Web Speech API: Chrome, Edge, Safari). Necesita internet y permiso de micrófono. ──
+let _vozRec = null;
+function _vozSoportado(){ return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
+function _vozNormalizar(t){
+  // El reconocedor suele escribir "siete mil uno" como "7001" ya bien, pero agrega punto final y mayúsculas.
+  return String(t || '').replace(/[.,;¡!¿?]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+window.vozBuscar = () => {
+  const btn = document.getElementById('btn-voz-busqueda');
+  if (_vozRec) { try { _vozRec.stop(); } catch(e){} return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { alert('Tu navegador no permite búsqueda por voz. Probá con Chrome, Edge o Safari.'); return; }
+  const rec = new SR();
+  rec.lang = 'es-AR';
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+  rec.continuous = false;
+  const input = document.getElementById('input-busqueda');
+  _vozRec = rec;
+  if (btn) { btn.classList.add('escuchando'); btn.title = 'Escuchando… tocá para parar'; }
+  if (input) input.placeholder = '🎤 Escuchando… decí el producto';
+  const placeholderOrig = 'Nombre o SKU… (o dejá vacío para ver todo el catálogo)';
+  const fin = () => {
+    _vozRec = null;
+    if (btn) { btn.classList.remove('escuchando'); btn.title = 'Buscar por voz'; }
+    if (input) input.placeholder = placeholderOrig;
+  };
+  rec.onresult = (ev) => {
+    let texto = '';
+    for (let i = 0; i < ev.results.length; i++) texto += ev.results[i][0].transcript + ' ';
+    texto = _vozNormalizar(texto);
+    if (input && texto) { input.value = texto; onBusquedaInput(texto); }
+  };
+  rec.onerror = (ev) => {
+    fin();
+    if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') alert('El navegador no tiene permiso para usar el micrófono. Habilitalo en el candado de la barra de direcciones.');
+    else if (ev.error === 'no-speech') { /* no se escuchó nada */ }
+    else if (ev.error === 'network') alert('La búsqueda por voz necesita internet.');
+  };
+  rec.onend = fin;
+  try { rec.start(); } catch(e) { fin(); }
+};
 window.limpiarBusqueda = () => {
   const input = document.getElementById('input-busqueda');
   if (input) { input.value = ''; input.focus(); }
