@@ -1405,6 +1405,7 @@ window.cambiarListaAdmin = (n) => {
   document.body.classList.toggle('vista-reventa', _adminVistaPrecio === 'reventa');
   document.body.classList.toggle('vista-mayorista', _adminVistaPrecio === 'mayorista');
   const _zoomAbierto = !!document.getElementById('zoom-prod-backdrop');
+  const _pedidoFullAbierto = !!document.getElementById('pedido-full-backdrop');
   const _scrollY = window.scrollY;
   renderPrincipal(); // re-dibuja todo (banner incluido) para que se note el cambio de vista
   if (_zoomAbierto) {
@@ -1412,6 +1413,15 @@ window.cambiarListaAdmin = (n) => {
     // lugar y el propio modal se vuelve a dibujar con el precio de la lista nueva.
     requestAnimationFrame(() => window.scrollTo(0, _scrollY));
     _zoomRefrescarSiAbierto();
+  }
+  if (_pedidoFullAbierto && typeof abrirVistaCompletaPedido === 'function') {
+    // "Tu pedido" en pantalla completa: se vuelve a dibujar con los precios de la lista nueva,
+    // conservando hasta dónde habías bajado y el modo (presupuesto/pedido) en el que estabas.
+    const _cuerpo = document.getElementById('pedido-full-body');
+    const _sc = _cuerpo ? _cuerpo.scrollTop : 0;
+    abrirVistaCompletaPedido(true);
+    const _rest = () => { const c = document.getElementById('pedido-full-body'); if (c) c.scrollTop = _sc; };
+    _rest(); requestAnimationFrame(_rest);
   }
   const msg = `👁 ${_LISTA_ADMIN_LABEL[n]}`;
   if (typeof showToast === 'function') showToast(msg, 'ok');
@@ -7771,7 +7781,15 @@ document.addEventListener('keydown', (e) => {
   if (typeof esAdminCatalogo !== 'function' || !esAdminCatalogo()) return;
   const el = document.activeElement;
   const tag = (el && el.tagName) || '';
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
+  // Con la pantalla completa de un producto o de "Tu pedido" abierta, el atajo tiene que
+  // andar siempre: el foco puede haber quedado en el buscador de atrás (por ejemplo si la
+  // abriste con Shift+Enter) o en un botón. Solo se respeta un campo donde se esté
+  // escribiendo DENTRO de esas pantallas (precio manual, cantidad, costo de envío...).
+  const _pantallaCompleta = document.getElementById('zoom-prod-backdrop') || document.getElementById('pedido-full-backdrop');
+  const _enCampoDePantalla = !!(el && _pantallaCompleta && _pantallaCompleta.contains(el) && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable));
+  if (_pantallaCompleta) {
+    if (_enCampoDePantalla) return;
+  } else if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
   e.preventDefault();
   if (typeof cambiarListaAdmin === 'function') cambiarListaAdmin(n);
 });
