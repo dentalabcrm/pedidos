@@ -5057,6 +5057,7 @@ function renderCarrito(){
 let _pedidoFullModo = 'pedido';
 let _pedidoFullMostrarTotal = true;
 let _pedidoFullMostrarFormaPago = true;
+let _pedidoFullDosListas = false; // admin + Presupuesto: muestra Lista 1 (Contado) y Lista 2 (Tarjeta) lado a lado
 let _pedidoFullOrden = 'original'; // 'original' | 'precio_asc' | 'precio_desc' | 'manual' — solo aplica en modo Presupuesto
 // Costo de envío que el admin puede sumarle a "Tu pedido" — misma estrategia que
 // Presupuestos: Envío en el CRM (toggle activo + tipo + monto), simplificada acá.
@@ -5074,6 +5075,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
     _pedidoFullModo = esAdminCatalogo() ? 'presupuesto' : 'pedido';
     _pedidoFullMostrarTotal = !esAdminCatalogo(); // admin arranca en "sin total"; el cliente siempre lo ve
     _pedidoFullMostrarFormaPago = true;
+    _pedidoFullDosListas = false;
     _pedidoFullOrden = 'original';
     _pedidoEnvioAdmin = { activo: false, tipo: 'Envío a domicilio', costo: '', editando: false };
     _pedidoEditandoPrecioSku = null;
@@ -5103,6 +5105,9 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
     });
   }
   const _modoOrdenManual = _esPresu && _pedidoFullOrden === 'manual' && esAdmin;
+  // Mostrar las dos listas (Contado y Tarjeta) a la vez — solo admin, solo Presupuesto, y no
+  // mientras se está viendo Reventa/Mayorista (esas listas no tienen "dos precios").
+  const _dual = _esPresu && esAdmin && _adminVistaPrecio === 'normal' && _pedidoFullDosListas;
   const filas = entradasCarrito.map(([sku, qty], idxFila) => {
     const it = catalogoBySku.get(sku);
     if (!it) return '';
@@ -5118,7 +5123,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
     const stockHtml = it.st
       ? (_ocultarAgotadoSet.has(sku) ? '' : `<div class="prod-stock-agotado">Agotado</div>`)
       : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>` : `<div class="prod-stock-en">En stock</div>`;
-    const _mostrarFormaPagoFila = !_esPresu || _pedidoFullMostrarFormaPago;
+    const _mostrarFormaPagoFila = (!_esPresu || _pedidoFullMostrarFormaPago) && !_dual;
     const medioPagoBadge = (listaActiva && _adminVistaPrecio === 'normal' && _mostrarFormaPagoFila)
       ? (listaActiva === 'p1'
           ? `<span class="ci-medio-pago medio-contado">✓ Precios ya con 10% off</span>`
@@ -5134,7 +5139,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
         <div style="flex:1;min-width:0;">
           <div style="font-size:14.5px;font-weight:700;color:var(--text);line-height:1.3;">${escHtml(it.n)}</div>
           <div class="ci-sku" style="margin-top:2px;">SKU: ${escHtml(it.s)}</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px;">${fmtMoney(precio)} c/u × ${qty}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px;">${_dual ? `${qty} ${qty === 1 ? 'unidad' : 'unidades'} · Contado ${fmtMoney(it.p1)} c/u · Tarjeta ${fmtMoney(it.p2)} c/u` : `${fmtMoney(precio)} c/u × ${qty}`}</div>
           <div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${stockHtml}${it.of ? '<span style="font-size:10.5px;font-weight:800;color:#fff;background:#dc2626;border-radius:5px;padding:2px 7px;letter-spacing:.3px;">🏷️ OFERTA</span>' : ''}${it.st && esAdmin ? `<button onclick="toggleOcultarAgotado('${escHtml(sku)}')" title="${_ocultarAgotadoSet.has(sku) ? 'Volver a mostrar \'Agotado\' a este producto' : 'Ocultarle \'Agotado\' a este producto (acá, en el carrito y en el PDF)'}" style="background:none;border:none;font-size:13px;cursor:pointer;padding:0 2px;line-height:1;${_ocultarAgotadoSet.has(sku) ? 'opacity:.5;' : ''}">🙈</button>` : ''}${medioPagoBadge}</div>
           ${medioPagoDetalle}
         </div>
@@ -5145,7 +5150,10 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
                 <input type="text" inputmode="decimal" autofocus value="${_preciosManualesCarrito.has(sku) ? _preciosManualesCarrito.get(sku) : precioDe(it)}" onblur="_pedidoCommitPrecioManual('${escHtml(sku)}', this.value)" onkeydown="if(event.key==='Enter')this.blur(); if(event.key==='Escape'){_pedidoEditandoPrecioSku=null; abrirVistaCompletaPedido(true);}" onclick="this.select()" style="width:90px;border:1px solid var(--blue);border-radius:6px;padding:4px 6px;font-size:14px;font-weight:700;text-align:right;background:var(--panel);color:var(--text);">
               </div>`
             : `<div style="display:flex;align-items:center;gap:6px;">
-                <div style="font-size:16px;font-weight:800;color:var(--text);white-space:nowrap;">${fmtMoney(precio * qty)}</div>
+                ${_dual ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
+                  <div style="display:flex;align-items:baseline;gap:8px;white-space:nowrap;"><span style="font-size:10.5px;font-weight:700;color:#0ea968;">💵 Contado</span><span style="font-size:15px;font-weight:800;color:var(--text);">${fmtMoney((it.p1 || 0) * qty)}</span></div>
+                  <div style="display:flex;align-items:baseline;gap:8px;white-space:nowrap;"><span style="font-size:10.5px;font-weight:700;color:#7c3aed;">💳 Tarjeta</span><span style="font-size:15px;font-weight:800;color:var(--text);">${fmtMoney((it.p2 || 0) * qty)}</span></div>
+                </div>` : `<div style="font-size:16px;font-weight:800;color:var(--text);white-space:nowrap;">${fmtMoney(precio * qty)}</div>`}
                 ${esAdmin ? `<button onclick="_pedidoEditandoPrecioSku='${escHtml(sku)}'; abrirVistaCompletaPedido(true);" title="Cambiar el precio de este producto a mano, solo para este pedido" class="ci-precio-col-hover-btn" style="background:none;border:none;font-size:12px;cursor:pointer;padding:0 2px;line-height:1;">✏️</button>` : ''}
               </div>
               ${_preciosManualesCarrito.has(sku) ? `<button onclick="quitarPrecioManual('${escHtml(sku)}')" title="Volver al precio de catálogo" class="ci-precio-col-hover-btn" style="background:none;border:none;font-size:10px;color:var(--text3);cursor:pointer;padding:0;text-decoration:underline;">↺ precio de catálogo</button>` : ''}`}
@@ -5188,6 +5196,10 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
           <input type="checkbox" id="pedido-presu-mostrar-forma-pago" ${_pedidoFullMostrarFormaPago ? 'checked' : ''} onchange="_pedidoToggleMostrarFormaPago(this.checked)" style="width:15px;height:15px;cursor:pointer;">
           Mostrar forma de pago
         </label>
+        ${(esAdmin && _adminVistaPrecio === 'normal') ? `<label style="display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--text2);cursor:pointer;" title="Muestra en cada producto el precio de Lista 1 (Contado) y de Lista 2 (Tarjeta), y los dos totales">
+          <input type="checkbox" id="pedido-presu-dos-listas" ${_pedidoFullDosListas ? 'checked' : ''} onchange="_pedidoToggleDosListas(this.checked)" style="width:15px;height:15px;cursor:pointer;">
+          Mostrar Lista 1 y Lista 2
+        </label>` : ''}
         <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--text2);">
           Orden:
           <select onchange="_pedidoCambiarOrden(this.value)" style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--panel);color:var(--text);cursor:pointer;">
@@ -5219,7 +5231,13 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
             <button onclick="_pedidoEditarEnvio()" title="Editar envío" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:0;line-height:1;">✏️</button>
           </span>
         </div>` : ''}
-        ${(!_esPresu || _pedidoFullMostrarTotal) ? `<div style="display:flex;align-items:center;justify-content:space-between;font-size:16px;font-weight:800;color:var(--text);margin-bottom:2px;">
+        ${(_dual && _pedidoFullMostrarTotal) ? `<div style="display:flex;align-items:center;justify-content:space-between;font-size:15px;font-weight:800;color:var(--text);margin-bottom:2px;">
+          <span>💵 Total Contado <span style="font-size:10.5px;font-weight:600;color:var(--text3);">(Efectivo, débito o transferencia)</span></span><span>${fmtMoney(_totalPorLista('p1'))}</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:15px;font-weight:800;color:var(--text);margin-bottom:2px;">
+          <span>💳 Total Tarjeta <span style="font-size:10.5px;font-weight:600;color:var(--text3);">(1 pago)</span></span><span>${fmtMoney(_totalPorLista('p2'))}</span>
+        </div>
+        <div style="font-size:10.5px;font-weight:600;color:var(--text3);margin-bottom:12px;">✓ Precios finales, con IVA incluido</div>` : (!_esPresu || _pedidoFullMostrarTotal) ? `<div style="display:flex;align-items:center;justify-content:space-between;font-size:16px;font-weight:800;color:var(--text);margin-bottom:2px;">
           <span>Total</span><span>${fmtMoney(calcularTotal() + _envioMontoActual)}</span>
         </div>
         <div style="font-size:10.5px;font-weight:600;color:var(--text3);margin-bottom:12px;">✓ Precio final, con IVA incluido</div>` : ''}
@@ -5244,6 +5262,17 @@ window._pedidoCambiarModo = (modo) => {
 };
 window._pedidoToggleMostrarTotal = (mostrar) => {
   _pedidoFullMostrarTotal = mostrar;
+  abrirVistaCompletaPedido(true);
+};
+// Total de todo el pedido con una lista fija ('p1' Contado / 'p2' Tarjeta), ignorando la lista activa
+// y los precios cambiados a mano — se usa en la opción "Mostrar Lista 1 y Lista 2".
+function _totalPorLista(clave){
+  let t = 0;
+  carrito.forEach((qty, sku) => { const it = catalogoBySku.get(sku); if (it) t += (it[clave] || 0) * qty; });
+  return t;
+}
+window._pedidoToggleDosListas = (mostrar) => {
+  _pedidoFullDosListas = !!mostrar;
   abrirVistaCompletaPedido(true);
 };
 window._pedidoToggleMostrarFormaPago = (mostrar) => {
@@ -5501,7 +5530,11 @@ window.descargarPedidoPDFConFotos = async () => {
     // total y la forma de pago por fila solo se muestran si esos toggles de la vista
     // están activados.
     const _esPresu = esAdminCatalogo() && _pedidoFullModo === 'presupuesto';
-    const mostrarMedioPago = _adminVistaPrecio === 'normal' && (!_esPresu || _pedidoFullMostrarFormaPago);
+    // "Mostrar Lista 1 y Lista 2" (admin, Presupuesto): dos columnas de precio (Contado y Tarjeta)
+    // en vez de una sola; en ese caso no se agrega la leyenda de forma de pago por fila.
+    const _dual = _esPresu && esAdminCatalogo() && _adminVistaPrecio === 'normal' && _pedidoFullDosListas;
+    const _colContadoX = pageW - margin - 33; // borde derecho de la columna Contado (la Tarjeta va pegada al margen)
+    const mostrarMedioPago = _adminVistaPrecio === 'normal' && (!_esPresu || _pedidoFullMostrarFormaPago) && !_dual;
     const filaAlto = mostrarMedioPago ? 39 : 31;
     const _envioMontoPDF = (esAdminCatalogo() && !_esPresu && _pedidoEnvioAdmin.activo) ? (parseFloat(_pedidoEnvioAdmin.costo) || 0) : 0;
     let y = margin;
@@ -5553,7 +5586,12 @@ window.descargarPedidoPDFConFotos = async () => {
     // precio de cada fila.
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(130, 140, 160);
     doc.text('PRODUCTO', margin + fotoSize + 6, y);
-    doc.text('SUBTOTAL', pageW - margin, y, { align: 'right' });
+    if (_dual) {
+      doc.text('CONTADO (LISTA 1)', _colContadoX, y, { align: 'right' });
+      doc.text('TARJETA (LISTA 2)', pageW - margin, y, { align: 'right' });
+    } else {
+      doc.text('SUBTOTAL', pageW - margin, y, { align: 'right' });
+    }
     y += 3;
     doc.setDrawColor(210, 214, 224); doc.setLineWidth(0.3);
     doc.line(margin, y, pageW - margin, y);
@@ -5574,7 +5612,7 @@ window.descargarPedidoPDFConFotos = async () => {
       }
 
       const textX = margin + fotoSize + 6;
-      const anchoTexto = pageW - margin - textX - 32;
+      const anchoTexto = pageW - margin - textX - (_dual ? 68 : 32);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(15, 23, 42);
       const nombreLineas = doc.splitTextToSize(it.n, anchoTexto).slice(0, 2);
       doc.text(nombreLineas, textX, y + 5);
@@ -5582,7 +5620,7 @@ window.descargarPedidoPDFConFotos = async () => {
       const offsetY = nombreLineas.length > 1 ? 13 : 9;
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(130, 140, 160);
       doc.text(`SKU: ${it.s}`, textX, y + offsetY);
-      doc.text(`${fmtMoney(precio)} c/u × ${qty}`, textX, y + offsetY + 4.5);
+      if (!_dual) doc.text(`${fmtMoney(precio)} c/u × ${qty}`, textX, y + offsetY + 4.5);
 
       // Estado de stock — mismo texto y criterio que se ve en pantalla, salvo que acá
       // "Agotado" se muestra como "Stock a confirmar" (mismo texto y color naranja que ya
@@ -5616,8 +5654,19 @@ window.descargarPedidoPDFConFotos = async () => {
         }
       }
 
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 23, 42);
-      doc.text(fmtMoney(precio * qty), pageW - margin, y + fotoSize / 2 + 1.5, { align: 'right' });
+      if (_dual) {
+        const p1 = it.p1 || 0, p2 = it.p2 || 0;
+        const yPrecio = y + fotoSize / 2 - 0.5;
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(15, 23, 42);
+        doc.text(fmtMoney(p1 * qty), _colContadoX, yPrecio, { align: 'right' });
+        doc.text(fmtMoney(p2 * qty), pageW - margin, yPrecio, { align: 'right' });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(130, 140, 160);
+        doc.text(`${fmtMoney(p1)} c/u × ${qty}`, _colContadoX, yPrecio + 4.5, { align: 'right' });
+        doc.text(`${fmtMoney(p2)} c/u × ${qty}`, pageW - margin, yPrecio + 4.5, { align: 'right' });
+      } else {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 23, 42);
+        doc.text(fmtMoney(precio * qty), pageW - margin, y + fotoSize / 2 + 1.5, { align: 'right' });
+      }
 
       y += filaAlto;
       doc.setDrawColor(230, 233, 240);
@@ -5625,7 +5674,7 @@ window.descargarPedidoPDFConFotos = async () => {
     }
 
     if (!_esPresu || _pedidoFullMostrarTotal) {
-      if (y + (_envioMontoPDF > 0 ? 22 : 14) > pageH - margin) { doc.addPage(); y = margin; }
+      if (y + (_dual ? 32 : (_envioMontoPDF > 0 ? 22 : 14)) > pageH - margin) { doc.addPage(); y = margin; }
       y += 4;
       if (_envioMontoPDF > 0) {
         doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(80, 90, 110);
@@ -5636,10 +5685,24 @@ window.descargarPedidoPDFConFotos = async () => {
       doc.setDrawColor(15, 23, 42); doc.setLineWidth(0.4);
       doc.line(margin, y, pageW - margin, y);
       y += 8;
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(15, 23, 42);
-      doc.text('Total', margin, y);
-      doc.text(fmtMoney(calcularTotal() + _envioMontoPDF), pageW - margin, y, { align: 'right' });
-      if (y + 8 > pageH - margin) { doc.addPage(); y = margin; } else { y += 7; }
+      if (_dual) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(15, 23, 42);
+        doc.text('Total Contado', margin, y);
+        doc.text(fmtMoney(_totalPorLista('p1')), pageW - margin, y, { align: 'right' });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130, 140, 160);
+        doc.text('Efectivo, débito o transferencia', margin, y + 4);
+        y += 11;
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(15, 23, 42);
+        doc.text('Total Tarjeta', margin, y);
+        doc.text(fmtMoney(_totalPorLista('p2')), pageW - margin, y, { align: 'right' });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130, 140, 160);
+        doc.text('Tarjeta de crédito en 1 pago', margin, y + 4);
+      } else {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(15, 23, 42);
+        doc.text('Total', margin, y);
+        doc.text(fmtMoney(calcularTotal() + _envioMontoPDF), pageW - margin, y, { align: 'right' });
+      }
+      if (y + (_dual ? 12 : 8) > pageH - margin) { doc.addPage(); y = margin; } else { y += (_dual ? 11 : 7); }
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(100, 110, 130);
       doc.text('Precios finales, con IVA incluido.', margin, y);
     }
