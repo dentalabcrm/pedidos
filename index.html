@@ -629,6 +629,7 @@
   .total-cuotas-link:hover{background:#0284c710;}
 
   /* ── Modal de financiamiento en cuotas ── */
+  .pf-cols > div{break-inside:avoid;}
   .pwfin-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:900;display:flex;align-items:flex-end;justify-content:center;}
   @media (min-width:640px){ .pwfin-backdrop{align-items:center;} }
   .pwfin-panel{background:#fff;width:100%;max-width:440px;max-height:85vh;border-radius:16px 16px 0 0;overflow:hidden;display:flex;flex-direction:column;animation:pwfinSlideUp .25s ease-out;}
@@ -5215,7 +5216,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
           </select>
         </label>
       </div>` : ''}
-      <div id="pedido-full-body" style="overflow-y:auto;padding:4px 20px;flex:1;${_pedidoFullAmplio ? 'display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));column-gap:28px;align-content:start;' : ''}">${filas}</div>
+      <div id="pedido-full-body" style="overflow-y:auto;padding:4px 20px;flex:1;">${_pedidoFullAmplio ? `<div class="pf-cols" style="column-width:480px;column-gap:28px;">${filas}</div>` : filas}</div>
       <div id="pedido-full-footer" style="padding:16px 20px;border-top:1px solid var(--border);">
         ${_mostrarPanelEnvio ? `<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;background:var(--panel2);">
           <label style="display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;">
