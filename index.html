@@ -2462,7 +2462,7 @@ window._zoomCopiarTarjeta = async (sku) => {
 function _pwCerrarAvisarmeModal(){
   document.getElementById('avisarme-backdrop')?.remove();
 }
-window.abrirAvisarmeModal = (sku, nombreCodificado) => {
+window.abrirAvisarmeModal = (sku, nombreCodificado, esInterno) => {
   const nombreProd = decodeURIComponent(nombreCodificado);
   document.getElementById('avisarme-backdrop')?.remove();
   const bd = document.createElement('div');
@@ -2471,17 +2471,17 @@ window.abrirAvisarmeModal = (sku, nombreCodificado) => {
   bd.innerHTML = `
     <div class="pwfin-panel">
       <div class="pwfin-header">
-        <div class="pwfin-title">🔔 Avisarme cuando vuelva a ingresar</div>
+        <div class="pwfin-title">🔔 ${esInterno ? 'Avisarme si vuelve a ingresar' : 'Avisarme cuando vuelva a ingresar'}</div>
         <button class="pwfin-close" onclick="_pwCerrarAvisarmeModal()">✕</button>
       </div>
       <div class="pwfin-body">
         <div class="pwfin-precio-base">
-          <div class="pwfin-precio-lbl">Producto agotado</div>
+          <div class="pwfin-precio-lbl">${esInterno ? 'Producto con stock — te avisa el CRM cuando entre más' : 'Producto agotado'}</div>
           <div class="pwfin-prod-name" style="font-size:14px;font-weight:700;color:var(--text);margin-top:2px;">${escHtml(nombreProd)}</div>
         </div>
-        <div class="field"><label>Tu nombre *</label><input type="text" id="avisar-nombre" placeholder="Nombre y apellido"></div>
-        <div class="field" style="margin-top:12px;"><label>Teléfono *</label><input type="text" id="avisar-tel" placeholder="11 1234-5678"></div>
-        <button class="btn-enviar" id="btn-avisar-guardar" style="margin-top:16px;" onclick="guardarAvisoStock('${escHtml(sku)}', '${encodeURIComponent(nombreProd)}')">🔔 Avisarme</button>
+        <div class="field"><label>${esInterno ? 'Nombre / nota (opcional)' : 'Tu nombre *'}</label><input type="text" id="avisar-nombre" placeholder="${esInterno ? 'Ej: para el cliente Pérez' : 'Nombre y apellido'}"></div>
+        <div class="field" style="margin-top:12px;"><label>${esInterno ? 'Teléfono (opcional)' : 'Teléfono *'}</label><input type="text" id="avisar-tel" placeholder="11 1234-5678"></div>
+        <button class="btn-enviar" id="btn-avisar-guardar" style="margin-top:16px;" onclick="guardarAvisoStock('${escHtml(sku)}', '${encodeURIComponent(nombreProd)}', ${esInterno ? 'true' : 'false'})">🔔 Avisarme</button>
         <div id="avisar-msg" style="font-size:12px;margin-top:10px;text-align:center;"></div>
       </div>
     </div>`;
@@ -2489,13 +2489,14 @@ window.abrirAvisarmeModal = (sku, nombreCodificado) => {
   bd.addEventListener('click', e => { if (e.target === bd) _pwCerrarAvisarmeModal(); });
   setTimeout(() => document.getElementById('avisar-nombre')?.focus(), 50);
 };
-window.guardarAvisoStock = async (sku, nombreCodificado) => {
+window.guardarAvisoStock = async (sku, nombreCodificado, esInterno) => {
   const nombreProd = decodeURIComponent(nombreCodificado);
-  const nombre = document.getElementById('avisar-nombre')?.value.trim() || '';
+  let nombre = document.getElementById('avisar-nombre')?.value.trim() || '';
   const telefono = document.getElementById('avisar-tel')?.value.trim() || '';
   const msgEl = document.getElementById('avisar-msg');
+  if (esInterno && !nombre) nombre = 'Aviso interno (admin)';
   if (!nombre) { if (msgEl) msgEl.innerHTML = '<span style="color:var(--red);">Ingresá tu nombre.</span>'; document.getElementById('avisar-nombre')?.focus(); return; }
-  if (!telefono) { if (msgEl) msgEl.innerHTML = '<span style="color:var(--red);">Ingresá un teléfono de contacto.</span>'; document.getElementById('avisar-tel')?.focus(); return; }
+  if (!telefono && !esInterno) { if (msgEl) msgEl.innerHTML = '<span style="color:var(--red);">Ingresá un teléfono de contacto.</span>'; document.getElementById('avisar-tel')?.focus(); return; }
   const btn = document.getElementById('btn-avisar-guardar');
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
   try {
@@ -2505,7 +2506,7 @@ window.guardarAvisoStock = async (sku, nombreCodificado) => {
       nroPedido: '', cantidad: 0, vendedor: '', proveedor: '', encargadoCompras: '', dondePide: '',
       sku, descripcion: nombreProd,
       productos: [{ sku, descripcion: nombreProd }],
-      estado: 'pendiente', fechaCarga: new Date().toISOString(), creadoPor: 'Cliente Web',
+      estado: 'pendiente', fechaCarga: new Date().toISOString(), creadoPor: esInterno ? 'Admin Pedidos' : 'Cliente Web',
       dep1Ingresado: 0, depCIngresado: 0,
       sound: true, soundRepeats: 5,
     };
@@ -2514,6 +2515,12 @@ window.guardarAvisoStock = async (sku, nombreCodificado) => {
       lista.unshift(nuevoFaltante);
       return lista;
     });
+    if (esInterno) {
+      if (msgEl) msgEl.innerHTML = '<span style="color:var(--green);">✓ Listo. Quedó cargado en Mercadería Faltante del CRM: cuando aumente el stock te suena el aviso.</span>';
+      if (btn) btn.style.display = 'none';
+      setTimeout(_pwCerrarAvisarmeModal, 2200);
+      return;
+    }
     _avisosAgregar(sku, nombreProd);
     if (msgEl) msgEl.innerHTML = '<span style="color:var(--green);">✓ ¡Listo! Cuando vuelva a ingresar, te va a aparecer primero en el catálogo (solo a vos).</span>';
     if (btn) btn.style.display = 'none';
@@ -4595,12 +4602,15 @@ function renderResultados(){
       : qtyEnCarrito > 0
       ? ` onclick="quitarDelCarrito('${it.s}')"`
       : (puedeAgregar ? ` onclick="agregarAlCarrito('${it.s}')"` : '');
+    const _avisoAdminBtn = (esAdminCatalogo() && !it.st)
+      ? `<button class="prod-avisar-link" title="Solo admin: te avisa (CRM → Mercadería Faltante) cuando vuelva a ingresar mercadería de este producto" onclick="event.stopPropagation(); abrirAvisarmeModal('${escHtml(it.s)}', '${encodeURIComponent(it.n)}', true)">🔔 Avisarme${vistaProductos === 'grilla' ? '' : ' si vuelve a ingresar'}</button>`
+      : '';
     const stockHtml = it.st
       ? `<div class="prod-stock-agotado">Agotado</div><button class="prod-avisar-link" onclick="event.stopPropagation(); abrirAvisarmeModal('${escHtml(it.s)}', '${encodeURIComponent(it.n)}')">🔔 Avisarme${vistaProductos === 'grilla' ? '' : ' cuando vuelva a ingresar'}</button>`
-      : _avisosEsperandoSet.has(it.s) ? `<div class="prod-stock-en">En stock</div><div class="prod-restock-badge prod-restock-personal">🆕 ¡Llegó! Lo estabas esperando</div>`
-      : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>`
-      : it.restockedAt ? `<div class="prod-stock-en">En stock</div><div class="prod-restock-badge">🎉 ¡Disponible${vistaProductos === 'grilla' ? '!' : ' otra vez!'}</div>`
-      : `<div class="prod-stock-en">En stock</div>`;
+      : _avisosEsperandoSet.has(it.s) ? `<div class="prod-stock-en">En stock</div><div class="prod-restock-badge prod-restock-personal">🆕 ¡Llegó! Lo estabas esperando</div>${_avisoAdminBtn}`
+      : it.sb ? `<div class="prod-stock-bajo">Stock a confirmar</div>${_avisoAdminBtn}`
+      : it.restockedAt ? `<div class="prod-stock-en">En stock</div><div class="prod-restock-badge">🎉 ¡Disponible${vistaProductos === 'grilla' ? '!' : ' otra vez!'}</div>${_avisoAdminBtn}`
+      : `<div class="prod-stock-en">En stock</div>${_avisoAdminBtn}`;
     // Solo para admin: el desglose real de stock por depósito (nunca se le muestra al
     // cliente). Se ve aunque la tarjeta diga "Agotado" o "Stock a confirmar", para que el
     // admin sepa exactamente cuánto hay en cada lado sin tener que ir al CRM.
