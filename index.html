@@ -5057,6 +5057,7 @@ function renderCarrito(){
 let _pedidoFullModo = 'pedido';
 let _pedidoFullMostrarTotal = true;
 let _pedidoFullMostrarFormaPago = true;
+let _pedidoFullAmplio = (function(){ try { return localStorage.getItem('pedidoFullAmplio') === '1'; } catch(e) { return false; } })(); // pantalla completa real: la ventana ocupa toda la pantalla y los productos van en columnas
 let _pedidoFullDosListas = false; // admin + Presupuesto: muestra Lista 1 (Contado) y Lista 2 (Tarjeta) lado a lado
 let _pedidoFullOrden = 'original'; // 'original' | 'precio_asc' | 'precio_desc' | 'manual' — solo aplica en modo Presupuesto
 // Costo de envío que el admin puede sumarle a "Tu pedido" — misma estrategia que
@@ -5169,7 +5170,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
   bd.id = 'pedido-full-backdrop';
   bd.className = 'pwfin-backdrop';
   bd.innerHTML = `
-    <div style="background:var(--panel);border-radius:18px;width:100%;max-width:640px;max-height:92vh;display:flex;flex-direction:column;position:relative;">
+    <div style="background:var(--panel);${_pedidoFullAmplio ? 'border-radius:0;width:100vw;max-width:none;height:100vh;max-height:100vh;' : 'border-radius:18px;width:100%;max-width:640px;max-height:92vh;'}display:flex;flex-direction:column;position:relative;">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);gap:8px;flex-wrap:wrap;">
         <h2 style="margin:0;font-size:17px;font-weight:800;color:var(--text);">${_esPresu ? '📄 Presupuesto' : '🛒 Tu pedido'}</h2>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -5181,6 +5182,10 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
             background:var(--panel2);color:var(--text2);border:1px solid var(--border);border-radius:8px;
             padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;
           ">✂️ Recortar</button>` : ''}
+          <button onclick="_pedidoToggleAmplio()" title="${_pedidoFullAmplio ? 'Volver a la ventana chica' : 'Ocupar toda la pantalla (se ven más productos juntos para capturar)'}" style="
+            background:var(--panel2);color:var(--text2);border:1px solid var(--border);border-radius:8px;
+            padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;
+          ">${_pedidoFullAmplio ? '🗗 Reducir' : '⛶ Ampliar'}</button>
           <button onclick="document.getElementById('pedido-full-backdrop')?.remove()" style="
             width:34px;height:34px;border-radius:50%;background:var(--panel2);color:var(--text2);border:none;
             font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;
@@ -5210,7 +5215,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
           </select>
         </label>
       </div>` : ''}
-      <div id="pedido-full-body" style="overflow-y:auto;padding:4px 20px;flex:1;">${filas}</div>
+      <div id="pedido-full-body" style="overflow-y:auto;padding:4px 20px;flex:1;${_pedidoFullAmplio ? 'display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));column-gap:28px;align-content:start;' : ''}">${filas}</div>
       <div id="pedido-full-footer" style="padding:16px 20px;border-top:1px solid var(--border);">
         ${_mostrarPanelEnvio ? `<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;background:var(--panel2);">
           <label style="display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;">
@@ -5258,6 +5263,11 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
 window._pedidoCambiarModo = (modo) => {
   if (!esAdminCatalogo()) return;
   _pedidoFullModo = modo;
+  abrirVistaCompletaPedido(true);
+};
+window._pedidoToggleAmplio = () => {
+  _pedidoFullAmplio = !_pedidoFullAmplio;
+  try { localStorage.setItem('pedidoFullAmplio', _pedidoFullAmplio ? '1' : '0'); } catch(e) {}
   abrirVistaCompletaPedido(true);
 };
 window._pedidoToggleMostrarTotal = (mostrar) => {
