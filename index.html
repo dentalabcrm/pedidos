@@ -1268,11 +1268,24 @@ function _avisosGetLista(){
 function _avisosGuardarLista(lista){
   try { localStorage.setItem(LS_KEY_AVISOS, JSON.stringify(lista)); } catch (e) {}
 }
-function _avisosAgregar(sku, nombre){
+// `base` (opcional, solo avisos del admin sobre productos que YA tienen stock): unidades totales
+// (Depósito 1 + Central) que había al pedir el aviso. Cuenta como "llegó" cuando el total sube
+// UMBRAL_AVISOS_STOCK unidades o más por encima de esa base.
+function _avisosAgregar(sku, nombre, base){
   const lista = _avisosGetLista();
-  if (!lista.some(a => a.sku === sku)) {
-    lista.push({ sku, nombre, desde: Date.now() });
+  const ya = lista.find(a => a.sku === sku);
+  if (!ya) {
+    const nuevo = { sku, nombre, desde: Date.now() };
+    if (typeof base === 'number') nuevo.base = base;
+    lista.push(nuevo);
     _avisosGuardarLista(lista);
+  } else if (typeof base === 'number') {
+    ya.base = base; ya.desde = Date.now();
+    _avisosGuardarLista(lista);
+    try {
+      const notif = JSON.parse(localStorage.getItem(LS_KEY_AVISOS_NOTIFICADOS) || '[]');
+      localStorage.setItem(LS_KEY_AVISOS_NOTIFICADOS, JSON.stringify(notif.filter(s => s !== sku)));
+    } catch (e) {}
   }
 }
 function _avisosQuitar(sku){
@@ -1296,7 +1309,9 @@ function _avisosLlegadosSet(){
     if (!it) return;
     const hayDatoStock = typeof it.d1 === 'number' || typeof it.dc === 'number';
     const stockTotal = (it.d1 || 0) + (it.dc || 0);
-    const llego = hayDatoStock ? stockTotal >= UMBRAL_AVISOS_STOCK : !it.st;
+    const llego = (typeof a.base === 'number' && hayDatoStock)
+      ? stockTotal >= a.base + UMBRAL_AVISOS_STOCK   // aviso del admin sobre un producto que ya tenía stock
+      : hayDatoStock ? stockTotal >= UMBRAL_AVISOS_STOCK : !it.st;
     if (llego) set.add(a.sku);
   });
   return set;
@@ -2516,7 +2531,11 @@ window.guardarAvisoStock = async (sku, nombreCodificado, esInterno) => {
       return lista;
     });
     if (esInterno) {
-      if (msgEl) msgEl.innerHTML = '<span style="color:var(--green);">✓ Listo. Quedó cargado en Mercadería Faltante del CRM: cuando aumente el stock te suena el aviso.</span>';
+      // Además del aviso en el CRM, queda en la lista de este navegador con el stock de hoy como base:
+      // cuando suba 3 o más unidades, el producto sube arriba del catálogo con el cartel "¡Llegó!".
+      const _itA = catalogoBySku.get(sku);
+      if (_itA && (typeof _itA.d1 === 'number' || typeof _itA.dc === 'number')) _avisosAgregar(sku, nombreProd, (_itA.d1 || 0) + (_itA.dc || 0));
+      if (msgEl) msgEl.innerHTML = '<span style="color:var(--green);">✓ Listo. Te avisa el CRM (Mercadería Faltante) y, en este navegador, el producto va a subir arriba con el cartel "¡Llegó!" cuando el stock aumente 3 o más unidades.</span>';
       if (btn) btn.style.display = 'none';
       setTimeout(_pwCerrarAvisarmeModal, 2200);
       return;
