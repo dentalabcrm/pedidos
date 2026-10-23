@@ -4870,6 +4870,50 @@ function _actualizarTarjetaProducto(sku){
   });
 }
 
+// Solo admin: agrega 1 unidad de cada producto "En stock" o "Stock a confirmar" (no Agotado) de lo
+// que muestra la búsqueda/filtros en este momento (todas las páginas). Los que ya están en el
+// pedido no se tocan. Se puede disparar con el botón o con Shift + clic sobre un producto.
+window.agregarTodosLosEnStock = () => {
+  if (!esAdminCatalogo()) return;
+  const resultados = buscarProductos();
+  const candidatos = resultados.filter(it => !it.st && !!precioDe(it) && !carrito.has(it.s) && _limiteQtyPara(it.s) >= 1);
+  if (!candidatos.length) {
+    const msg = resultados.length ? 'No hay productos nuevos con stock para agregar (los agotados y los que ya están en el pedido se saltean).' : 'No hay productos en pantalla.';
+    if (typeof showToast === 'function') showToast(msg, 'info'); else alert(msg);
+    return;
+  }
+  const saltados = resultados.length - candidatos.length;
+  candidatos.forEach(it => carrito.set(it.s, 1));
+  requestAnimationFrame(() => {
+    renderResultados();
+    renderCarrito();
+    if (typeof showToast === 'function') showToast(`✅ ${candidatos.length} producto${candidatos.length === 1 ? '' : 's'} agregado${candidatos.length === 1 ? '' : 's'} al pedido` + (saltados ? ` · ${saltados} salteado${saltados === 1 ? '' : 's'} (agotados, sin precio o ya en el pedido)` : ''), 'ok');
+  });
+};
+// Shift + clic izquierdo EN CUALQUIER PARTE de la página = lo mismo que el botón, sin preguntar
+// (solo admin). Se ignora sobre campos de texto/desplegables, con una ventana abierta o con un
+// modo de selección de fotos / asignar manual activo (que usan su propio clic).
+function _shiftClickTodosAplica(e) {
+  if (e.button !== 0 || !e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return false;
+  if (!esAdminCatalogo()) return false;
+  if (_modoAgregarFotos || _modoSeleccionFotos || _modoAsignarManual) return false;
+  const t = e.target;
+  if (!t || !t.closest) return false;
+  if (t.closest('input, select, textarea, [contenteditable="true"]')) return false;
+  if (t.closest('.pwfin-backdrop, #zoom-prod-backdrop, #pedido-full-backdrop, #presu-backdrop, #admin-login-backdrop, #avisarme-backdrop, #gestor-fotos-backdrop, #historial-backdrop, #instalar-backdrop, #qr-backdrop')) return false;
+  if (!document.getElementById('resultados')) return false;
+  return true;
+}
+document.addEventListener('mousedown', e => {
+  if (_shiftClickTodosAplica(e)) e.preventDefault(); // evita que Shift+clic seleccione texto
+}, true);
+document.addEventListener('click', e => {
+  if (!_shiftClickTodosAplica(e)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  agregarTodosLosEnStock();
+}, true);
+
 window.agregarAlCarrito = (sku) => {
   const actual = carrito.get(sku) || 0;
   const limite = _limiteQtyPara(sku);
@@ -6301,6 +6345,7 @@ function renderPrincipal(){
             <label class="chk-ofertas"><input type="checkbox" id="chk-stock" onchange="onFiltroChange()"> Solo en stock</label>
             ${_frecuentesSkusOrdenados().length ? `<label class="chk-ofertas"><input type="checkbox" id="chk-frecuentes" onchange="onFiltroChange()"> ⭐ Solo lo que pedís seguido</label>` : ''}
             ${esAdminCatalogo() ? `<button id="btn-modo-seleccion-fotos" onclick="toggleModoSeleccionFotos()" style="background:${_modoSeleccionFotos ? '#dc2626' : 'var(--panel2)'};color:${_modoSeleccionFotos ? '#fff' : 'var(--text)'};border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">${_modoSeleccionFotos ? '✕ Cancelar selección' : '☑️ Seleccionar fotos para borrar'}</button>` : ''}
+            ${esAdminCatalogo() ? `<button id="btn-agregar-todos-stock" onclick="agregarTodosLosEnStock()" title="Agrega 1 unidad de cada producto con stock o stock a confirmar de lo que se ve ahora (atajo: Shift + clic en cualquier producto)" style="background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">✅ Agregar todos los que hay en stock <span style="font-weight:600;color:var(--text3);font-size:11px;">(Shift + clic)</span></button>` : ''}
             ${esAdminCatalogo() ? `<button id="btn-modo-agregar-fotos" onclick="toggleModoAgregarFotos()" style="background:${_modoAgregarFotos ? '#0ea968' : 'var(--panel2)'};color:${_modoAgregarFotos ? '#fff' : 'var(--text)'};border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">${_modoAgregarFotos ? '✕ Cancelar selección' : '☑️ Seleccionar productos para agregar fotos'}</button>` : ''}
           </div>
           <div class="resultados" id="resultados"></div>
