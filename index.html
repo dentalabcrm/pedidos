@@ -1750,8 +1750,8 @@ function _presuDocHtml(items){
   const logoSrc = document.getElementById('brand-logo-admin-trigger')?.src || '';
   const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const listaLabel = _presuListaLabel();
-  const nombreCliente = document.getElementById('cf-nombre')?.value.trim() || '';
-  const dniCliente = document.getElementById('cf-dni')?.value.trim() || '';
+  const nombreCliente = _presuDatosCliente().nombre;
+  const dniCliente = _presuDatosCliente().dni;
   const filas = items.map(it => `
     <tr>
       <td class="sku-cell">${escHtml(it.sku)}</td>
@@ -1991,8 +1991,8 @@ window.descargarPresupuestoPDF = async () => {
     y = 44;
 
     // ── Cliente card ──
-    const nombreCliente = document.getElementById('cf-nombre')?.value.trim() || '';
-    const dniCliente = document.getElementById('cf-dni')?.value.trim() || '';
+    const nombreCliente = _presuDatosCliente().nombre;
+    const dniCliente = _presuDatosCliente().dni;
     doc.setFillColor(248, 248, 248); doc.setDrawColor(200, 200, 200);
     doc.roundedRect(margin, y, contentW, 18, 2, 2, 'FD');
     doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(120, 120, 120);
@@ -5134,6 +5134,15 @@ let _pedidoFullModo = 'pedido';
 let _pedidoFullMostrarTotal = true;
 let _pedidoFullMostrarFormaPago = true;
 let _pedidoFullAmplio = (function(){ try { return localStorage.getItem('pedidoFullAmplio') === '1'; } catch(e) { return false; } })(); // pantalla completa real: la ventana ocupa toda la pantalla y los productos van en columnas
+// Cliente y CUIT/DNI del presupuesto (se completan en la pantalla completa → Presupuesto, solo admin)
+let _presuClienteNombre = '';
+let _presuClienteDni = '';
+function _presuDatosCliente(){
+  return {
+    nombre: (_presuClienteNombre || document.getElementById('cf-nombre')?.value || '').trim(),
+    dni: (_presuClienteDni || document.getElementById('cf-dni')?.value || '').trim(),
+  };
+}
 let _pedidoFullDosListas = false; // admin + Presupuesto: muestra Lista 1 (Contado) y Lista 2 (Tarjeta) lado a lado
 let _pedidoFullOrden = 'original'; // 'original' | 'precio_asc' | 'precio_desc' | 'manual' — solo aplica en modo Presupuesto
 // Costo de envío que el admin puede sumarle a "Tu pedido" — misma estrategia que
@@ -5289,6 +5298,14 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
             <option value="precio_desc" ${_pedidoFullOrden === 'precio_desc' ? 'selected' : ''}>Precio: mayor a menor</option>
             <option value="manual" ${_pedidoFullOrden === 'manual' ? 'selected' : ''}>Manual (con flechitas)</option>
           </select>
+        </label>
+ </div>` : ''}
+      ${_esPresu ? `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 20px 0;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--text2);flex:1;min-width:200px;">Cliente
+          <input type="text" id="pedido-presu-cliente" value="${escHtml(_presuDatosCliente().nombre)}" placeholder="Nombre y apellido / razón social" oninput="_presuClienteNombre=this.value" style="flex:1;min-width:0;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12.5px;background:var(--panel);color:var(--text);">
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--text2);">CUIT / DNI
+          <input type="text" id="pedido-presu-dni" inputmode="numeric" value="${escHtml(_presuDatosCliente().dni)}" placeholder="Sin puntos ni guiones" oninput="_presuClienteDni=this.value" style="width:170px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12.5px;background:var(--panel);color:var(--text);">
         </label>
       </div>` : ''}
       <div id="pedido-full-body" style="overflow-y:auto;padding:4px 20px;flex:1;">${_pedidoFullAmplio ? `<div class="pf-cols" style="column-width:480px;column-gap:28px;">${filas}</div>` : filas}</div>
@@ -5646,6 +5663,19 @@ window.descargarPedidoPDFConFotos = async () => {
       doc.setTextColor(0, 0, 0);
 
       y = 44;
+
+      // ── Cliente / CUIT-DNI (mismo recuadro que "Ver como Presupuesto") ──
+      const _dc = _presuDatosCliente();
+      doc.setFillColor(248, 248, 248); doc.setDrawColor(200, 200, 200);
+      doc.roundedRect(margin, y, pageW - margin * 2, 18, 2, 2, 'FD');
+      doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(120, 120, 120);
+      doc.text('CLIENTE', margin + 5, y + 5);
+      doc.text('CUIT / DNI', margin + (pageW - margin * 2) / 2 + 5, y + 5);
+      doc.setFontSize(10); doc.setTextColor(20, 20, 20);
+      doc.text(_dc.nombre || '—', margin + 5, y + 12);
+      doc.text(_dc.dni || '—', margin + (pageW - margin * 2) / 2 + 5, y + 12);
+      doc.setTextColor(0, 0, 0);
+      y += 24;
     } else {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(15, 23, 42);
       doc.text('Tu pedido — Dentalab', margin, y); y += 7;
