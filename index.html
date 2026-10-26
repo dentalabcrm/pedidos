@@ -6343,6 +6343,7 @@ function renderPrincipal(){
       </div>
       ${_adminVistaPrecio !== 'normal' ? `<span style="font-size:11.5px;font-weight:700;color:#dc2626;">⚠ Estás viendo precios de ${_adminVistaPrecio === 'reventa' ? 'Reventa' : 'Mayorista'} — el cliente NO ve esto</span>` : ''}
       <span id="fotos-offline-info" title="Fotos que este dispositivo ya guardó para mostrarlas aunque no haya internet (se van sumando a medida que las ves con conexión)" style="margin-left:auto;font-size:11.5px;font-weight:600;color:#7c3aed;white-space:nowrap;"></span>
+      ${(typeof _fotosDescargaEsPC === 'function' && _fotosDescargaEsPC()) ? `<button id="btn-descargar-fotos" onclick="_descargarTodasLasFotos()" title="Baja solas todas las fotos del catálogo a esta PC, de a poco, para verlas sin internet. Tocá de nuevo para detener." style="border:1px solid #7c3aed55;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;background:#fff;color:#7c3aed;">${_fotosDescargaLabel()}</button>` : ''}
     </div>` : ''}
 
     <div class="desktop-search-cart">
@@ -7758,10 +7759,81 @@ async function _actualizarInfoFotosOffline(){
   if (!el) return;
   try {
     if (!window.caches) { el.textContent = ''; return; }
-    const c = await caches.open('dentalab-fotos-v1');
+    const c = await caches.open(_FOTOS_CACHE_NOMBRE);
     const n = (await c.keys()).length;
-    el.textContent = `📷 ${n} foto${n === 1 ? '' : 's'} guardada${n === 1 ? '' : 's'} para usar sin internet`;
+    el.textContent = `📷 ${n.toLocaleString('es-AR')} foto${n === 1 ? '' : 's'} guardada${n === 1 ? '' : 's'} para usar sin internet`;
   } catch (e) { el.textContent = ''; }
+}
+
+// ── Botón "📥 Descargar todas las fotos" (solo admin, solo PC) ──
+// Recorre el catálogo y le pide al service worker (sw.js) que guarde cada foto, en tandas de 20,
+// con la misma copia liviana que se guarda al verlas. Las que ya están guardadas se saltean,
+// así que si se corta (o se detiene) se puede volver a tocar y sigue desde donde quedó.
+const _FOTOS_CACHE_NOMBRE = 'dentalab-fotos-v2'; // tiene que coincidir con FOTOS_CACHE de sw.js
+let _descFotos = null; // { hechas, total, fallidas, cancelar, terminado, mensaje }
+function _fotosDescargaEsPC(){
+  try { return window.matchMedia('(hover: hover) and (pointer: fine)').matches && window.innerWidth >= 900; } catch (e) { return false; }
+}
+function _fotosDescargaLabel(){
+  const d = _descFotos;
+  if (!d) return '📥 Descargar todas las fotos';
+  if (d.terminado) return d.mensaje || '📥 Descargar todas las fotos';
+  return `⏸ Detener · ${d.hechas.toLocaleString('es-AR')} de ${d.total.toLocaleString('es-AR')}`;
+}
+function _refrescarBotonDescargaFotos(){
+  const b = document.getElementById('btn-descargar-fotos');
+  if (b) b.textContent = _fotosDescargaLabel();
+}
+function _idsDeTodasLasFotos(){
+  // Primero la foto principal de cada producto, después las extras del carrusel:
+  // si llegara a no entrar todo, quedan guardadas las que más se ven.
+  const principales = [], extras = [], vistos = new Set();
+  const agregar = (lista, id) => { if (id && !vistos.has(id)) { vistos.add(id); lista.push(id); } };
+  (catalogo || []).forEach(it => {
+    const arr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
+    agregar(principales, it.img);
+    agregar(principales, arr[0]);
+    arr.slice(1).forEach(id => agregar(extras, id));
+  });
+  return principales.concat(extras);
+}
+function _swPedir(sw, msg){
+  return new Promise((resolve, reject) => {
+    const ch = new MessageChannel();
+    const t = setTimeout(() => reject(new Error('sin respuesta')), 120000);
+    ch.port1.onmessage = e => { clearTimeout(t); resolve(e.data || {}); };
+    sw.postMessage(msg, [ch.port2]);
+  });
+}
+async function _descargarTodasLasFotos(){
+  if (_descFotos && !_descFotos.terminado) { _descFotos.cancelar = true; return; } // segundo toque = detener
+  const terminar = (mensaje) => { _descFotos.terminado = true; _descFotos.mensaje = mensaje; _refrescarBotonDescargaFotos(); _actualizarInfoFotosOffline(); };
+  _descFotos = { hechas: 0, total: 0, fallidas: 0, cancelar: false, terminado: false };
+  if (!('serviceWorker' in navigator) || !window.caches) return terminar('⚠ Este navegador no permite guardar fotos');
+  const ids = _idsDeTodasLasFotos();
+  _descFotos.total = ids.length;
+  if (!ids.length) return terminar('⚠ El catálogo todavía no cargó fotos');
+  _refrescarBotonDescargaFotos();
+  let reg;
+  try { reg = await navigator.serviceWorker.ready; } catch (e) {}
+  const sw = reg && reg.active;
+  if (!sw) return terminar('⚠ Recargá la página y probá de nuevo');
+  const TANDA = 20;
+  for (let i = 0; i < ids.length; i += TANDA) {
+    if (_descFotos.cancelar) return terminar(`⏹ Detenido en ${_descFotos.hechas.toLocaleString('es-AR')} de ${_descFotos.total.toLocaleString('es-AR')} · tocá para seguir`);
+    if (!navigator.onLine) return terminar('⚠ Sin internet · tocá para seguir cuando vuelva');
+    const tanda = ids.slice(i, i + TANDA);
+    let r;
+    try { r = await _swPedir(sw, { tipo: 'fotos-descargar', ids: tanda }); }
+    catch (e) { r = { error: tanda.length }; }
+    if (r.lleno) return terminar(`⚠ Se llegó al tope de ${Number(r.max || 0).toLocaleString('es-AR')} fotos guardadas`);
+    _descFotos.hechas += tanda.length;
+    _descFotos.fallidas += Number(r.error) || 0;
+    _refrescarBotonDescargaFotos();
+    if (i % 200 === 0) _actualizarInfoFotosOffline();
+  }
+  const f = _descFotos.fallidas;
+  terminar(f ? `✅ Listo · ${f.toLocaleString('es-AR')} no se pudieron bajar, tocá para reintentar` : '✅ Todas las fotos guardadas');
 }
 setInterval(_actualizarInfoFotosOffline, 10000);
 setTimeout(_actualizarInfoFotosOffline, 3000);
