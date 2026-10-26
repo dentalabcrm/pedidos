@@ -947,6 +947,7 @@ try {
 
 let catalogo = [];
 let catalogoBySku = new Map();
+let _catalogoActualizadoAt = 0; // marca de tiempo de la última publicación del CRM que ya tenemos cargada
 let listaActiva = null; // 'p1' (Contado -10%) | 'p2' (Tarjeta 1 pago)
 let medioPagoContado = null; // 'efectivo' | 'debito' | 'transferencia' (solo si listaActiva === 'p1')
 // Financiamiento en cuotas elegido por el cliente cuando paga con Tarjeta — opcional,
@@ -3999,6 +4000,7 @@ async function cargarCatalogo(){
       renderError('No pudimos cargar el catálogo en este momento. Probá de nuevo en unos minutos.');
       return;
     }
+    _catalogoActualizadoAt = data.actualizadoAt || 0;
     catalogo = data.items;
     // El reporte de Yiqi a veces trae el mismo SKU repetido varias veces (por ejemplo,
     // una fila por lote/depósito). Eso confunde a los clientes viendo el mismo producto
@@ -6995,23 +6997,94 @@ function _avisosChequearYNotificar(){
     else disparar(null);
   });
 }
-if (_avisosGetLista().length) {
-  let _avisosPrimeraCarga = true;
+// ── Actualización en vivo del catálogo ──
+// Cuando el CRM republica el listado (precios, stock, ofertas), esta página lo recibe sola y se
+// redibuja sin perder el pedido armado, la búsqueda ni la posición en la pantalla. Se omite si
+// hoy se está editando un pedido de vendedor (para no cambiarle precios por debajo).
+const _SUFIJO_FAMILIA_SKU_VIVO = { '1998': 'Turbina', '1999': 'Turbina', '4249': 'Turbina', '2999': 'Contra Ángulo', '2990': 'Contra Ángulo', '31620': 'Pieza de mano' };
+const _SIEMPRE_STOCK_A_CONFIRMAR_VIVO = new Set(['31000', '29000']);
+let _catalogoVivoPendiente = null;
+let _catalogoVivoTimer = null;
+function _catalogoHayEdicionEnCurso(){
+  const ae = document.activeElement;
+  if (ae && ae.closest && ae.matches && ae.matches('input, textarea, select') && ae.closest('#resultados, #carrito-items, #pedido-full-backdrop')) return true;
+  if (typeof _pedidoEditandoPrecioSku !== 'undefined' && _pedidoEditandoPrecioSku) return true;
+  return false;
+}
+function _aplicarCatalogoEnVivo(data){
+  if (!data || !Array.isArray(data.items) || !data.items.length || !catalogo.length) return;
+  if (_modoVendedorEdicion) return;
+  if (_catalogoHayEdicionEnCurso()) { // el usuario está escribiendo algo: se reintenta en unos segundos
+    _catalogoVivoPendiente = data;
+    clearTimeout(_catalogoVivoTimer);
+    _catalogoVivoTimer = setTimeout(() => { const d = _catalogoVivoPendiente; _catalogoVivoPendiente = null; if (d) _aplicarCatalogoEnVivo(d); }, 4000);
+    return;
+  }
+  const viejos = catalogoBySku;
+  const porSku = new Map();
+  for (const it of data.items) {
+    const ex = porSku.get(it.s);
+    if (!ex || (ex.st && !it.st)) porSku.set(it.s, it);
+  }
+  let precios = 0, nuevos = 0;
+  const reingresos = [];
+  const lista = Array.from(porSku.values());
+  lista.forEach(it => {
+    const prev = viejos.get(it.s);
+    if (prev) {
+      // Las fotos y manuales "en vivo" ya cargados se conservan (no cambian con una publicación de precios)
+      if (prev.imgs) { it.imgs = prev.imgs; it.img = prev.img; } else { delete it.imgs; delete it.img; }
+      if (prev.manuales) it.manuales = prev.manuales;
+      if (prev.p1 !== it.p1 || prev.p2 !== it.p2 || prev.p3 !== it.p3 || prev.p4 !== it.p4) precios++;
+      if (prev.st && !it.st) reingresos.push(it.n);
+    } else { nuevos++; }
+    const sufijo = _SUFIJO_FAMILIA_SKU_VIVO[String(it.s || '').split('-')[0]];
+    if (sufijo && !it.n.includes(`(${sufijo})`)) it.n = `${it.n} (${sufijo})`;
+    if (_SIEMPRE_STOCK_A_CONFIRMAR_VIVO.has(String(it.s || '')) && !it.st) it.sb = true;
+  });
+  catalogo = lista;
+  catalogoBySku.clear();
+  catalogo.forEach(it => catalogoBySku.set(it.s, it));
+  _catalogoActualizadoAt = data.actualizadoAt || Date.now();
+  // Volver a dibujar lo que se ve, sin saltar de lugar
+  const sy = window.scrollY;
+  const resCont = document.getElementById('resultados');
+  const sResCont = resCont ? resCont.scrollTop : 0;
+  try {
+    if (resCont && typeof renderResultados === 'function') renderResultados();
+    if (typeof renderCarrito === 'function') renderCarrito();
+    if (document.getElementById('pedido-full-backdrop') && typeof abrirVistaCompletaPedido === 'function') abrirVistaCompletaPedido(true);
+  } catch (e) { console.error('[Catálogo en vivo] error al redibujar:', e); }
+  requestAnimationFrame(() => { window.scrollTo(0, sy); const rc = document.getElementById('resultados'); if (rc) rc.scrollTop = sResCont; });
+  if (typeof showToast === 'function') {
+    const partes = [];
+    if (precios) partes.push(`${precios} precio${precios === 1 ? '' : 's'}`);
+    if (reingresos.length) partes.push(`${reingresos.length} producto${reingresos.length === 1 ? ' volvió' : 's volvieron'} a ingresar`);
+    if (nuevos) partes.push(`${nuevos} nuevo${nuevos === 1 ? '' : 's'}`);
+    if (partes.length) showToast('🔄 Catálogo actualizado: ' + partes.join(' · ') + (esAdminCatalogo() && reingresos.length ? ` (${reingresos.slice(0, 3).join(', ')}${reingresos.length > 3 ? '…' : ''})` : ''), 'ok');
+  }
+  if (typeof _avisosChequearYNotificar === 'function') _avisosChequearYNotificar();
+}
+{
+  let _catalogoPrimeraSnap = true;
   db.ref('dentalab/catalogo_publico').on('value', snap => {
     const data = snap.val();
     if (!data || !Array.isArray(data.items)) return;
-    data.items.forEach(it => { if (catalogoBySku.has(it.s)) catalogoBySku.set(it.s, { ...catalogoBySku.get(it.s), st: it.st, sb: it.sb, d1: it.d1, dc: it.dc }); });
-    if (_avisosPrimeraCarga) {
-      // La primera vez ya se refleja en el banner/badge de la página — no hace falta
-      // además una notificación nativa redundante. Solo marcamos como "ya visto".
-      _avisosPrimeraCarga = false;
+    if (_catalogoPrimeraSnap) {
+      // La primera vez ya coincide con lo que se cargó al abrir: solo marcamos como "ya visto"
+      // lo que estaba esperando este cliente, así no salta una notificación redundante.
+      _catalogoPrimeraSnap = false;
       try {
-        const yaVistos = Array.from(_avisosLlegadosSet());
-        if (yaVistos.length) localStorage.setItem(LS_KEY_AVISOS_NOTIFICADOS, JSON.stringify(yaVistos));
+        if (_avisosGetLista().length) {
+          const yaVistos = Array.from(_avisosLlegadosSet());
+          if (yaVistos.length) localStorage.setItem(LS_KEY_AVISOS_NOTIFICADOS, JSON.stringify(yaVistos));
+        }
       } catch (e) {}
-      return;
+      if (!_catalogoActualizadoAt || (data.actualizadoAt || 0) === _catalogoActualizadoAt) return;
     }
-    _avisosChequearYNotificar();
+    if (!catalogo.length) return; // todavía no terminó de cargar
+    if ((data.actualizadoAt || 0) && (data.actualizadoAt || 0) === _catalogoActualizadoAt) return; // ya la tenemos
+    _aplicarCatalogoEnVivo(data);
   });
 }
 
