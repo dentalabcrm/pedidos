@@ -3868,16 +3868,27 @@ window.abrirFotoProducto = async function(el, autoAbrir = true) {
       img.onclick = (ev) => { ev.stopPropagation(); window.open(`https://drive.google.com/file/d/${fileId}/view`, '_blank'); };
       img.onerror = () => manejarErrorFotoProducto(img);
       el.replaceWith(img);
-      // Guardar en memoria para que no haga falta re-buscarla si se vuelve a renderizar la lista
+      // IMPORTANTE: si el producto YA tenía fotos guardadas, NO se pisa su lista. Antes, cuando una
+      // miniatura no cargaba (Google frena pedidos si se piden muchas de golpe, algo que pasa mucho
+      // con los productos de varias fotos, que cargan el carrusel entero), esta búsqueda reemplazaba
+      // TODAS las fotos del producto por una sola encontrada por nombre — a veces otra foto distinta.
+      // Ahora solo se muestra la encontrada en pantalla; la lista guardada se toca únicamente si el
+      // producto no tenía ninguna foto.
       const itCat = catalogoBySku.get(sku);
-      if (itCat) { itCat.imgs = [fileId]; itCat.img = fileId; }
-      const itArr = catalogo.find(x => x.s === sku);
-      if (itArr) { itArr.imgs = [fileId]; itArr.img = fileId; }
+      const yaTeniaFotos = !!(itCat && ((itCat.imgs && itCat.imgs.length) || itCat.img));
+      if (!yaTeniaFotos) {
+        // Guardar en memoria para que no haga falta re-buscarla si se vuelve a renderizar la lista
+        if (itCat) { itCat.imgs = [fileId]; itCat.img = fileId; }
+        const itArr = catalogo.find(x => x.s === sku);
+        if (itArr) { itArr.imgs = [fileId]; itArr.img = fileId; }
+      }
       if (autoAbrir) window.open(`https://drive.google.com/file/d/${fileId}/view`, '_blank');
-      try {
-        const key = String(sku).trim().replace(/[.#$\[\]/]/g, '_');
-        if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_imagenes/' + key).set([fileId]);
-      } catch (e) { /* silencioso */ }
+      if (!yaTeniaFotos) {
+        try {
+          const key = String(sku).trim().replace(/[.#$\[\]/]/g, '_');
+          if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_imagenes/' + key).set([fileId]);
+        } catch (e) { /* silencioso */ }
+      }
       return; // el placeholder ya no existe, no restaurar texto en el finally
     } else {
       // No se encontró nada. IMPORTANTE: si la búsqueda la disparamos solos (una miniatura que no
@@ -3887,7 +3898,11 @@ window.abrirFotoProducto = async function(el, autoAbrir = true) {
       // alcanzaría para recuperar los vínculos). Solo se limpia si alguien pidió la búsqueda a mano.
       _fotoBusquedaFallida.add(sku);
       if (autoAbrir) {
-        try {
+        // Tampoco se borra la lista si el producto tiene varias fotos: que no se encuentre una
+        // por nombre no significa que las demás no existan.
+        const itPrev = catalogoBySku.get(sku);
+        const variasFotos = !!(itPrev && itPrev.imgs && itPrev.imgs.length > 1);
+        if (!variasFotos) try {
           const key = String(sku).trim().replace(/[.#$\[\]/]/g, '_');
           if (key && typeof db !== 'undefined') await db.ref('dentalab/sku_imagenes/' + key).remove();
         } catch (e) { /* silencioso */ }
