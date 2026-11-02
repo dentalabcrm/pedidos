@@ -4921,14 +4921,16 @@ function _shiftClickTodosAplica(e) {
   if (!document.getElementById('resultados')) return false;
   return true;
 }
-// Tecla Esc = cerrar el Pedido / Presupuesto (lo mismo que la ✕). Si está abierta la vista
-// "Ver como Presupuesto" encima, se cierra primero esa; un segundo Esc cierra la ventana de abajo.
+// Tecla Esc = cerrar la ventana de arriba (lo mismo que su ✕): la pantalla completa de un
+// producto, el Pedido / Presupuesto o la vista "Ver como Presupuesto". Si hay una encima de
+// otra, se cierra solo la de arriba (la última abierta); otro Esc cierra la de abajo.
 // No interfiere con el campo de precio manual, que ya usa Esc para cancelar la edición.
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape' || e.defaultPrevented) return;
   const t = e.target;
   if (t && t.getAttribute && /Escape/.test(t.getAttribute('onkeydown') || '')) return;
-  const arriba = document.getElementById('presu-backdrop') || document.getElementById('pedido-full-backdrop');
+  const abiertas = document.querySelectorAll('#zoom-prod-backdrop, #presu-backdrop, #pedido-full-backdrop');
+  const arriba = abiertas[abiertas.length - 1]; // la que está más abajo en la página es la que se ve encima
   if (!arriba) return;
   e.preventDefault();
   arriba.remove();
