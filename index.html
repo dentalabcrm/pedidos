@@ -5229,7 +5229,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
     const precio = precioCarritoDe(sku);
     const imgsArr = it.imgs && it.imgs.length ? it.imgs : (it.img ? [it.img] : []);
     const foto = imgsArr.length
-      ? `<img src="https://drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w400" alt="" style="width:100%;height:100%;object-fit:contain;background:#f4f6fa;">`
+      ? `<img src="https://drive.google.com/thumbnail?id=${imgsArr[0]}&sz=w400" alt="" style="width:100%;height:100%;object-fit:cover;background:#f4f6fa;">`
       : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;background:#f4f6fa;opacity:.35;">🦷</div>`;
     const flechasOrden = _modoOrdenManual ? `<div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;">
       <button onclick="_pedidoMoverItemManual('${escHtml(sku)}', -1)" title="Subir" ${idxFila === 0 ? 'disabled' : ''} style="background:var(--panel2);border:1px solid var(--border);border-radius:5px;width:22px;height:20px;font-size:10px;cursor:${idxFila === 0 ? 'default' : 'pointer'};opacity:${idxFila === 0 ? '.35' : '1'};color:var(--text2);">▲</button>
