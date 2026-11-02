@@ -4921,6 +4921,18 @@ function _shiftClickTodosAplica(e) {
   if (!document.getElementById('resultados')) return false;
   return true;
 }
+// Tecla Esc = cerrar el Pedido / Presupuesto (lo mismo que la ✕). Si está abierta la vista
+// "Ver como Presupuesto" encima, se cierra primero esa; un segundo Esc cierra la ventana de abajo.
+// No interfiere con el campo de precio manual, que ya usa Esc para cancelar la edición.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || e.defaultPrevented) return;
+  const t = e.target;
+  if (t && t.getAttribute && /Escape/.test(t.getAttribute('onkeydown') || '')) return;
+  const arriba = document.getElementById('presu-backdrop') || document.getElementById('pedido-full-backdrop');
+  if (!arriba) return;
+  e.preventDefault();
+  arriba.remove();
+});
 document.addEventListener('mousedown', e => {
   if (_shiftClickTodosAplica(e)) e.preventDefault(); // evita que Shift+clic seleccione texto
 }, true);
