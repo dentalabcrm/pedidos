@@ -7808,7 +7808,12 @@ function _aplicarCatalogoEnVivo(data){
       // n°3, nº 3, nro 3, numero 3, num. 3, #3, n3 → 3
       .replace(/(?:\bn\s*[°º]|\bnro\.?|\bnum(?:ero)?\.?|#)\s*(\d+)/g, ' $1 ')
       .replace(/\bn(\d{1,3})\b/g, ' $1 ')
-      .replace(/[°º]/g, ' ');
+      .replace(/[°º]/g, ' ')
+      // unidades escritas con palabras: "3 kilos" = "3kg", "500 gramos" = "500g", "1 litro" = "1l"
+      .replace(/(\d)\s*(?:kilogramos?|kilos?|kgs)\b/g, '$1 kg').replace(/\b(?:kilogramos?|kilos?|kgs)\b/g, 'kg')
+      .replace(/(\d)\s*(?:gramos?|grms?)\b/g, '$1 g').replace(/\b(?:gramos?|grms?)\b/g, 'g')
+      .replace(/(\d)\s*(?:mililitros?)\b/g, '$1 ml').replace(/\b(?:mililitros?)\b/g, 'ml')
+      .replace(/(\d)\s*(?:litros?)\b/g, '$1 l').replace(/\blitros?\b/g, 'l');
   }
   function _tokens(s){
     return _norm(s)
@@ -7945,7 +7950,9 @@ function _aplicarCatalogoEnVivo(data){
         if (best >= 0.7) parecidos.set(t, best);
       });
       let df = 0; parecidos.forEach((s, t) => { if (s >= 0.9) df = Math.max(df, I.vocab.get(t).df); });
-      const peso = parecidos.size ? _idf(df || 1, I.N) : _idf(1, I.N) * 0.5;
+      // Una palabra que no está en ningún producto ("urgente", "porfis"…) pesa como una palabra
+      // común, no como una rarísima: así no hunde a un producto que coincide en todo lo demás.
+      const peso = parecidos.size ? _idf(df || 1, I.N) : _idf(Math.max(1, I.N / 30), I.N);
       return { q, parecidos, peso };
     });
     const pesoTotal = qInfo.reduce((a, b) => a + b.peso, 0);
@@ -8115,7 +8122,7 @@ function _aplicarCatalogoEnVivo(data){
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <button type="button" onclick="_waInterpretarTexto()" style="background:#0ea968;color:#fff;border:none;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:800;cursor:pointer;">🔎 Interpretar <span style="font-weight:600;opacity:.8;font-size:11px;">(Ctrl+Enter)</span></button>
             <button type="button" onclick="_waLimpiarTexto()" style="background:var(--panel2);color:var(--text2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;font-size:12.5px;font-weight:700;cursor:pointer;">Borrar texto</button>
-            <span style="font-size:11.5px;color:var(--text3);">↑↓←→ + Enter: agregar/sacar · Shift+↓: ver todas las opciones del grupo · tipeá para buscar en el grupo · Tab: ver presupuesto</span>
+            <span style="font-size:11.5px;color:var(--text3);">↑↓←→ + Enter: agregar/sacar · Shift+Q: cantidad · Shift+↓: ver todas las opciones del grupo · tipeá para buscar en el grupo · Tab: ver presupuesto</span>
           </div>`;
         wrap.insertAdjacentElement('afterend', ent);
         const ta = ent.querySelector('#wa-texto');
@@ -8510,6 +8517,36 @@ function _aplicarCatalogoEnVivo(data){
     return mejor === null ? idx : mejor;
   };
 
+  function _cantidadShiftQ(grupoBusq){
+    const cards = _navTarjetas();
+    let idx = -1;
+    if (grupoBusq == null && typeof _skuHoverAdmin !== 'undefined' && _skuHoverAdmin) idx = cards.findIndex(c => c.dataset.sku === _skuHoverAdmin);
+    if (idx < 0 && grupoBusq == null && typeof _navIdxSeleccionado !== 'undefined' && _navIdxSeleccionado >= 0) idx = _navIdxSeleccionado;
+    if (idx < 0) {
+      let i = grupoBusq != null ? grupoBusq : _grupoDelTeclado(); if (i < 0) i = 0;
+      const r = _rangos[i];
+      if (r && r.hasta >= r.desde) idx = r.desde;
+    }
+    const card = cards[idx];
+    if (!card) return;
+    const sku = card.dataset.sku;
+    const g = _grupoDeTarjeta(idx);
+    if (g >= 0) { _grupoActual = g; _pintarGrupoActual(); }
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    _navSeleccionar(idx);
+    const enfocar = () => {
+      const q = document.querySelectorAll('#resultados > .prod-card, #resultados > .prod-row')[idx];
+      const inp = q && q.querySelector('.qty-val');
+      if (inp) { inp.focus(); inp.select(); }
+    };
+    if (carrito.has(sku)) { enfocar(); return; }
+    const it = catalogoBySku.get(sku);
+    if (!it || !precioDe(it)) return;
+    if (g >= 0) _skuGrupo.set(sku, g);
+    carrito.set(sku, 1);
+    requestAnimationFrame(() => { _actualizarTarjetaProducto(sku); renderCarrito(); requestAnimationFrame(enfocar); });
+  }
+
   // ── Teclado del modo (en "captura", antes que los atajos del catálogo) ──
   function _hayVentanaAbierta(){
     return Array.from(document.querySelectorAll('.pwfin-backdrop, #admin-login-backdrop'))
@@ -8530,6 +8567,14 @@ function _aplicarCatalogoEnVivo(data){
     }
     if (e.metaKey) return;
     if (_hayVentanaAbierta()) return; // hay una ventana abierta encima
+    // Shift + Q = cantidad (igual que en el catálogo): agrega el producto si no estaba y salta a su
+    // campo de cantidad. Toma el del mouse, o el marcado con las flechas, o el primero del grupo actual.
+    if (e.code === 'KeyQ' && e.shiftKey && !e.ctrlKey && !esTexto && _grupos && (busq !== null || !(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'))) {
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      if (busq !== null) _terminarBusquedaPendiente();
+      _cantidadShiftQ(busq);
+      return;
+    }
     // Shift + ↓ = ver todas las opciones del grupo actual · Shift + ↑ = volver a ver solo las primeras
     if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.shiftKey && !e.ctrlKey && !esTexto && _grupos) {
       let i = _grupoDelTeclado(); if (i < 0) i = 0;
