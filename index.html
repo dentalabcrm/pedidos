@@ -8169,6 +8169,9 @@ function _aplicarCatalogoEnVivo(data){
     _guardarTxt(texto);
     if (!texto.trim()) { _grupos = null; renderResultados(); return; }
     _grupos = _interpretar(texto);
+    // Las cantidades no se interpretan: todo entra con 1 y las cantidades las pone el admin
+    // (Shift + Q o en la tarjeta). El número del mensaje solo se saca del texto para buscar mejor.
+    _grupos.forEach(g => { g.qty = 1; g.elegidos.forEach((_, k) => g.elegidos.set(k, 1)); });
     _grupos.forEach(g => {
       g.generico = g.estado === 'duda' && !g.recordado;
       if (g.generico) {
@@ -8313,7 +8316,6 @@ function _aplicarCatalogoEnVivo(data){
           background:var(--panel2);border:1.5px solid ${i === _grupoActual ? 'var(--blue)' : 'var(--border)'};${i === _grupoActual ? 'box-shadow:0 0 0 3px rgba(2,132,199,.18);' : ''}">
           <span style="font-size:12px;font-weight:800;color:var(--text3);flex-shrink:0;">${i + 1}/${_grupos.length}</span>
           <span style="font-size:14.5px;font-weight:800;color:var(--text);font-style:italic;min-width:0;flex:1 1 220px;" title="${escHtml(g.orig)}">“${escHtml(g.orig)}”</span>
-          <span style="font-size:12px;font-weight:700;color:var(--text2);flex-shrink:0;">Pidió: <b>${g.qty}</b></span>
           <span class="wa-estado" style="display:flex;align-items:center;gap:5px;flex-shrink:0;">${_estadoHtml(g, i)}</span>
           ${g.generico ? '<span title="Pedido genérico: se marcaron todos los productos con stock que tienen lo pedido en el nombre, de menor a mayor precio" style="font-size:10.5px;font-weight:700;color:#0369a1;background:#e0f2fe;border-radius:6px;padding:2px 6px;flex-shrink:0;">🔤 todos los que coinciden</span>' : ''}
           ${g.recordado ? '<span title="Lo elegiste vos la última vez para este mismo texto" style="font-size:10.5px;font-weight:700;color:#7c3aed;background:#ede9fe;border-radius:6px;padding:2px 6px;flex-shrink:0;">📌 recordado</span>' : ''}
