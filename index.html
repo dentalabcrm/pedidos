@@ -407,8 +407,11 @@
        pedido" y la barra de "Forma de pago" seguían ocupando todo el ancho de la pantalla,
        quedando desalineados. Los acotamos al mismo ancho aproximado y los centramos, y
        además achicamos un poco el padding de la barra de forma de pago. */
-    .page-title, .pago-activo-pago, .banner-info-suave, #avisos-llegados-banner{
-      max-width:1584px;margin-left:auto;margin-right:auto;
+    /* Mismo ancho exacto que el bloque "Buscar productos + Tu pedido" (1614px en pantalla grande),
+       así el título, los avisos, la forma de pago y el panel violeta de admin quedan alineados
+       con los bordes de ese bloque, a la izquierda y a la derecha. */
+    .page-title, .pago-activo-pago, .banner-info-suave, #avisos-llegados-banner, .barra-admin-precios{
+      max-width:1614px;margin-left:auto;margin-right:auto;
     }
     .pago-activo-pago{padding:9px 14px;font-size:12.5px;}
     .pago-activo-pago b{font-size:13.5px;}
@@ -430,6 +433,19 @@
   }
   @media (min-width:1600px){
     .desktop-search-cart #card-buscar .resultados:not(.vista-lista){grid-template-columns:repeat(4,minmax(0,230px));}
+  }
+  /* Bloque compacto, como en la web: el recuadro "Buscar productos" mide justo lo que ocupan
+     las columnas de tarjetas (en vez de estirarse a todo el ancho y dejar aire a los costados
+     de la grilla), así las categorías, la bandeja de productos y "Tu pedido" quedan juntos y el
+     conjunto centrado en la pantalla. La bandeja se puede achicar si la pantalla no alcanza. */
+  @media (min-width:1300px){
+    .desktop-search-cart #card-buscar{flex:0 1 auto;}
+    .desktop-search-cart #card-buscar .buscar-main{flex:0 1 742px;min-width:0;}
+    .desktop-search-cart #card-buscar .resultados:not(.vista-lista){grid-template-columns:repeat(3,minmax(0,1fr));}
+  }
+  @media (min-width:1600px){
+    .desktop-search-cart #card-buscar .buscar-main{flex-basis:984px;}
+    .desktop-search-cart #card-buscar .resultados:not(.vista-lista){grid-template-columns:repeat(4,minmax(0,1fr));}
   }
   /* Pantallas muy anchas (monitores grandes): que siga creciendo en vez de quedarse
      fija con espacio en blanco de sobra a los costados. */
@@ -6374,7 +6390,7 @@ function renderPrincipal(){
     </div>`}
 
     ${esAdminCatalogo() ? `
-    <div style="background:#7c3aed12;border:1px solid #7c3aed40;border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <div class="barra-admin-precios" style="background:#7c3aed12;border:1px solid #7c3aed40;border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
       <span style="font-size:12px;font-weight:700;color:#7c3aed;white-space:nowrap;">👁 Vista de precios (solo admin):</span>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         ${[
