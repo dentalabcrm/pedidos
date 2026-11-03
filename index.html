@@ -7965,7 +7965,7 @@ function _aplicarCatalogoEnVivo(data){
       const precision = usadas.size / p.nTok;
       let score = 0.86 * cobertura + 0.14 * precision;
       if (p.it.st) score -= 0.03;               // agotado: un poquito más abajo
-      res.push({ sku: p.it.s, score });
+      res.push({ sku: p.it.s, score, cob: cobertura });   // cob = cuánto de lo pedido tiene el nombre (1 = todas las palabras)
     });
     res.sort((a, b) => b.score - a.score || (catalogoBySku.get(a.sku)?.n || '').length - (catalogoBySku.get(b.sku)?.n || '').length);
     return res.slice(0, limite);
@@ -8165,13 +8165,10 @@ function _aplicarCatalogoEnVivo(data){
     _grupos.forEach(g => {
       g.generico = g.estado === 'duda' && !g.recordado;
       if (g.generico) {
-        // el más barato con stock + sus otras presentaciones (mismo producto en otro tamaño),
-        // salvo que el cliente haya dicho el tamaño (en ese caso las otras ya no coinciden igual)
-        const sku = _elegirMasBarato(g);
-        if (sku) {
-          const lista = [sku, ..._otrasPresentaciones(g, sku)].sort((a, b) => _precioOrden(a) - _precioOrden(b));
-          g.elegidos = new Map(lista.map(s2 => [s2, g.qty]));
-        }
+        // Pedido genérico ("dame adhesivo", "densita"): se marcan TODOS los productos que tienen
+        // lo pedido en el nombre (igual de bien que el mejor), con stock y precio, de menor a mayor.
+        const lista = _todosLosQueCoinciden(g);
+        if (lista.length) g.elegidos = new Map(lista.map(s2 => [s2, g.qty]));
       }
       g.inicial = Array.from(g.elegidos.keys()); g.abierta = true; g.verTodas = false;
     });
@@ -8248,6 +8245,15 @@ function _aplicarCatalogoEnVivo(data){
       .filter((s2, k, arr) => arr.indexOf(s2) === k);
   }
 
+  function _todosLosQueCoinciden(g){
+    if (!g.opciones.length) return [];
+    const cobTop = Math.max(...g.opciones.map(o => o.cob != null ? o.cob : o.score));
+    return g.opciones.filter(o => (o.cob != null ? o.cob : o.score) >= cobTop - 0.03).map(o => o.sku)
+      .filter((s2, k, arr) => arr.indexOf(s2) === k)
+      .filter(s2 => { const it = catalogoBySku.get(s2); return it && !it.st && precioDe(it) > 0; })
+      .sort((a, b) => _precioOrden(a) - _precioOrden(b));
+  }
+
   // ── Estado de un grupo (se recalcula en vivo según lo que hay en "Tu pedido") ──
   // Elegidos de un grupo = lo que está en "Tu pedido" y se agregó EN ese grupo (no cualquier producto
   // del pedido que justo aparezca entre sus opciones — eso hacía que se "recordaran" productos de más).
@@ -8302,7 +8308,7 @@ function _aplicarCatalogoEnVivo(data){
           <span style="font-size:14.5px;font-weight:800;color:var(--text);font-style:italic;min-width:0;flex:1 1 220px;" title="${escHtml(g.orig)}">“${escHtml(g.orig)}”</span>
           <span style="font-size:12px;font-weight:700;color:var(--text2);flex-shrink:0;">Pidió: <b>${g.qty}</b></span>
           <span class="wa-estado" style="display:flex;align-items:center;gap:5px;flex-shrink:0;">${_estadoHtml(g, i)}</span>
-          ${g.generico ? '<span title="Pedido genérico: opciones de menor a mayor precio y se eligió la más barata con stock" style="font-size:10.5px;font-weight:700;color:#0369a1;background:#e0f2fe;border-radius:6px;padding:2px 6px;flex-shrink:0;">💲 menor precio</span>' : ''}
+          ${g.generico ? '<span title="Pedido genérico: se marcaron todos los productos con stock que tienen lo pedido en el nombre, de menor a mayor precio" style="font-size:10.5px;font-weight:700;color:#0369a1;background:#e0f2fe;border-radius:6px;padding:2px 6px;flex-shrink:0;">🔤 todos los que coinciden</span>' : ''}
           ${g.recordado ? '<span title="Lo elegiste vos la última vez para este mismo texto" style="font-size:10.5px;font-weight:700;color:#7c3aed;background:#ede9fe;border-radius:6px;padding:2px 6px;flex-shrink:0;">📌 recordado</span>' : ''}
           <input type="text" data-wa-busq="${i}" value="${escHtml(g.busqueda || '')}" placeholder="🔍 Buscar otro (nombre o SKU)…" autocomplete="off"
             oninput="_waBuscarEnGrupo(${i}, this.value)" onfocus="_waMarcarGrupo(${i})"
