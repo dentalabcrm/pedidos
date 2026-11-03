@@ -7893,11 +7893,17 @@ function _aplicarCatalogoEnVivo(data){
     'presupuesto presupuestar presupuestame precio precios cuanto cuantos sale salen cuesta cuestan valor porfa por favor xfa xfavor pf plis please ' +
     'de del la el los las lo le un una uno unos unas al a en con para p y o e que q tenes tienen tendras tendrian hay si mas tambien tb tmb ' +
     'ademas otro otra otros otras ok oka dale mandame enviame manda mandar envio enviar unidad unidades u un unid unids uds ud x cant cantidad ' +
-    'quedo atento atenta espero aviso avisame cuando puedas me das das dame consulta consultar consulto queria saber stock tenes disponible').split(' '));
+    'quedo atento atenta espero aviso avisame cuando puedas me das das dame consulta consultar consulto queria saber stock tenes disponible ' +
+    // frases de conversación: "estoy buscando…", "¿venden…?", "me interesa…", "quería consultar si tienen…"
+    'estoy estamos ando busco buscando buscaba buscamos buscar conseguir consigo consiguen consigue venden vendes vende vendian trabajan trabajas ' +
+    'manejan manejas tendran tendrias tenian tienes tenemos tiene algun alguna algunos algunas algo interesa interesaria interesado interesada ' +
+    'info informacion sobre saber averiguar averiguando preguntar pregunto pregunta hacer hago llevar llevo llevaria comprar compro compraria ' +
+    'necesitaba necesitan precisaria preciso precisamos mas menos o sea tal vez quizas capaz ahi ya bueno buenisimo genial perfecto barbaro hay').split(' '));
   // Equivalencias propias de cómo escriben los pedidos (talles en castellano / inglés, etc.)
   const _SINONIMOS_PEDIDOS = [
     ['medium', 'mediano', 'mediana', 'med', 'm'], ['small', 'chico', 'chica', 'pequeno', 'pequena', 's'],
     ['large', 'grande', 'l'], ['xl', 'extragrande'], ['xs', 'extrachico'],
+    ['vacio', 'vacuum', 'vac'],
     ['superior', 'arriba', 'sup'], ['inferior', 'abajo', 'inf'], ['adulto', 'adultos'], ['nino', 'ninos', 'infantil', 'pediatrico'],
   ];
   const _UNIDADES_MEDIDA = new Set('mm ml cc g gr grs grm kg mts mt m cm l lt lts oz mg'.split(' '));
@@ -7952,9 +7958,13 @@ function _aplicarCatalogoEnVivo(data){
       let df = 0; parecidos.forEach((s, t) => { if (s >= 0.9) df = Math.max(df, I.vocab.get(t).df); });
       // Una palabra que no está en ningún producto ("urgente", "porfis"…) pesa como una palabra
       // común, no como una rarísima: así no hunde a un producto que coincide en todo lo demás.
-      const peso = parecidos.size ? _idf(df || 1, I.N) : _idf(Math.max(1, I.N / 30), I.N);
+      const peso = parecidos.size ? _idf(df || 1, I.N) : _idf(Math.max(1, I.N / 30), I.N) * 0.5;
       return { q, parecidos, peso };
     });
+    // La primera palabra (que no sea un número) suele ser el producto en sí ("termoformadora al vacío",
+    // "yeso blanco", "alginato kromopan"): pesa un 50% más que las palabras que lo describen.
+    const iPrincipal = qInfo.findIndex(x => !/\d/.test(x.q) && x.parecidos.size);
+    if (iPrincipal >= 0 && qInfo.length > 1) qInfo[iPrincipal].peso *= 1.5;
     const pesoTotal = qInfo.reduce((a, b) => a + b.peso, 0);
     const candidatos = new Set();
     qInfo.forEach(qi => qi.parecidos.forEach((_, t) => I.vocab.get(t).prods.forEach(p => candidatos.add(p))));
@@ -7983,7 +7993,8 @@ function _aplicarCatalogoEnVivo(data){
   function _opcionesDe(texto){
     const r = _buscar(texto, 150);
     if (!r.length || r[0].porSku) return r;
-    const tope = Math.max(0.5, r[0].score - 0.3);
+    // Se muestran siempre las mejores aunque el puntaje sea bajo (así nunca queda vacío si hay algo parecido)
+    const tope = Math.max(0.2, r[0].score - 0.4);
     return r.filter(o => o.score >= tope);
   }
 
