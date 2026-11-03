@@ -416,9 +416,14 @@
        propia fila (en vez de amontonarse todos en una sola fila muy angosta). */
     .desktop-search-cart #card-pedido .carrito-item{flex-direction:column;align-items:stretch;gap:8px;}
     .desktop-search-cart #card-pedido .ci-bottom{justify-content:space-between;padding-left:54px;}
-    /* 4 columnas angostas y fijas (230px), pegadas entre sí — en vez de 4 columnas
-       anchas con la tarjeta chica flotando centrada adentro (dejaba huecos). */
-    .desktop-search-cart #card-buscar .resultados:not(.vista-lista){grid-template-columns:repeat(4,230px);justify-content:start;}
+    /* Pantalla grande: siempre 4 columnas que se reparten TODO el ancho por igual (antes eran
+       4 columnas fijas de 230px pegadas a la izquierda y sobraba un espacio en blanco a la
+       derecha). En notebooks más chicas (hasta 1599px) 3 columnas, para que no queden angostas.
+       La pantalla dividida (menos de 1300px) no cambia: sigue con sus 3 columnas. */
+    .desktop-search-cart #card-buscar .resultados:not(.vista-lista){grid-template-columns:repeat(3,minmax(0,1fr));justify-content:stretch;}
+  }
+  @media (min-width:1600px){
+    .desktop-search-cart #card-buscar .resultados:not(.vista-lista){grid-template-columns:repeat(4,minmax(0,1fr));}
   }
   /* Pantallas muy anchas (monitores grandes): que siga creciendo en vez de quedarse
      fija con espacio en blanco de sobra a los costados. */
