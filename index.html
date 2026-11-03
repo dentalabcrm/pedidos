@@ -8174,11 +8174,18 @@ function _aplicarCatalogoEnVivo(data){
     _grupos.forEach(g => { g.qty = 1; g.elegidos.forEach((_, k) => g.elegidos.set(k, 1)); });
     _grupos.forEach(g => {
       g.generico = g.estado === 'duda' && !g.recordado;
+      // Producto puntual o recordado: también se marca solo si tiene stock suficiente
+      if (!g.generico && g.elegidos.size) {
+        const antes = g.elegidos.size;
+        Array.from(g.elegidos.keys()).forEach(k => { if (!_stockOk(k)) g.elegidos.delete(k); });
+        if (antes && !g.elegidos.size) g.sinStock = true;
+      }
       if (g.generico) {
         // Pedido genérico ("dame adhesivo", "densita"): se marcan TODOS los productos que tienen
         // lo pedido en el nombre (igual de bien que el mejor), con stock y precio, de menor a mayor.
         const lista = _todosLosQueCoinciden(g);
-        if (lista.length) g.elegidos = new Map(lista.map(s2 => [s2, g.qty]));
+        g.elegidos = new Map(lista.map(s2 => [s2, g.qty]));
+        if (!lista.length && g.opciones.length) g.sinStock = true;
       }
       g.inicial = Array.from(g.elegidos.keys()); g.abierta = true; g.verTodas = false;
     });
@@ -8255,12 +8262,21 @@ function _aplicarCatalogoEnVivo(data){
       .filter((s2, k, arr) => arr.indexOf(s2) === k);
   }
 
+  // Solo se cotiza automáticamente lo que tiene stock real suficiente: Local + Depósito ≥ 5.
+  // (Si un producto no trae el dato por depósito, se usa el estado general: que no esté agotado.)
+  const STOCK_MINIMO_COTIZAR = 5;
+  function _stockOk(sku){
+    const it = catalogoBySku.get(sku);
+    if (!it || it.st) return false;
+    if (it.d1 === undefined && it.dc === undefined) return true;
+    return ((+it.d1 || 0) + (+it.dc || 0)) >= STOCK_MINIMO_COTIZAR;
+  }
   function _todosLosQueCoinciden(g){
     if (!g.opciones.length) return [];
     const cobTop = Math.max(...g.opciones.map(o => o.cob != null ? o.cob : o.score));
     return g.opciones.filter(o => (o.cob != null ? o.cob : o.score) >= cobTop - 0.03).map(o => o.sku)
       .filter((s2, k, arr) => arr.indexOf(s2) === k)
-      .filter(s2 => { const it = catalogoBySku.get(s2); return it && !it.st && precioDe(it) > 0; })
+      .filter(s2 => _stockOk(s2) && precioDe(catalogoBySku.get(s2)) > 0)
       .sort((a, b) => _precioOrden(a) - _precioOrden(b));
   }
 
@@ -8272,7 +8288,7 @@ function _aplicarCatalogoEnVivo(data){
     const n = _elegidosDe(i).length;
     const tocado = _firma(g.inicial) !== _firma(_elegidosDe(i));
     const icono = !n ? '❌' : ((g.estado === 'ok' || tocado) ? '✅' : '⚠️');
-    const txt = !n ? (g.opciones.length ? 'ninguno elegido' : 'no lo encontré — buscalo acá →')
+    const txt = !n ? (g.sinStock && _firma(g.inicial) === '' ? `sin stock suficiente (Local + Depósito ≥ ${STOCK_MINIMO_COTIZAR}) — agregalo a mano si querés` : (g.opciones.length ? 'ninguno elegido' : 'no lo encontré — buscalo acá →'))
       : `${n} elegido${n === 1 ? '' : 's'}${(!tocado && g.estado === 'duda') ? ' · revisá' : ''}`;
     const color = !n ? '#dc2626' : ((g.estado === 'ok' || tocado) ? '#0ea968' : '#d97706');
     return `<span style="font-size:16px;">${icono}</span><span style="font-size:12px;font-weight:800;color:${color};white-space:nowrap;">${txt}</span>`;
