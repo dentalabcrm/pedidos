@@ -4600,27 +4600,9 @@ window.seleccionarSubgrupoTab = (sg) => {
   if (nuevoTabs) nuevoTabs.scrollTop = _scrollTabs;
 };
 
-function renderResultados(){
-  const cont = document.getElementById('resultados');
-  if (!cont) return;
-  _navIdxSeleccionado = -1; // la grilla se vuelve a dibujar entera: la selección por teclado anterior ya no aplica
-  clearTimeout(_navAutoDeseleccionId);
-  cont.classList.toggle('vista-lista', vistaProductos === 'lista');
-  renderCatTabs();
-  renderVistaToggle();
-  const resultados = buscarProductos();
-  if (!resultados.length) {
-    cont.innerHTML = `<div class="sin-resultados">No se encontraron productos.</div>`;
-    return;
-  }
-  const totalPaginas = Math.max(1, Math.ceil(resultados.length / POR_PAGINA));
-  if (paginaActual > totalPaginas) paginaActual = totalPaginas;
-  if (paginaActual < 1) paginaActual = 1;
-  const inicio = (paginaActual - 1) * POR_PAGINA;
-  const mostrados = resultados.slice(inicio, inicio + POR_PAGINA);
-
-  const _avisosEsperandoSet = _avisosLlegadosSet();
-  const filas = mostrados.map(it => {
+// Tarjeta (grilla) o fila (lista) de un producto — la usa el catálogo y también el modo
+// "Pedido de WhatsApp", así los dos se ven y funcionan exactamente igual.
+function _htmlTarjetaProducto(it, _avisosEsperandoSet){
     const precio = precioDe(it);
     const puedeAgregar = !!precio && (!it.st || esAdminCatalogo());
     const qtyEnCarrito = carrito.get(it.s) || 0;
@@ -4751,7 +4733,31 @@ function renderResultados(){
           ${qtyEnCarrito > 0 ? control : ''}
         </div>
       </div>`;
-  }).join('');
+}
+
+function renderResultados(){
+  const cont = document.getElementById('resultados');
+  if (!cont) return;
+  _navIdxSeleccionado = -1; // la grilla se vuelve a dibujar entera: la selección por teclado anterior ya no aplica
+  clearTimeout(_navAutoDeseleccionId);
+  cont.classList.toggle('vista-lista', vistaProductos === 'lista');
+  renderCatTabs();
+  renderVistaToggle();
+  // Modo "Pedido de WhatsApp": en vez de la búsqueda normal se muestran los grupos del mensaje
+  if (typeof _waRenderEnResultados === 'function' && _waRenderEnResultados(cont)) return;
+  const resultados = buscarProductos();
+  if (!resultados.length) {
+    cont.innerHTML = `<div class="sin-resultados">No se encontraron productos.</div>`;
+    return;
+  }
+  const totalPaginas = Math.max(1, Math.ceil(resultados.length / POR_PAGINA));
+  if (paginaActual > totalPaginas) paginaActual = totalPaginas;
+  if (paginaActual < 1) paginaActual = 1;
+  const inicio = (paginaActual - 1) * POR_PAGINA;
+  const mostrados = resultados.slice(inicio, inicio + POR_PAGINA);
+
+  const _avisosEsperandoSet = _avisosLlegadosSet();
+  const filas = mostrados.map(it => _htmlTarjetaProducto(it, _avisosEsperandoSet)).join('');
 
   const paginacion = `
     <div class="paginacion">
@@ -4929,7 +4935,7 @@ document.addEventListener('keydown', e => {
   if (e.key !== 'Escape' || e.defaultPrevented) return;
   const t = e.target;
   if (t && t.getAttribute && /Escape/.test(t.getAttribute('onkeydown') || '')) return;
-  const abiertas = document.querySelectorAll('#zoom-prod-backdrop, #presu-backdrop, #pedido-full-backdrop');
+  const abiertas = document.querySelectorAll('#zoom-prod-backdrop, #presu-backdrop, #pedido-full-backdrop, #wa-pedido-backdrop');
   const arriba = abiertas[abiertas.length - 1]; // la que está más abajo en la página es la que se ve encima
   if (!arriba) return;
   e.preventDefault();
@@ -6409,6 +6415,7 @@ function renderPrincipal(){
             ${_frecuentesSkusOrdenados().length ? `<label class="chk-ofertas"><input type="checkbox" id="chk-frecuentes" onchange="onFiltroChange()"> ⭐ Solo lo que pedís seguido</label>` : ''}
             ${esAdminCatalogo() ? `<button id="btn-modo-seleccion-fotos" onclick="toggleModoSeleccionFotos()" style="background:${_modoSeleccionFotos ? '#dc2626' : 'var(--panel2)'};color:${_modoSeleccionFotos ? '#fff' : 'var(--text)'};border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">${_modoSeleccionFotos ? '✕ Cancelar selección' : '☑️ Seleccionar fotos para borrar'}</button>` : ''}
             ${esAdminCatalogo() ? `<button id="btn-agregar-todos-stock" onclick="agregarTodosLosEnStock()" title="Agrega 1 unidad de cada producto con stock o stock a confirmar de lo que se ve ahora (atajo: Shift + clic en cualquier producto)" style="background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">✅ Agregar todos los que hay en stock <span style="font-weight:600;color:var(--text3);font-size:11px;">(Shift + clic)</span></button>` : ''}
+            ${esAdminCatalogo() ? `<label id="lbl-modo-wa" title="Pegá el mensaje de un cliente en el buscador y se arma el pedido solo, agrupado por lo que pidió" style="display:inline-flex;align-items:center;gap:7px;background:#dcfce7;color:#15803d;border:1px solid #86efac;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;"><input type="checkbox" id="chk-modo-wa" ${(typeof _waModoActivo === 'function' && _waModoActivo()) ? 'checked' : ''} onchange="_waSetModo(this.checked)" style="width:15px;height:15px;cursor:pointer;"> 📋 Pedido de WhatsApp</label>` : ''}
             ${esAdminCatalogo() ? `<button id="btn-modo-agregar-fotos" onclick="toggleModoAgregarFotos()" style="background:${_modoAgregarFotos ? '#0ea968' : 'var(--panel2)'};color:${_modoAgregarFotos ? '#fff' : 'var(--text)'};border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">${_modoAgregarFotos ? '✕ Cancelar selección' : '☑️ Seleccionar productos para agregar fotos'}</button>` : ''}
           </div>
           <div class="resultados" id="resultados"></div>
@@ -7780,6 +7787,786 @@ function _aplicarCatalogoEnVivo(data){
 })();
 </script>
 
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+//  📋 PEGAR PEDIDO DE WHATSAPP (solo admin)
+//  Se pega el mensaje tal cual lo mandó el cliente; se separa en renglones, se detecta la
+//  cantidad de cada uno y se busca el producto tolerando errores de ortografía (tasa/taza,
+//  silicona/siliconada, guante/guantes, b/v, s/z/c, h muda, letras cambiadas, etc.).
+//  Todo pasa en este navegador: no se manda el mensaje a ningún lado.
+//  Lo que se corrige a mano se recuerda en este dispositivo para la próxima vez.
+// ══════════════════════════════════════════════════════════════════════════════
+(function(){
+  const LS_APRENDIDO = 'dl_wa_aprendido_v2'; // v2: se descarta la memoria vieja, que había guardado productos de más
+  try { localStorage.removeItem('dl_wa_aprendido_v1'); } catch (e) {}
+  const LS_TEXTO = 'dl_wa_texto_v1';
+
+  // ── Normalización ──
+  function _norm(s){
+    return String(s || '').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      // n°3, nº 3, nro 3, numero 3, num. 3, #3, n3 → 3
+      .replace(/(?:\bn\s*[°º]|\bnro\.?|\bnum(?:ero)?\.?|#)\s*(\d+)/g, ' $1 ')
+      .replace(/\bn(\d{1,3})\b/g, ' $1 ')
+      .replace(/[°º]/g, ' ');
+  }
+  function _tokens(s){
+    return _norm(s)
+      .replace(/(\d)(mm|ml|cc|grs|gr|g|kg|mts|mt|cm|lts|lt|oz|mg|m|l)\b/g, '$1 $2')   // 25mm → 25 mm, 1kg → 1 kg
+      .replace(/[^a-z0-9]+/g, ' ').split(' ').filter(Boolean)
+      .map(t => _ROMANOS[t] || t);   // "tipo III" = "tipo 3"
+  }
+  const _ROMANOS = { ii: '2', iii: '3', iv: '4', vi: '6', vii: '7', viii: '8', ix: '9' };
+  function _stem(w){
+    if (/^\d+$/.test(w)) return w;
+    if (w.length > 5 && w.endsWith('es')) return w.slice(0, -2);
+    if (w.length > 3 && w.endsWith('s')) return w.slice(0, -1);
+    return w;
+  }
+  // Clave "como suena" en castellano rioplatense: s/z/c(e,i), b/v, ll/y, h muda, qu/k/c, g/j…
+  function _fon(w){
+    if (/^\d+$/.test(w)) return w;
+    let x = _stem(w)
+      .replace(/ch/g, '§').replace(/h/g, '').replace(/§/g, 'ch')
+      .replace(/ll/g, 'y').replace(/qu/g, 'k').replace(/c([ei])/g, 's$1').replace(/c/g, 'k')
+      .replace(/z/g, 's').replace(/v/g, 'b').replace(/w/g, 'b').replace(/g([ei])/g, 'j$1')
+      .replace(/gu([ei])/g, 'g$1').replace(/x/g, 'ks').replace(/y$/, 'i');
+    return x.replace(/(.)\1+/g, '$1');
+  }
+  // Distancia de edición con transposición (letras cambiadas de lugar cuentan como 1 error)
+  function _dist(a, b, max){
+    const la = a.length, lb = b.length;
+    if (Math.abs(la - lb) > max) return max + 1;
+    let prev2 = null, prev = Array.from({ length: lb + 1 }, (_, j) => j);
+    for (let i = 1; i <= la; i++) {
+      const cur = [i];
+      let minFila = i;
+      for (let j = 1; j <= lb; j++) {
+        const c = a[i - 1] === b[j - 1] ? 0 : 1;
+        let v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + c);
+        if (prev2 && i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, prev2[j - 2] + 1);
+        cur.push(v);
+        if (v < minFila) minFila = v;
+      }
+      if (minFila > max) return max + 1;
+      prev2 = prev; prev = cur;
+    }
+    return prev[lb];
+  }
+  // Parecido entre una palabra del mensaje (q) y una del producto (n): 0 a 1
+  function _sim(q, n){
+    if (q === n) return 1;
+    const qNum = /\d/.test(q), nNum = /\d/.test(n);
+    if (qNum || nNum) {
+      // Números y medidas (3, 000, a2, 25mm) tienen que coincidir exacto: "#3" no es "#4"
+      // "03" = "3", pero "000", "00" y "0" son medidas distintas (ej: hilo retractor)
+      const sinCeros = x => /^0+$/.test(x) ? x : x.replace(/^0+(?=\d)/, '');
+      if (sinCeros(q) === sinCeros(n)) return 1;
+      return 0;
+    }
+    const sq = _stem(q), sn = _stem(n);
+    if (sq === sn) return 0.97;
+    const fq = _fon(q), fn = _fon(n);
+    if (fq === fn) return 0.92;
+    if (q.length >= 3 && n.startsWith(q)) return Math.min(0.93, 0.72 + 0.22 * (q.length / n.length));
+    if (n.length >= 4 && q.startsWith(n)) return 0.74;
+    if (fq.length >= 4 && fn.startsWith(fq)) return Math.min(0.9, 0.7 + 0.2 * (fq.length / fn.length));
+    const L = Math.max(fq.length, fn.length);
+    if (L >= 4) {
+      // 1 error en palabras de 4+ letras; 2 errores solo en palabras largas (8+)
+      const d = _dist(fq, fn, 2);
+      if (d === 1) return L >= 6 ? 0.86 : 0.8;
+      if (d === 2 && L >= 8) return 0.72;
+    }
+    return 0;
+  }
+
+  // Palabras que no ayudan a encontrar el producto (saludos, pedidos de precio, unidades…)
+  const _RELLENO = new Set(('hola holaa buenas buenos buen bue dia dias tarde tardes noche noches como estas esta estan va todo bien ' +
+    'gracias graciass saludos slds abrazo besos necesito necesitaria nesecito necesitamos nececito quiero quisiera queria quiciera ' +
+    'pedir pido pedido pedidos me nos te pasas pasan pasarias pasame pasa podes podrias podran cotizar cotiza cotizas cotizacion cotizame ' +
+    'presupuesto presupuestar presupuestame precio precios cuanto cuantos sale salen cuesta cuestan valor porfa por favor xfa xfavor pf plis please ' +
+    'de del la el los las lo le un una uno unos unas al a en con para p y o e que q tenes tienen tendras tendrian hay si mas tambien tb tmb ' +
+    'ademas otro otra otros otras ok oka dale mandame enviame manda mandar envio enviar unidad unidades u un unid unids uds ud x cant cantidad ' +
+    'quedo atento atenta espero aviso avisame cuando puedas me das das dame consulta consultar consulto queria saber stock tenes disponible').split(' '));
+  // Equivalencias propias de cómo escriben los pedidos (talles en castellano / inglés, etc.)
+  const _SINONIMOS_PEDIDOS = [
+    ['medium', 'mediano', 'mediana', 'med', 'm'], ['small', 'chico', 'chica', 'pequeno', 'pequena', 's'],
+    ['large', 'grande', 'l'], ['xl', 'extragrande'], ['xs', 'extrachico'],
+    ['superior', 'arriba', 'sup'], ['inferior', 'abajo', 'inf'], ['adulto', 'adultos'], ['nino', 'ninos', 'infantil', 'pediatrico'],
+  ];
+  const _UNIDADES_MEDIDA = new Set('mm ml cc g gr grs grm kg mts mt m cm l lt lts oz mg'.split(' '));
+  const _NUM_PALABRA = { un: 1, una: 1, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10,
+    once: 11, doce: 12, quince: 15, veinte: 20, treinta: 30, cincuenta: 50, cien: 100, docena: 12 };
+  const _ENVASES = '(?:u|un|uni|unid|unids|unidad|unidades|uds?|cajas?|cajitas?|paquetes?|paq|packs?|frascos?|kits?|jeringas?|blisters?|rollos?|bolsas?|sobres?|potes?|tubos?|pares?|cajones?|bidones?|botellas?)';
+
+  // ── Índice del catálogo (se arma una vez y se rehace si cambia el catálogo) ──
+  let _idx = null;
+  function _indice(){
+    if (_idx && _idx.ref === catalogo && _idx.len === catalogo.length) return _idx;
+    const vocab = new Map();          // palabra → { df, prods: [] }
+    const prods = [];
+    catalogo.forEach((it, i) => {
+      const toks = new Set([..._tokens(it.n), ..._tokens(it.m || '')].filter(t => !_RELLENO.has(t) || /\d/.test(t)));
+      prods.push({ it, toks, nTok: toks.size || 1 });
+      toks.forEach(t => {
+        let v = vocab.get(t);
+        if (!v) { v = { df: 0, prods: [] }; vocab.set(t, v); }
+        v.df++; v.prods.push(i);
+      });
+    });
+    const sinon = [...(typeof SINONIMOS !== 'undefined' ? SINONIMOS : []), ..._SINONIMOS_PEDIDOS].map(g => g.map(t => _tokens(t)).filter(t => t.length === 1).map(t => t[0]));
+    _idx = { ref: catalogo, len: catalogo.length, vocab, prods, N: catalogo.length || 1, sinon };
+    return _idx;
+  }
+  function _idf(df, N){ return Math.log(1 + N / Math.max(1, df)); }
+
+  // Busca los productos más parecidos a un texto. Devuelve [{ sku, score }] ordenado.
+  function _buscar(texto, limite = 8){
+    const I = _indice();
+    const qs = _tokens(texto).filter(t => !_RELLENO.has(t) || /\d/.test(t));
+    if (!qs.length) return [];
+    // SKU escrito tal cual (ej: 68626-3)
+    const directos = [];
+    String(texto).split(/[\s,;()]+/).forEach(w => {
+      const c = w.replace(/^[^\w]+|[^\w]+$/g, '');
+      if (!c || !/\d/.test(c)) return;
+      [c, c.toUpperCase()].forEach(s => { if (catalogoBySku.has(s) && !directos.includes(s)) directos.push(s); });
+    });
+    if (directos.length) return directos.map(sku => ({ sku, score: 1, porSku: true }));
+
+    const qInfo = qs.map(q => {
+      const parecidos = new Map(); // palabra del catálogo → parecido
+      const alternativas = [[q, 1]];
+      I.sinon.forEach(g => { if (g.some(t => _sim(q, t) >= 0.9)) g.forEach(t => { if (t !== q) alternativas.push([t, 0.93]); }); });
+      I.vocab.forEach((v, t) => {
+        let best = 0;
+        for (const [a, f] of alternativas) { const s = _sim(a, t) * f; if (s > best) best = s; }
+        if (best >= 0.7) parecidos.set(t, best);
+      });
+      let df = 0; parecidos.forEach((s, t) => { if (s >= 0.9) df = Math.max(df, I.vocab.get(t).df); });
+      const peso = parecidos.size ? _idf(df || 1, I.N) : _idf(1, I.N) * 0.5;
+      return { q, parecidos, peso };
+    });
+    const pesoTotal = qInfo.reduce((a, b) => a + b.peso, 0);
+    const candidatos = new Set();
+    qInfo.forEach(qi => qi.parecidos.forEach((_, t) => I.vocab.get(t).prods.forEach(p => candidatos.add(p))));
+    const res = [];
+    candidatos.forEach(pi => {
+      const p = I.prods[pi];
+      let suma = 0; const usadas = new Set();
+      qInfo.forEach(qi => {
+        let best = 0, bestTok = null;
+        p.toks.forEach(t => { const s = qi.parecidos.get(t) || 0; if (s > best) { best = s; bestTok = t; } });
+        suma += best * qi.peso;
+        if (bestTok) usadas.add(bestTok);
+      });
+      const cobertura = suma / pesoTotal;
+      const precision = usadas.size / p.nTok;
+      let score = 0.86 * cobertura + 0.14 * precision;
+      if (p.it.st) score -= 0.03;               // agotado: un poquito más abajo
+      res.push({ sku: p.it.s, score });
+    });
+    res.sort((a, b) => b.score - a.score || (catalogoBySku.get(a.sku)?.n || '').length - (catalogoBySku.get(b.sku)?.n || '').length);
+    return res.slice(0, limite);
+  }
+
+  // Todas las opciones razonables para un texto (no solo las primeras): las que se parecen
+  // casi tanto como la mejor. Ej: "adhesivo" trae todos los adhesivos.
+  function _opcionesDe(texto){
+    const r = _buscar(texto, 150);
+    if (!r.length || r[0].porSku) return r;
+    const tope = Math.max(0.5, r[0].score - 0.3);
+    return r.filter(o => o.score >= tope);
+  }
+
+  // ── Separar el mensaje en renglones (un producto por renglón) ──
+  function _separar(texto){
+    const out = [];
+    String(texto || '').replace(/\r/g, '').split(/\n|;/).forEach(linea => {
+      // Formato que pega WhatsApp al copiar varios mensajes: "[10:32, 2/11/2026] Juan: ..."
+      linea = linea.replace(/^\s*\[[^\]]{4,30}\]\s*[^:]{1,40}:\s*/, '');
+      // "2 tazas y 3 hilos" → dos renglones
+      const partesY = linea.split(/\s+(?:y|e|\+)\s+(?=(?:\d+|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|docena)\b)/i);
+      partesY.forEach(p => {
+        // comas: separan productos salvo que lo que sigue sea muy corto (ej: "composite, a2")
+        const segs = p.split(',');
+        const juntos = [];
+        segs.forEach(s => {
+          if (juntos.length && s.replace(/[^a-z0-9áéíóúñ]/gi, '').length <= 3) juntos[juntos.length - 1] += ' ' + s;
+          else juntos.push(s);
+        });
+        juntos.forEach(s => { if (s.trim()) out.push(s.trim()); });
+      });
+    });
+    return out;
+  }
+
+  // ── Cantidad del renglón ──
+  function _cantidad(linea){
+    let s = ' ' + linea.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') + ' ';
+    s = s.replace(/^\s*(?:[-*•·>]+|\d{1,2}[.)](?=\s))\s*/, ' ');   // viñetas y "1) …" de listas
+    let qty = null;
+    const tomar = (re, fn) => {
+      if (qty !== null) return;
+      const m = s.match(re);
+      if (!m) return;
+      const v = fn(m);
+      if (v > 0 && v < 10000) { qty = v; s = s.replace(m[0], ' '); }
+    };
+    tomar(/\s(?:cant(?:idad)?|qty)\.?\s*:?\s*(\d{1,4})\b/, m => +m[1]);
+    tomar(/\sx\s*(\d{1,4})(?=\s|$|[,.])/, m => +m[1]);
+    tomar(/\s(\d{1,4})\s*x(?=\s)/, m => +m[1]);
+    tomar(/\((\d{1,4})\s*(?:u|un|unid|unidades)?\)/, m => +m[1]);
+    tomar(new RegExp('^\\s*(\\d{1,4})\\s*(?:' + _ENVASES + '\\b\\.?\\s*(?:de\\s+)?)?(?=[a-z#])'), m => {
+      const sig = (s.slice(m.index + m[0].length).match(/^[a-z]+/) || [''])[0];
+      if (_UNIDADES_MEDIDA.has(sig) && !new RegExp('^\\s*\\d{1,4}\\s*' + _ENVASES).test(m[0])) return 0;
+      return +m[1];
+    });
+    tomar(/^\s*(media docena|una docena|docena|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|quince|veinte|treinta|cincuenta|cien)\b/, m => {
+      if (m[1] === 'media docena') return 6;
+      if (m[1] === 'una docena') return 12;
+      return _NUM_PALABRA[m[1]] || 0;
+    });
+    tomar(new RegExp('\\s(\\d{1,4})\\s*' + _ENVASES + '\\.?\\s*$'), m => +m[1]);
+    tomar(/\s[-:=]\s*(\d{1,4})\s*$/, m => +m[1]);
+    // "2 cajas de…" ya se sacó; quitar envases sueltos que quedaron al principio
+    s = s.replace(new RegExp('^\\s*' + _ENVASES + '\\b\\.?\\s*(?:de\\s+)?'), ' ');
+    return { qty: qty || 1, resto: s.trim(), detectada: qty !== null };
+  }
+
+  // ── Memoria de correcciones ──
+  function _claveTexto(t){ return _tokens(t).filter(x => !_RELLENO.has(x) || /\d/.test(x)).map(_stem).sort().join(' '); }
+  function _aprendido(){ try { return JSON.parse(localStorage.getItem(LS_APRENDIDO) || '{}') || {}; } catch (e) { return {}; } }
+  function _aprender(texto, skus){
+    const k = _claveTexto(texto);
+    if (!k) return;
+    const m = _aprendido();
+    if (skus && skus.length) m[k] = skus; else delete m[k];
+    try { localStorage.setItem(LS_APRENDIDO, JSON.stringify(m)); } catch (e) {}
+  }
+
+  // ── Interpretar el mensaje completo ──
+  function _interpretar(texto){
+    const mem = _aprendido();
+    const lineas = [];
+    _separar(texto).forEach(orig => {
+      const { qty, resto, detectada } = _cantidad(orig);
+      const utiles = _tokens(resto).filter(t => !_RELLENO.has(t) || /\d/.test(t));
+      if (!utiles.length) return; // saludo, "gracias", etc.
+      const memo = mem[_claveTexto(resto)];
+      const recordados = (Array.isArray(memo) ? memo : (memo ? [memo] : [])).filter(sku => catalogoBySku.has(sku));
+      let opciones = _opcionesDe(resto);
+      let estado;
+      const elegidos = new Map();
+      if (recordados.length) {
+        opciones = [...recordados.map(sku => ({ sku, score: 1 })), ...opciones.filter(o => !recordados.includes(o.sku))];
+        estado = 'ok';
+        recordados.forEach(sku => elegidos.set(sku, qty));
+      } else if (!opciones.length || opciones[0].score < 0.6) {
+        estado = 'nada';
+      } else {
+        const a = opciones[0].score, b = opciones[1] ? opciones[1].score : 0;
+        estado = (opciones[0].porSku || (a >= 0.8 && (a - b >= 0.07 || b < 0.6))) ? 'ok' : 'duda';
+        elegidos.set(opciones[0].sku, qty);
+      }
+      lineas.push({ orig, resto, qty, opciones, elegidos, estado, recordado: recordados.length > 0,
+        incluir: elegidos.size > 0, abierta: estado !== 'ok', busqueda: '', tocado: false });
+    });
+    return lineas;
+  }
+
+  // Para probar desde la consola: _waPedido.interpretar('2 tasas de silicona n3')
+  window._waPedido = { interpretar: _interpretar, buscar: _buscar, cantidad: _cantidad, separar: _separar };
+
+  // ════════════════════════════════════════════════════════════════════════════
+  //  MODO "PEDIDO DE WHATSAPP" dentro del catálogo (no en una ventana aparte)
+  //  Casilla en la barra de herramientas → el buscador pasa a ser un recuadro donde se pega
+  //  el mensaje → los resultados se ven en la misma grilla/lista del catálogo, agrupados por
+  //  renglón del mensaje, con las tarjetas de siempre. Lo detectado va directo a "Tu pedido".
+  //  Teclado: flechas + Enter como en el catálogo · Tab = abre el presupuesto (como siempre) ·
+  //  tipear = buscar dentro del grupo (nombre o SKU) · Ctrl+Enter = interpretar · Shift+↓ = ver todas.
+  // ════════════════════════════════════════════════════════════════════════════
+  let _modo = false;
+  let _grupos = null;        // renglones interpretados
+  let _rangos = [];          // por grupo: índice de su primera y última tarjeta en #resultados
+  let _grupoActual = -1;
+
+  window._waModoActivo = () => _modo;
+  const _firma = arr => arr.slice().sort().join('|');
+
+  function _txtGuardado(){ try { return localStorage.getItem(LS_TEXTO) || ''; } catch (e) { return ''; } }
+  function _guardarTxt(t){ try { localStorage.setItem(LS_TEXTO, t); } catch (e) {} }
+
+  // ── Recuadro para pegar (reemplaza al buscador mientras el modo está activo) ──
+  function _asegurarUI(){
+    const wrap = document.querySelector('.buscador-input-wrap');
+    if (!wrap) return;
+    let ent = document.getElementById('wa-entrada');
+    if (_modo) {
+      wrap.style.display = 'none';
+      if (!ent) {
+        ent = document.createElement('div');
+        ent.id = 'wa-entrada';
+        ent.style.cssText = 'flex:1;min-width:260px;display:flex;flex-direction:column;gap:6px;';
+        ent.innerHTML = `
+          <textarea id="wa-texto" rows="4" placeholder="📋 Pegá acá el mensaje del cliente (se interpreta solo al pegar)…"
+            style="width:100%;box-sizing:border-box;border:2px solid #86efac;border-radius:12px;padding:10px 12px;font-size:14px;font-family:inherit;line-height:1.45;background:var(--panel);color:var(--text);resize:vertical;min-height:84px;"></textarea>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button type="button" onclick="_waInterpretarTexto()" style="background:#0ea968;color:#fff;border:none;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:800;cursor:pointer;">🔎 Interpretar <span style="font-weight:600;opacity:.8;font-size:11px;">(Ctrl+Enter)</span></button>
+            <button type="button" onclick="_waLimpiarTexto()" style="background:var(--panel2);color:var(--text2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;font-size:12.5px;font-weight:700;cursor:pointer;">Borrar texto</button>
+            <span style="font-size:11.5px;color:var(--text3);">↑↓←→ + Enter: agregar/sacar · Shift+↓: ver todas las opciones del grupo · tipeá para buscar en el grupo · Tab: ver presupuesto</span>
+          </div>`;
+        wrap.insertAdjacentElement('afterend', ent);
+        const ta = ent.querySelector('#wa-texto');
+        ta.value = _txtGuardado();
+        ta.addEventListener('input', () => _guardarTxt(ta.value));
+        ta.addEventListener('paste', () => setTimeout(() => window._waInterpretarTexto(), 0));
+      }
+    } else {
+      wrap.style.display = '';
+      if (ent) ent.remove();
+    }
+  }
+
+  let _ordenPrevio = null;
+  function _ponerOrdenPrecio(v){
+    filtroOrdenPrecio = v;
+    const sel = document.getElementById('sel-orden-precio');
+    if (sel) sel.value = v;
+  }
+  window._waSetModo = (on) => {
+    if (!esAdminCatalogo()) return;
+    // Al entrar: "Ordenar por precio" pasa solo a "menor a mayor"; al salir, vuelve a como estaba
+    if (on && !_modo) { _ordenPrevio = filtroOrdenPrecio; _ponerOrdenPrecio('asc'); }
+    else if (!on && _modo && _ordenPrevio !== null) { _ponerOrdenPrecio(_ordenPrevio); _ordenPrevio = null; }
+    _modo = !!on;
+    _grupoActual = -1;
+    _asegurarUI();
+    document.querySelectorAll('#chk-modo-wa').forEach(c => { c.checked = _modo; });
+    if (typeof renderResultados === 'function') renderResultados();
+    if (_modo) setTimeout(() => { const ta = document.getElementById('wa-texto'); if (ta) { ta.focus(); ta.select(); } }, 30);
+  };
+  window._waLimpiarTexto = () => {
+    const ta = document.getElementById('wa-texto');
+    if (ta) { ta.value = ''; ta.focus(); }
+    _guardarTxt('');
+    _grupos = null;
+    if (typeof renderResultados === 'function') renderResultados();
+  };
+
+  // ── Interpretar: arma los grupos y carga lo detectado directo en "Tu pedido" (vaciando lo anterior) ──
+  window._waInterpretarTexto = () => {
+    const ta = document.getElementById('wa-texto');
+    const texto = ta ? ta.value : _txtGuardado();
+    _guardarTxt(texto);
+    if (!texto.trim()) { _grupos = null; renderResultados(); return; }
+    _grupos = _interpretar(texto);
+    _grupos.forEach(g => {
+      g.generico = g.estado === 'duda' && !g.recordado;
+      if (g.generico) {
+        const sku = _elegirMasBarato(g);
+        if (sku) g.elegidos = new Map([[sku, g.qty]]);
+      }
+      g.inicial = Array.from(g.elegidos.keys()); g.abierta = true; g.verTodas = false;
+    });
+    carrito.clear();
+    if (typeof _preciosManualesCarrito !== 'undefined' && _preciosManualesCarrito && _preciosManualesCarrito.clear) _preciosManualesCarrito.clear();
+    _skuGrupo.clear();
+    _grupos.forEach((g, i) => g.elegidos.forEach((q, sku) => {
+      if (!catalogoBySku.has(sku)) return;
+      carrito.set(sku, (carrito.get(sku) || 0) + q);
+      if (!_skuGrupo.has(sku)) _skuGrupo.set(sku, i);
+    }));
+    _skusPrevios = new Set(carrito.keys());
+    if (typeof _guardarCarritoLS === 'function') _guardarCarritoLS();
+    _pedidoFullModo = 'presupuesto'; // así Tab (pedido en pantalla completa) lo abre directo como Presupuesto
+    _grupoActual = -1;
+    renderResultados();
+    renderCarrito();
+    document.getElementById('resultados')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // ── Orden por precio ──
+  // Pedido genérico (varias opciones parecidas, ej "dame adhesivo") → de menor a mayor precio.
+  // Producto puntual (coincidencia clara, SKU o recordado) → el orden por coincidencia.
+  // Si en el buscador del grupo se escribe algo, manda la coincidencia con lo escrito.
+  // El desplegable "Ordenar por precio" del catálogo, si está elegido, manda sobre todo.
+  function _precioOrden(sku){ const it = catalogoBySku.get(sku); const v = it ? precioDe(it) : 0; return v > 0 ? v : Infinity; }
+  function _ordenGrupo(g){
+    const dd = (typeof filtroOrdenPrecio !== 'undefined') ? filtroOrdenPrecio : '';
+    if (dd === 'asc' || dd === 'desc') return dd;
+    if (g.generico && !(g.busqueda || '').trim()) return 'asc';
+    return '';
+  }
+  function _opcionesOrdenadas(g){
+    const todas = g.opciones.map(o => o.sku).filter((s, k, arr) => arr.indexOf(s) === k && catalogoBySku.has(s));
+    const ord = _ordenGrupo(g);
+    if (ord === 'asc') todas.sort((a, b) => _precioOrden(a) - _precioOrden(b));
+    else if (ord === 'desc') todas.sort((a, b) => { const va = _precioOrden(a), vb = _precioOrden(b); return (vb === Infinity ? -1 : vb) - (va === Infinity ? -1 : va); });
+    // igual que en el catálogo: los agotados siempre al final
+    if (ord) todas.sort((a, b) => (catalogoBySku.get(a).st ? 1 : 0) - (catalogoBySku.get(b).st ? 1 : 0));
+    return todas;
+  }
+  // En un pedido genérico se elige solo la opción más barata con stock, entre las que coinciden
+  // casi igual de bien que la mejor (así "guantes nitrilo" no termina eligiendo uno de látex).
+  function _elegirMasBarato(g){
+    if (!g.opciones.length) return null;
+    const top = g.opciones[0].score;
+    const cands = g.opciones.filter(o => o.score >= top - 0.05).map(o => o.sku)
+      .filter(sku => { const it = catalogoBySku.get(sku); return it && !it.st && precioDe(it) > 0; });
+    if (!cands.length) return null;
+    return cands.sort((a, b) => _precioOrden(a) - _precioOrden(b))[0];
+  }
+
+  // ── Estado de un grupo (se recalcula en vivo según lo que hay en "Tu pedido") ──
+  // Elegidos de un grupo = lo que está en "Tu pedido" y se agregó EN ese grupo (no cualquier producto
+  // del pedido que justo aparezca entre sus opciones — eso hacía que se "recordaran" productos de más).
+  function _elegidosDe(i){ return Array.from(carrito.keys()).filter(s => _skuGrupo.get(s) === i); }
+  function _estadoHtml(g, i){
+    const n = _elegidosDe(i).length;
+    const tocado = _firma(g.inicial) !== _firma(_elegidosDe(i));
+    const icono = !n ? '❌' : ((g.estado === 'ok' || tocado) ? '✅' : '⚠️');
+    const txt = !n ? (g.opciones.length ? 'ninguno elegido' : 'no lo encontré — buscalo acá →')
+      : `${n} elegido${n === 1 ? '' : 's'}${(!tocado && g.estado === 'duda') ? ' · revisá' : ''}`;
+    const color = !n ? '#dc2626' : ((g.estado === 'ok' || tocado) ? '#0ea968' : '#d97706');
+    return `<span style="font-size:16px;">${icono}</span><span style="font-size:12px;font-weight:800;color:${color};white-space:nowrap;">${txt}</span>`;
+  }
+  function _resumenHtml(){
+    const c = { ok: 0, duda: 0, nada: 0 };
+    _grupos.forEach((g, i) => {
+      const n = _elegidosDe(i).length;
+      const tocado = _firma(g.inicial) !== _firma(_elegidosDe(i));
+      c[!n ? 'nada' : ((g.estado === 'ok' || tocado) ? 'ok' : 'duda')]++;
+    });
+    return `<span style="color:#0ea968;">✅ ${c.ok} listo${c.ok === 1 ? '' : 's'}</span>
+      <span style="color:#d97706;">⚠️ ${c.duda} para revisar</span>
+      <span style="color:#dc2626;">❌ ${c.nada} sin elegir</span>`;
+  }
+
+  // Lo llama renderResultados() del catálogo: si el modo está activo, dibuja los grupos y devuelve true
+  window._waRenderEnResultados = (cont) => {
+    if (!_modo) return false;
+    _asegurarUI();
+    if (!_grupos) {
+      cont.innerHTML = `<div class="sin-resultados" style="grid-column:1/-1;">📋 Pegá arriba el mensaje del cliente y se arman los grupos con los productos.</div>`;
+      _rangos = [];
+      return true;
+    }
+    const avisos = typeof _avisosLlegadosSet === 'function' ? _avisosLlegadosSet() : new Set();
+    let html = `
+      <div class="wa-resumen" style="grid-column:1/-1;display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:13px;font-weight:800;padding:4px 2px 2px;">
+        <span id="wa-resumen-cuentas" style="display:flex;gap:14px;flex-wrap:wrap;">${_resumenHtml()}</span>
+        <button type="button" onclick="_waVerPresupuesto()" style="margin-left:auto;background:#0ea968;color:#fff;border:none;border-radius:10px;padding:9px 16px;font-size:13.5px;font-weight:800;cursor:pointer;">📄 Ver presupuesto <span style="font-weight:600;opacity:.8;font-size:11px;">(Tab)</span></button>
+      </div>`;
+    _rangos = [];
+    let idx = 0;
+    _grupos.forEach((g, i) => {
+      // lo elegido siempre se ve, aunque esté más allá de las primeras 8 opciones
+      const todas = _opcionesOrdenadas(g);
+      const visibles = g.verTodas ? todas : todas.filter((s, k) => k < 8 || carrito.has(s));
+      const ocultas = todas.length - visibles.length;
+      html += `
+        <div class="wa-grupo-head" data-wa-grupo="${i}" style="grid-column:1/-1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:${i ? 14 : 4}px;padding:10px 12px;border-radius:12px;
+          background:var(--panel2);border:1.5px solid ${i === _grupoActual ? 'var(--blue)' : 'var(--border)'};${i === _grupoActual ? 'box-shadow:0 0 0 3px rgba(2,132,199,.18);' : ''}">
+          <span style="font-size:12px;font-weight:800;color:var(--text3);flex-shrink:0;">${i + 1}/${_grupos.length}</span>
+          <span style="font-size:14.5px;font-weight:800;color:var(--text);font-style:italic;min-width:0;flex:1 1 220px;" title="${escHtml(g.orig)}">“${escHtml(g.orig)}”</span>
+          <span style="font-size:12px;font-weight:700;color:var(--text2);flex-shrink:0;">Pidió: <b>${g.qty}</b></span>
+          <span class="wa-estado" style="display:flex;align-items:center;gap:5px;flex-shrink:0;">${_estadoHtml(g, i)}</span>
+          ${g.generico ? '<span title="Pedido genérico: opciones de menor a mayor precio y se eligió la más barata con stock" style="font-size:10.5px;font-weight:700;color:#0369a1;background:#e0f2fe;border-radius:6px;padding:2px 6px;flex-shrink:0;">💲 menor precio</span>' : ''}
+          ${g.recordado ? '<span title="Lo elegiste vos la última vez para este mismo texto" style="font-size:10.5px;font-weight:700;color:#7c3aed;background:#ede9fe;border-radius:6px;padding:2px 6px;flex-shrink:0;">📌 recordado</span>' : ''}
+          <input type="text" data-wa-busq="${i}" value="${escHtml(g.busqueda || '')}" placeholder="🔍 Buscar otro (nombre o SKU)…" autocomplete="off"
+            oninput="_waBuscarEnGrupo(${i}, this.value)" onfocus="_waMarcarGrupo(${i})"
+            style="flex:0 1 260px;min-width:170px;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;background:var(--panel);color:var(--text);">
+        </div>`;
+      const desde = idx;
+      visibles.forEach(sku => { html += _htmlTarjetaProducto(catalogoBySku.get(sku), avisos); idx++; });
+      _rangos.push({ desde, hasta: idx - 1 });
+      if (g.verTodas && todas.length > 8) {
+        html += `<button type="button" onclick="_waVerMenos(${i})" style="grid-column:1/-1;padding:7px;border-radius:10px;border:1px dashed var(--border);background:var(--panel2);color:var(--text3);font-size:12.5px;font-weight:700;cursor:pointer;">▴ Ver menos <span style="font-weight:600;font-size:11px;">(Shift + ↑)</span></button>`;
+      }
+      if (ocultas > 0) {
+        html += `<button type="button" onclick="_waVerTodas(${i})" style="grid-column:1/-1;padding:9px;border-radius:10px;border:1px dashed var(--border);background:var(--panel2);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer;">▾ Ver todas las opciones de este grupo (${ocultas} más) <span style="font-weight:600;font-size:11px;color:var(--text3);">(Shift + ↓)</span></button>`;
+      }
+      if (!visibles.length) {
+        html += `<div style="grid-column:1/-1;font-size:13px;color:var(--text3);padding:6px 4px;">Sin opciones. Escribí en el buscador del grupo (nombre o SKU) y Enter agrega el primero.</div>`;
+      }
+    });
+    cont.innerHTML = html;
+    return true;
+  };
+
+  // Al cambiar "Tu pedido" (clic en una tarjeta, Enter, ±), se actualizan los estados de los grupos
+  function _actualizarCabeceras(){
+    if (!_modo || !_grupos) return;
+    document.querySelectorAll('#resultados .wa-grupo-head').forEach(h => {
+      const g = _grupos[+h.dataset.waGrupo];
+      const est = h.querySelector('.wa-estado');
+      if (g && est) est.innerHTML = _estadoHtml(g, +h.dataset.waGrupo);
+    });
+    const res = document.getElementById('wa-resumen-cuentas');
+    if (res) res.innerHTML = _resumenHtml();
+    // Recordar lo que se cambió a mano en cada grupo, para la próxima vez que llegue el mismo texto
+    _grupos.forEach((g, i) => {
+      const el = _elegidosDe(i);
+      if (_firma(el) !== _firma(g.inicial)) { g.tocado = true; _aprender(g.resto, el); }
+    });
+  }
+  // ── Orden de "Tu pedido": lo que se agrega en un grupo entra justo debajo de lo ya elegido de
+  //    ese mismo grupo (no al final de todo). Así el presupuesto queda en el orden del mensaje. ──
+  const _skuGrupo = new Map();   // sku → grupo al que se agregó
+  let _skusPrevios = new Set();
+  function _grupoParaNuevo(sku){
+    const cur = _grupoDelTeclado();
+    if (cur >= 0 && _grupos[cur] && _grupos[cur].opciones.some(o => o.sku === sku)) return cur;
+    if (cur >= 0 && _grupos[cur] && !_grupos.some(g => g.opciones.some(o => o.sku === sku))) return cur;
+    const k = _grupos.findIndex(g => g.opciones.some(o => o.sku === sku));
+    return k >= 0 ? k : cur;
+  }
+  function _ordenarCarritoPorGrupo(){
+    if (!_modo || !_grupos) { _skusPrevios = new Set(carrito.keys()); return; }
+    // lo que se sacó del pedido deja de pertenecer a su grupo (si se vuelve a agregar, va al grupo de ese momento)
+    Array.from(_skuGrupo.keys()).forEach(sku => { if (!carrito.has(sku)) _skuGrupo.delete(sku); });
+    carrito.forEach((_, sku) => {
+      if (!_skusPrevios.has(sku) && !_skuGrupo.has(sku)) { const g = _grupoParaNuevo(sku); if (g >= 0) _skuGrupo.set(sku, g); }
+    });
+    const entradas = Array.from(carrito.entries());
+    const pos = entradas.map(([sku], k) => ({ k, g: _skuGrupo.has(sku) ? _skuGrupo.get(sku) : Infinity }));
+    pos.sort((a, b) => (a.g - b.g) || (a.k - b.k));   // estable: dentro del grupo se respeta el orden de llegada
+    if (pos.some((p, k) => p.k !== k)) {
+      carrito.clear();
+      pos.forEach(p => carrito.set(entradas[p.k][0], entradas[p.k][1]));
+      if (typeof _guardarCarritoLS === 'function') _guardarCarritoLS();
+    }
+    _skusPrevios = new Set(carrito.keys());
+  }
+  if (typeof renderCarrito === 'function') {
+    const _renderCarritoOriginal = renderCarrito;
+    window.renderCarrito = function(){
+      try { _ordenarCarritoPorGrupo(); } catch (e) {}
+      const r = _renderCarritoOriginal.apply(this, arguments);
+      try { _actualizarCabeceras(); } catch (e) {}
+      return r;
+    };
+  }
+
+  window._waVerPresupuesto = () => {
+    if (!carrito.size) return;
+    _pedidoFullModo = 'presupuesto';
+    abrirVistaCompletaPedido();
+  };
+  window._waVerTodas = (i) => { const g = _grupos && _grupos[i]; if (!g) return; g.verTodas = true; renderResultados(); _irAGrupo(i, true); };
+  window._waVerMenos = (i) => { const g = _grupos && _grupos[i]; if (!g) return; g.verTodas = false; renderResultados(); _irAGrupo(i); };
+  // Desde el teclado: despliega / achica sin perder la tarjeta marcada (si queda visible)
+  function _verTodasTeclado(i, todas){
+    const g = _grupos && _grupos[i]; if (!g || g.verTodas === todas) return;
+    const prevSku = (typeof _navIdxSeleccionado !== 'undefined' && _navIdxSeleccionado >= 0) ? (_navTarjetas()[_navIdxSeleccionado] || {}).dataset?.sku : null;
+    const prevGrupo = _grupoDelTeclado();
+    g.verTodas = todas;
+    _grupoActual = i;
+    renderResultados();
+    _pintarGrupoActual();
+    const r = _rangos[i];
+    let idx = -1;
+    if (prevSku && prevGrupo === i && r) {
+      for (let k = r.desde; k <= r.hasta; k++) if ((_navTarjetas()[k] || {}).dataset?.sku === prevSku) { idx = k; break; }
+    }
+    if (idx < 0 && r && r.hasta >= r.desde) idx = r.desde;
+    if (idx >= 0) _navSeleccionar(idx);
+  }
+  window._waMarcarGrupo = (i) => { if (_grupoActual !== i) { _grupoActual = i; _pintarGrupoActual(); } };
+  function _pintarGrupoActual(){
+    document.querySelectorAll('#resultados .wa-grupo-head').forEach(h => {
+      const on = +h.dataset.waGrupo === _grupoActual;
+      h.style.borderColor = on ? 'var(--blue)' : 'var(--border)';
+      h.style.boxShadow = on ? '0 0 0 3px rgba(2,132,199,.18)' : '';
+    });
+  }
+
+  // ── Buscar dentro de un grupo ──
+  let _tBusq = null, _busqPendiente = null;
+  function _correrBusqueda(i, v){
+    const g = _grupos && _grupos[i]; if (!g) return;
+    const r = _opcionesDe(v.trim() ? v : g.resto);
+    // lo que ya está elegido en este grupo sigue visible (al final), para poder sacarlo
+    const yaElegidos = _elegidosDe(i).filter(sku => !r.some(o => o.sku === sku)).map(sku => ({ sku, score: 1 }));
+    g.opciones = [...r, ...yaElegidos];
+    g.verTodas = false;
+    renderResultados();
+    const inp = document.querySelector(`#resultados [data-wa-busq="${i}"]`);
+    if (inp) { inp.focus({ preventScroll: true }); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  }
+  window._waBuscarEnGrupo = (i, v) => {
+    const g = _grupos && _grupos[i]; if (!g) return;
+    g.busqueda = v;
+    clearTimeout(_tBusq);
+    _busqPendiente = { i, v };
+    _tBusq = setTimeout(() => { _busqPendiente = null; _correrBusqueda(i, v); }, 220);
+  };
+  function _terminarBusquedaPendiente(){
+    if (!_busqPendiente) return;
+    clearTimeout(_tBusq);
+    const { i, v } = _busqPendiente; _busqPendiente = null;
+    _correrBusqueda(i, v);
+  }
+  // Enter en el buscador del grupo: agrega el primer resultado que todavía no esté en el pedido
+  function _agregarPrimeroDelGrupo(i){
+    _terminarBusquedaPendiente();
+    const g = _grupos && _grupos[i]; if (!g) return;
+    const sku = _opcionesOrdenadas(g).find(s => !carrito.has(s));
+    if (!sku) return;
+    _skuGrupo.set(sku, i);
+    carrito.set(sku, g.qty || 1);
+    if (typeof _actualizarTarjetaProducto === 'function') _actualizarTarjetaProducto(sku);
+    renderCarrito();
+  }
+
+  // ── Tab: ir al grupo siguiente / anterior y pararse en su primera tarjeta ──
+  function _grupoDeTarjeta(idx){ return _rangos.findIndex(r => idx >= r.desde && idx <= r.hasta); }
+  function _grupoDelTeclado(){
+    const el = document.activeElement;
+    if (el && el.dataset && el.dataset.waBusq != null) return +el.dataset.waBusq;
+    if (typeof _navIdxSeleccionado !== 'undefined' && _navIdxSeleccionado >= 0) {
+      const g = _grupoDeTarjeta(_navIdxSeleccionado);
+      if (g >= 0) return g;
+    }
+    return _grupoActual;
+  }
+  function _irAGrupo(i, sinScroll){
+    if (!_grupos || !_grupos.length) return;
+    if (i < 0) i = _grupos.length - 1;
+    if (i >= _grupos.length) i = 0;
+    _grupoActual = i;
+    _pintarGrupoActual();
+    const head = document.querySelector(`#resultados .wa-grupo-head[data-wa-grupo="${i}"]`);
+    if (head && !sinScroll) head.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const r = _rangos[i];
+    if (document.activeElement && document.activeElement !== document.body && document.activeElement.blur) document.activeElement.blur();
+    if (r && r.hasta >= r.desde && typeof _navSeleccionar === 'function') {
+      _navSeleccionar(r.desde);
+      if (head && !sinScroll) setTimeout(() => head.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+    } else {
+      const inp = document.querySelector(`#resultados [data-wa-busq="${i}"]`);
+      if (inp) inp.focus({ preventScroll: true });
+    }
+  }
+
+  // Flechas en modo WhatsApp: los grupos cortan la grilla en bloques, así que ↑/↓ buscan la tarjeta
+  // que está visualmente arriba/abajo (en vez de sumar "una fila" de columnas). Lo usa la navegación
+  // del catálogo; devuelve null si el modo no está activo.
+  window._waNavVecino = (idx, key) => {
+    if (!_modo || !_grupos) return null;
+    const cards = typeof _navTarjetas === 'function' ? _navTarjetas() : [];
+    if (!cards.length) return null;
+    if (key === 'ArrowRight') return Math.min(idx + 1, cards.length - 1);
+    if (key === 'ArrowLeft') return Math.max(idx - 1, 0);
+    const cur = cards[idx] && cards[idx].getBoundingClientRect();
+    if (!cur) return 0;
+    const cx = cur.left + cur.width / 2;
+    const abajo = key === 'ArrowDown';
+    let mejorTop = null, mejor = null, mejorDx = Infinity;
+    cards.forEach((c, k) => {
+      const r = c.getBoundingClientRect();
+      const ok = abajo ? r.top > cur.top + 4 : r.top < cur.top - 4;
+      if (!ok) return;
+      if (mejorTop === null || (abajo ? r.top < mejorTop - 4 : r.top > mejorTop + 4)) { mejorTop = r.top; mejor = k; mejorDx = Math.abs(r.left + r.width / 2 - cx); }
+      else if (Math.abs(r.top - mejorTop) <= 4) { const dx = Math.abs(r.left + r.width / 2 - cx); if (dx < mejorDx) { mejor = k; mejorDx = dx; } }
+    });
+    return mejor === null ? idx : mejor;
+  };
+
+  // ── Teclado del modo (en "captura", antes que los atajos del catálogo) ──
+  function _hayVentanaAbierta(){
+    return Array.from(document.querySelectorAll('.pwfin-backdrop, #admin-login-backdrop'))
+      .some(x => x.offsetParent !== null || getComputedStyle(x).position === 'fixed' && getComputedStyle(x).display !== 'none');
+  }
+  window.addEventListener('keydown', (e) => {
+    if (!_modo || e.altKey) return;
+    const el = document.activeElement;
+    const tag = (el && el.tagName) || '';
+    const esTexto = el && el.id === 'wa-texto';
+    const busq = el && el.dataset && el.dataset.waBusq != null ? +el.dataset.waBusq : null;
+    // Ctrl + Enter = interpretar el mensaje (desde cualquier lado de la página; en Mac también ⌘ + Enter)
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      if (!esTexto && _hayVentanaAbierta()) return;
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      window._waInterpretarTexto();
+      return;
+    }
+    if (e.metaKey) return;
+    if (_hayVentanaAbierta()) return; // hay una ventana abierta encima
+    // Shift + ↓ = ver todas las opciones del grupo actual · Shift + ↑ = volver a ver solo las primeras
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.shiftKey && !e.ctrlKey && !esTexto && _grupos) {
+      let i = _grupoDelTeclado(); if (i < 0) i = 0;
+      e.preventDefault(); e.stopPropagation();
+      _verTodasTeclado(i, e.key === 'ArrowDown');
+      return;
+    }
+    // Tab no se toca: sigue funcionando como siempre en el catálogo (abre el pedido en pantalla completa)
+    if (esTexto) return; // en el recuadro del mensaje todas las teclas funcionan normal
+    if (busq !== null) {
+      // Shift + Retroceso: vacía SOLO este buscador del grupo (Retroceso solo borra una letra, normal)
+      if (e.key === 'Backspace' && e.shiftKey && !e.ctrlKey) {
+        e.preventDefault(); e.stopPropagation();
+        el.value = '';
+        window._waBuscarEnGrupo(busq, '');
+        return;
+      }
+      if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); _agregarPrimeroDelGrupo(busq); return; }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault(); e.stopPropagation();
+        _terminarBusquedaPendiente();
+        const r = _rangos[busq];
+        if (r && r.hasta >= r.desde) { el.blur(); _navSeleccionar(r.desde); }
+        return;
+      }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); el.blur(); return; }
+      return;
+    }
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (!_grupos) return;
+    // Retroceso / Shift + Retroceso fuera de un campo: borran SOLO en el buscador del grupo donde
+    // está parado el teclado (una letra / todo). Nunca van al recuadro con el mensaje del cliente.
+    if (e.key === 'Backspace' && !e.ctrlKey) {
+      e.preventDefault(); e.stopPropagation();
+      let i = _grupoDelTeclado(); if (i < 0) return;
+      const g = _grupos[i]; if (!g || !(g.busqueda || '').length) return;
+      const nuevo = e.shiftKey ? '' : g.busqueda.slice(0, -1);
+      const inp = document.querySelector(`#resultados [data-wa-busq="${i}"]`);
+      if (inp) { inp.value = nuevo; inp.focus({ preventScroll: true }); inp.setSelectionRange(nuevo.length, nuevo.length); }
+      window._waBuscarEnGrupo(i, nuevo);
+      return;
+    }
+    // Tipear = buscar dentro del grupo donde está parado el teclado
+    if (!e.ctrlKey && e.key.length === 1 && e.key.trim()) {
+      e.preventDefault(); e.stopPropagation();
+      let i = _grupoDelTeclado(); if (i < 0) i = 0;
+      const g = _grupos[i]; if (!g) return;
+      _grupoActual = i;
+      const inp = document.querySelector(`#resultados [data-wa-busq="${i}"]`);
+      if (!inp) return;
+      inp.value = (g.busqueda || '') + e.key;
+      inp.focus({ preventScroll: true });
+      inp.setSelectionRange(inp.value.length, inp.value.length);
+      _pintarGrupoActual();
+      window._waBuscarEnGrupo(i, inp.value);
+    }
+  }, true);
+
+  // Al tocar una tarjeta con el mouse, ese pasa a ser el grupo actual (para tipear / borrar)
+  document.addEventListener('click', (e) => {
+    if (!_modo || !_grupos) return;
+    const card = e.target.closest && e.target.closest('#resultados > .prod-card, #resultados > .prod-row');
+    if (!card) return;
+    const idx = (typeof _navTarjetas === 'function' ? _navTarjetas() : []).indexOf(card);
+    const g = _grupoDeTarjeta(idx);
+    if (g >= 0 && g !== _grupoActual) { _grupoActual = g; _pintarGrupoActual(); }
+    // si había una tarjeta marcada con el teclado en otro lado, la marca pasa a la tocada
+    if (idx >= 0 && typeof _navIdxSeleccionado !== 'undefined' && _navIdxSeleccionado >= 0 && _navIdxSeleccionado !== idx && typeof _navSeleccionar === 'function') _navSeleccionar(idx);
+  }, true);
+})();
+</script>
+
 <!-- ══ PWA: registrar service worker + modal "Instalar app" ══ -->
 <script>
 // Solo admin: cuántas fotos ya quedaron guardadas en este dispositivo para usar sin internet
@@ -8125,6 +8912,10 @@ document.addEventListener('keydown', (e) => {
   e.preventDefault();
   if (_navIdxSeleccionado < 0) { _navSeleccionar(0); return; }
 
+  if (typeof _waNavVecino === 'function') {
+    const v = _waNavVecino(_navIdxSeleccionado, e.key);
+    if (v !== null) { _navSeleccionar(v); return; }
+  }
   const cols = _navColumnas();
   let nuevo = _navIdxSeleccionado;
   if (e.key === 'ArrowRight') nuevo += 1;
