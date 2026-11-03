@@ -8165,8 +8165,13 @@ function _aplicarCatalogoEnVivo(data){
     _grupos.forEach(g => {
       g.generico = g.estado === 'duda' && !g.recordado;
       if (g.generico) {
+        // el más barato con stock + sus otras presentaciones (mismo producto en otro tamaño),
+        // salvo que el cliente haya dicho el tamaño (en ese caso las otras ya no coinciden igual)
         const sku = _elegirMasBarato(g);
-        if (sku) g.elegidos = new Map([[sku, g.qty]]);
+        if (sku) {
+          const lista = [sku, ..._otrasPresentaciones(g, sku)].sort((a, b) => _precioOrden(a) - _precioOrden(b));
+          g.elegidos = new Map(lista.map(s2 => [s2, g.qty]));
+        }
       }
       g.inicial = Array.from(g.elegidos.keys()); g.abierta = true; g.verTodas = false;
     });
@@ -8217,6 +8222,30 @@ function _aplicarCatalogoEnVivo(data){
       .filter(sku => { const it = catalogoBySku.get(sku); return it && !it.st && precioDe(it) > 0; });
     if (!cands.length) return null;
     return cands.sort((a, b) => _precioOrden(a) - _precioOrden(b))[0];
+  }
+
+  // Nombre "base" de un producto, sin la presentación (x 125g, x 1kg, x 500ml, x 1L, x100…).
+  // Si dos productos tienen la misma base, son el mismo producto en distinto tamaño.
+  const _ENVASE_SUELTO = new Set(['u', 'un', 'unid', 'unids', 'unidad', 'unidades', 'ud', 'uds']);
+  function _baseNombre(n){
+    const t = _tokens(n), out = [];
+    const esMedida = x => _UNIDADES_MEDIDA.has(x || '') || _ENVASE_SUELTO.has(x || '');
+    for (let k = 0; k < t.length; k++) {
+      const a = t[k], b = t[k + 1];
+      if (a === 'x' && /^\d+$/.test(b || '')) { k++; if (esMedida(t[k + 1])) k++; continue; }
+      if (/^\d+$/.test(a) && esMedida(b)) { k++; continue; }
+      out.push(a);
+    }
+    return out.sort().join(' ');
+  }
+  // Las otras presentaciones (con stock y precio) del mismo producto, entre las que coinciden igual de bien
+  function _otrasPresentaciones(g, sku){
+    const it0 = catalogoBySku.get(sku);
+    if (!it0 || !g.opciones.length) return [];
+    const top = g.opciones[0].score, base = _baseNombre(it0.n);
+    return g.opciones.filter(o => o.sku !== sku && o.score >= top - 0.05).map(o => o.sku)
+      .filter(s2 => { const it = catalogoBySku.get(s2); return it && !it.st && precioDe(it) > 0 && _baseNombre(it.n) === base; })
+      .filter((s2, k, arr) => arr.indexOf(s2) === k);
   }
 
   // ── Estado de un grupo (se recalcula en vivo según lo que hay en "Tu pedido") ──
