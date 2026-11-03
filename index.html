@@ -421,6 +421,12 @@
        En notebooks más chicas (hasta 1599px) 3 columnas, que se achican un poco si no entran,
        para no salirse del recuadro. La pantalla dividida (menos de 1300px) no cambia. */
     .desktop-search-cart #card-buscar .resultados:not(.vista-lista){grid-template-columns:repeat(3,minmax(0,230px));justify-content:center;}
+    /* "Bandeja" gris suave (mismo estilo y ancho que el recuadro de filtros de arriba) detrás de
+       la grilla: el espacio que queda a los costados de las tarjetas centradas pasa a ser parte
+       del diseño en vez de un hueco blanco. Las tarjetas van en blanco para que resalten sobre el
+       gris (las que están en el pedido o agotadas mantienen su color celeste / rojizo). */
+    .desktop-search-cart #card-buscar .resultados:not(.vista-lista){background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:12px;}
+    .desktop-search-cart #card-buscar .resultados:not(.vista-lista) > .prod-card:not(.prod-card-en-carrito):not(.prod-card-agotado){background:var(--panel);}
   }
   @media (min-width:1600px){
     .desktop-search-cart #card-buscar .resultados:not(.vista-lista){grid-template-columns:repeat(4,minmax(0,230px));}
