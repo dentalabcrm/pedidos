@@ -4387,6 +4387,7 @@ const ADHESIVO_COMPOSITE_SKUS = ['1542','1543','1545','1546','1548','1715','2125
 //    no filtran la lista (ej: "attach" en "kit para ball attach").
 //    Para sumar uno nuevo: agregar un objeto acá, no hace falta tocar el resto del código. ──
 const _ALT_KIT = ['kits'];
+const _ALT_NAVECILLA = ['navecillas', 'nabecilla', 'nabecillas', 'navesilla', 'navesillas', 'nabesilla', 'nabesillas'];
 const _ALT_BALL = ['bal', 'balls', 'bola', 'bolas', 'bolita', 'bolitas', 'ballattach', 'ballatach', 'ballattache', 'ballatache', 'ballattached'];
 const _ALT_BARRA = ['barras', 'rielera', 'rieleras', 'riel', 'rieles'];
 const _ALT_RIELERA = ['rieleras'];
@@ -4520,11 +4521,16 @@ const GRUPOS_ESPECIALES = [
     requiereAlt: { cazoleta: ['cazoletas', 'casoleta', 'casoletas'], metalica: ['metalicas', 'metal', 'metalico', 'metalicos', 'teflon', 'teflones', 'attache', 'attaches', 'atache', 'ataches', 'attach', 'atach'] },
     opcionales: _OPC_ATTACHE,
     get skus(){ return _skusAttache(['31170-18', '31170-19', '31170-21', '31170-23', '31170-25'], /^attache\s+cm-/); } },
-  // "Navecilla (para horno)" → Manta Cerámica p/ Horno. Si algún día hay un producto que se llame
-  // "Navecilla…" también aparece acá. ("horno" es opcional: si viene escrito no filtra la lista.)
-  { requiere: ['navecilla'], requiereAlt: { navecilla: ['navecillas', 'nabecilla', 'nabecillas', 'navesilla', 'navesillas', 'nabesilla', 'nabesillas'] },
+  // "Navecilla (para horno)" → Base Nido de Abeja c/ Pines Cerámicos / Metálicos. Si algún día hay un
+  // producto que se llame "Navecilla…" también aparece acá. ("horno" es opcional: si viene escrito no filtra.)
+  // "Navecilla cerámica / metálica" eligen una sola de las dos (el nombre dice "Cerámicos" / "Metálicos")
+  { requiere: ['navecilla', 'ceramica'], requiereAlt: { navecilla: _ALT_NAVECILLA, ceramica: ['ceramicas', 'ceramico', 'ceramicos'] },
+    opcionales: ['horno', 'hornos', 'pin', 'pines'], skus: ['31692'] },
+  { requiere: ['navecilla', 'metalica'], requiereAlt: { navecilla: _ALT_NAVECILLA, metalica: ['metalicas', 'metalico', 'metalicos', 'metal'] },
+    opcionales: ['horno', 'hornos', 'pin', 'pines'], skus: ['31690'] },
+  { requiere: ['navecilla'], requiereAlt: { navecilla: _ALT_NAVECILLA },
     opcionales: ['horno', 'hornos'],
-    get skus(){ return _skusAttache(['65400'], /^manta\s+ceramica\b|navecilla/); } },
+    get skus(){ return _skusAttache(['31692', '31690'], /^base\s+nido\s+de\s+abeja\b|navecilla/); } },
 ];
 function _skusPeliculasRx(){
   return (catalogo || []).filter(it => /^peliculas?\s+radiograficas?\b/.test(String(it.n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())).map(it => it.s);
