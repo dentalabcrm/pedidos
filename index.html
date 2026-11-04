@@ -4443,6 +4443,12 @@ const GRUPOS_ESPECIALES = [
     get skus(){ return _skusPeliculasRx(); } },
   { requiere: ['radiografias'], requiereAlt: { radiografias: ['radiografia'] },
     get skus(){ return _skusPeliculasRx(); } },
+  // "Placa(s) (de/para) blanqueamiento" → Termoplaca .040"/1mm Flexible
+  { requiere: ['placa', 'blanqueamiento'], requiereAlt: { placa: ['placas'], blanqueamiento: ['blanqueamientos', 'blanquear', 'blanqueo'] },
+    skus: ['32792', '32792-F', '32792-f', '32834', '32796', '32796-F', '32796-f', '32802', '32802-F', '32802-f', '32795', '32795-F', '32795-f'] },
+  // "Placa(s) (de/para) bruxismo" → Termoplaca .080"/2mm Rígida
+  { requiere: ['placa', 'bruxismo'], requiereAlt: { placa: ['placas'] },
+    skus: ['32830', '32791', '32791-F', '32791-f'] },
   // "Godiva" → Compuesto de Modelar
   { requiere: ['godiva'], skus: ['288-V', '286-F', '286', '285-M', '285-MF', '285-VF', '287-MAR', '287-VER', '288-M', '289', '285-V'] },
 ];
@@ -5000,7 +5006,8 @@ window.agregarTodosLosEnStock = () => {
     if (typeof showToast === 'function') showToast(`✅ ${candidatos.length} producto${candidatos.length === 1 ? '' : 's'} agregado${candidatos.length === 1 ? '' : 's'} al pedido` + (saltados ? ` · ${saltados} salteado${saltados === 1 ? '' : 's'} (agotados, sin precio o ya en el pedido)` : ''), 'ok');
   });
 };
-// Shift + clic izquierdo EN CUALQUIER PARTE de la página = lo mismo que el botón, sin preguntar
+// Shift + clic izquierdo EN CUALQUIER PARTE de la página = agrega lo que marcaría "Pedido de WhatsApp"
+// para lo que está escrito en el buscador (antes era lo mismo que el botón "Agregar todos los que hay en stock")
 // (solo admin). Se ignora sobre campos de texto/desplegables, con una ventana abierta o con un
 // modo de selección de fotos / asignar manual activo (que usan su propio clic).
 function _shiftClickTodosAplica(e) {
@@ -5012,6 +5019,7 @@ function _shiftClickTodosAplica(e) {
   if (t.closest('input, select, textarea, [contenteditable="true"]')) return false;
   if (t.closest('.pwfin-backdrop, #zoom-prod-backdrop, #pedido-full-backdrop, #presu-backdrop, #admin-login-backdrop, #avisarme-backdrop, #gestor-fotos-backdrop, #historial-backdrop, #instalar-backdrop, #qr-backdrop')) return false;
   if (!document.getElementById('resultados')) return false;
+  if (typeof _waModoActivo === 'function' && _waModoActivo()) return false; // en el modo WhatsApp ya está todo marcado
   return true;
 }
 // Tecla Esc = cerrar la ventana de arriba (lo mismo que su ✕): la pantalla completa de un
@@ -5035,7 +5043,9 @@ document.addEventListener('click', e => {
   if (!_shiftClickTodosAplica(e)) return;
   e.preventDefault();
   e.stopPropagation();
-  agregarTodosLosEnStock();
+  // Shift + clic: agrega lo que marcaría el modo "Pedido de WhatsApp" para lo que está escrito en el
+  // buscador (mismas reglas). El botón "Agregar todos los que hay en stock" sigue haciendo lo de antes.
+  if (typeof _waAgregarComoWhatsapp === 'function') _waAgregarComoWhatsapp(); else agregarTodosLosEnStock();
 }, true);
 
 window.agregarAlCarrito = (sku) => {
@@ -6501,7 +6511,7 @@ function renderPrincipal(){
             <label class="chk-ofertas"><input type="checkbox" id="chk-stock" onchange="onFiltroChange()"> Solo en stock</label>
             ${_frecuentesSkusOrdenados().length ? `<label class="chk-ofertas"><input type="checkbox" id="chk-frecuentes" onchange="onFiltroChange()"> ⭐ Solo lo que pedís seguido</label>` : ''}
             ${esAdminCatalogo() ? `<button id="btn-modo-seleccion-fotos" onclick="toggleModoSeleccionFotos()" style="background:${_modoSeleccionFotos ? '#dc2626' : 'var(--panel2)'};color:${_modoSeleccionFotos ? '#fff' : 'var(--text)'};border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">${_modoSeleccionFotos ? '✕ Cancelar selección' : '☑️ Seleccionar fotos para borrar'}</button>` : ''}
-            ${esAdminCatalogo() ? `<button id="btn-agregar-todos-stock" onclick="agregarTodosLosEnStock()" title="Agrega 1 unidad de cada producto con stock o stock a confirmar de lo que se ve ahora (atajo: Shift + clic en cualquier producto)" style="background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">✅ Agregar todos los que hay en stock <span style="font-weight:600;color:var(--text3);font-size:11px;">(Shift + clic)</span></button>` : ''}
+            ${esAdminCatalogo() ? `<button id="btn-agregar-todos-stock" onclick="agregarTodosLosEnStock()" title="Agrega 1 unidad de cada producto con stock o stock a confirmar de lo que se ve ahora" style="background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">✅ Agregar todos los que hay en stock</button>` : ''}
             ${esAdminCatalogo() ? `<label id="lbl-modo-wa" title="Pegá el mensaje de un cliente en el buscador y se arma el pedido solo, agrupado por lo que pidió" style="display:inline-flex;align-items:center;gap:7px;background:#dcfce7;color:#15803d;border:1px solid #86efac;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;"><input type="checkbox" id="chk-modo-wa" ${(typeof _waModoActivo === 'function' && _waModoActivo()) ? 'checked' : ''} onchange="_waSetModo(this.checked)" style="width:15px;height:15px;cursor:pointer;"> 📋 Pedido de WhatsApp</label>` : ''}
             ${esAdminCatalogo() ? `<button id="btn-modo-agregar-fotos" onclick="toggleModoAgregarFotos()" style="background:${_modoAgregarFotos ? '#0ea968' : 'var(--panel2)'};color:${_modoAgregarFotos ? '#fff' : 'var(--text)'};border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">${_modoAgregarFotos ? '✕ Cancelar selección' : '☑️ Seleccionar productos para agregar fotos'}</button>` : ''}
           </div>
@@ -8838,6 +8848,27 @@ function _aplicarCatalogoEnVivo(data){
     carrito.set(sku, 1);
     requestAnimationFrame(() => { _actualizarTarjetaProducto(sku); renderCarrito(); requestAnimationFrame(enfocar); });
   }
+
+  // ── Shift + clic en el catálogo normal: agrega al pedido lo que marcaría este modo para lo que está
+  //    escrito en el buscador (primera palabra, atajos, stock ≥ 5 / a confirmar con Depósito, padre/hijo) ──
+  window._waAgregarComoWhatsapp = () => {
+    if (!esAdminCatalogo()) return;
+    // Sin carteles: lo hace directamente (no hay avisos emergentes que haya que cerrar)
+    const texto = String(typeof busqueda === 'string' ? busqueda : '').trim();
+    if (!texto) return;
+    const lineas = _interpretar(texto);
+    lineas.forEach(_prepararGrupo);
+    const skus = [];
+    lineas.forEach(g => g.elegidos.forEach((_, sku) => { if (catalogoBySku.has(sku) && !skus.includes(sku)) skus.push(sku); }));
+    const nuevos = skus.filter(sku => !carrito.has(sku));
+    if (!nuevos.length) return;
+    nuevos.forEach(sku => carrito.set(sku, 1));
+    if (typeof _guardarCarritoLS === 'function') _guardarCarritoLS();
+    requestAnimationFrame(() => {
+      nuevos.forEach(sku => { if (typeof _actualizarTarjetaProducto === 'function') _actualizarTarjetaProducto(sku); });
+      renderCarrito();
+    });
+  };
 
   // ── Teclado del modo (en "captura", antes que los atajos del catálogo) ──
   function _hayVentanaAbierta(){
