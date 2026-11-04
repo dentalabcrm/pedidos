@@ -4396,7 +4396,7 @@ const _ALT_GOTA = ['gotas', 'gotita', 'gotitas'];
 const _ALT_VERTICAL = ['verticales', 'vert'];
 const _OPC_ATTACHE = ['attach', 'attachs', 'atach', 'attache', 'atache', 'attaches', 'ataches', 'attached', 'atached', 'attachment', 'atachment', 'attachement',
   'perno', 'pernos', 'repuesto', 'repuestos', 'rep', 'repu'];
-// SKU fijos + todo producto cuyo nombre EMPIEZA con ese modelo: "attache ar-19v" no debe agarrar
+// SKU fijos + todo producto cuyo nombre coincide con el patrón. En attaches el patrón pide que EMPIECE con el modelo: "attache ar-19v" no debe agarrar
 // el "Attache HE-1810V Hembra p/ AR-19V", que lo nombra más adelante.
 function _skusAttache(fijos, patron){
   const porNombre = (catalogo || []).filter(it => {
@@ -4520,6 +4520,11 @@ const GRUPOS_ESPECIALES = [
     requiereAlt: { cazoleta: ['cazoletas', 'casoleta', 'casoletas'], metalica: ['metalicas', 'metal', 'metalico', 'metalicos', 'teflon', 'teflones', 'attache', 'attaches', 'atache', 'ataches', 'attach', 'atach'] },
     opcionales: _OPC_ATTACHE,
     get skus(){ return _skusAttache(['31170-18', '31170-19', '31170-21', '31170-23', '31170-25'], /^attache\s+cm-/); } },
+  // "Navecilla (para horno)" → Manta Cerámica p/ Horno. Si algún día hay un producto que se llame
+  // "Navecilla…" también aparece acá. ("horno" es opcional: si viene escrito no filtra la lista.)
+  { requiere: ['navecilla'], requiereAlt: { navecilla: ['navecillas', 'nabecilla', 'nabecillas', 'navesilla', 'navesillas', 'nabesilla', 'nabesillas'] },
+    opcionales: ['horno', 'hornos'],
+    get skus(){ return _skusAttache(['65400'], /^manta\s+ceramica\b|navecilla/); } },
 ];
 function _skusPeliculasRx(){
   return (catalogo || []).filter(it => /^peliculas?\s+radiograficas?\b/.test(String(it.n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())).map(it => it.s);
