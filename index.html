@@ -4388,7 +4388,50 @@ const GRUPOS_ESPECIALES = [
   { requiere: ['acrilico', 'rosa'], requiereAlt: { acrilico: ['polimero'] }, skus: ACRILICO_ROSA_TODOS_SKUS },
   { requiere: ['acrilico', 'cristal'], requiereAlt: { acrilico: ['polimero'], cristal: ['transparente'] }, skus: ACRILICO_CRISTAL_SKUS },
   { requiere: ['adhesivo', 'composite'], skus: ADHESIVO_COMPOSITE_SKUS },
+  // "Triad gel" → Composite Resinlay TDV Gel p/ Modelos y Fundición (va antes que las placas triad)
+  { requiere: ['triad', 'gel'], skus: ['31557'] },
+  // Placas de fotocurado: "placa(s) triad", "placa(s) (de) fotocurado", "placas de foto"
+  { requiere: ['placa', 'triad'], requiereAlt: { placa: ['placas'], triad: ['fotocurado', 'foto'] }, skus: ['32806', '32806-F', '32809', '32809-F', '32805'] },
+  // "Pasta provisoria" / "Pasta provi" → Material de Obturación Temporario
+  // (el 1142-F se pone en mayúscula y minúscula por las dudas: los SKU distinguen entre las dos)
+  { requiere: ['pasta', 'provisoria'], requiereAlt: { pasta: ['pastas'], provisoria: ['provi', 'provisorias', 'provisorio', 'provisorios'] }, skus: ['1139', '1142-F', '1142-f', '1144', '1145', '1142', '1141'] },
+  // "Placa(s) (de/para) protector (bucal)" → Termoplacas flexibles .120"/3mm, .150" y .150"/3.8mm
+  // ("bucal" es opcional: se lista como alternativa para que no filtre la lista si viene escrito)
+  { requiere: ['placa', 'protector'], requiereAlt: { placa: ['placas'], protector: ['protectores', 'bucal', 'bucales'] },
+    skus: ['32794', '32794-F', '32794-f', '32781-AMA', '32781-AZU', '32781-BLA', '32781-CEL', '32781-FUC', '32781-NEG', '32781-TUR', '32781-VEF', '32781-VER', '32781-VIO', '32781-ROJ', '32820-AZU', '32820-FAZ', '32820-ROJ', '32820-FRO'] },
+  // "Polímero auto / autocurado / autocurable (para) provisorio(s)" → todos los "Polímero Autocurable…" y
+  // "Polímero Auto…" del catálogo (también los que se agreguen después), menos los de ortodoncia.
+  { requiere: ['polimero', 'auto', 'provisorio'],
+    requiereAlt: { polimero: ['polimeros', 'acrilico', 'acrilicos'], auto: ['autocurado', 'autocurable', 'autocurables', 'autocurados'], provisorio: ['provisorios', 'provisoria', 'provisorias', 'provi', 'provis'] },
+    get skus(){
+      return (catalogo || []).filter(it => {
+        const n = String(it.n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        return /^polimeros?\s+auto(curable|curado)?\b/.test(n) && !/ortodoncia/.test(n);
+      }).map(it => it.s);
+    } },
+  // "Polímero termo / termocurado / termocurable (para) provisorio(s)" → todos los "Polímero Termocurable…"
+  // y "Polímero Termo…" del catálogo (también los que se agreguen después), menos los de ortodoncia.
+  { requiere: ['polimero', 'termo', 'provisorio'],
+    requiereAlt: { polimero: ['polimeros', 'acrilico', 'acrilicos'], termo: ['termocurado', 'termocurable', 'termocurables', 'termocurados'], provisorio: ['provisorios', 'provisoria', 'provisorias', 'provi', 'provis'] },
+    get skus(){
+      return (catalogo || []).filter(it => {
+        const n = String(it.n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        return /^polimeros?\s+termo(curable|curado)?\b/.test(n) && !/ortodoncia/.test(n);
+      }).map(it => it.s);
+    } },
+  // "Películas rx" / "películas dentales" / "radiografías" → todos los "Películas Radiográficas…" del
+  // catálogo (también los que se agreguen después). Van en dos entradas porque "radiografías" sola
+  // alcanza y "películas" necesita la segunda palabra.
+  { requiere: ['peliculas', 'rx'], requiereAlt: { peliculas: ['pelicula', 'pelis'], rx: ['dentales', 'dental', 'radiograficas', 'radiografica', 'radiologicas'] },
+    get skus(){ return _skusPeliculasRx(); } },
+  { requiere: ['radiografias'], requiereAlt: { radiografias: ['radiografia'] },
+    get skus(){ return _skusPeliculasRx(); } },
+  // "Godiva" → Compuesto de Modelar
+  { requiere: ['godiva'], skus: ['288-V', '286-F', '286', '285-M', '285-MF', '285-VF', '287-MAR', '287-VER', '288-M', '289', '285-V'] },
 ];
+function _skusPeliculasRx(){
+  return (catalogo || []).filter(it => /^peliculas?\s+radiograficas?\b/.test(String(it.n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())).map(it => it.s);
+}
 const _STOPWORDS_BUSQUEDA = new Set(['para','de','del','la','el','los','las','p','y','o','con','sin']);
 
 // Familias de fresas/piedras/puntas cuyo SKU empieza con estos prefijos: cuando aparecen
@@ -7824,8 +7867,10 @@ function _aplicarCatalogoEnVivo(data){
 //  Lo que se corrige a mano se recuerda en este dispositivo para la próxima vez.
 // ══════════════════════════════════════════════════════════════════════════════
 (function(){
-  const LS_APRENDIDO = 'dl_wa_aprendido_v2'; // v2: se descarta la memoria vieja, que había guardado productos de más
-  try { localStorage.removeItem('dl_wa_aprendido_v1'); } catch (e) {}
+  // v3: la memoria ahora solo SUMA lo que se agregó a mano (no reemplaza la búsqueda). Se descarta la
+  // memoria de las versiones anteriores, que podía dejar un renglón "trabado" con una elección vieja.
+  const LS_APRENDIDO = 'dl_wa_aprendido_v3';
+  try { localStorage.removeItem('dl_wa_aprendido_v1'); localStorage.removeItem('dl_wa_aprendido_v2'); } catch (e) {}
   const LS_TEXTO = 'dl_wa_texto_v1';
 
   // ── Normalización ──
@@ -7836,6 +7881,15 @@ function _aplicarCatalogoEnVivo(data){
       .replace(/(?:\bn\s*[°º]|\bnro\.?|\bnum(?:ero)?\.?|#)\s*(\d+)/g, ' $1 ')
       .replace(/\bn(\d{1,3})\b/g, ' $1 ')
       .replace(/[°º]/g, ' ')
+      // Decimales como UN solo número: "0.8" = "0,8" = "0.80" = ".8" (antes se partían en "0" y "8",
+      // y el "0" coincidía con cualquier "0.5mm" o "0.75mm"). Se guardan como "0d8".
+      // Medidas con punto adelante y dos cifras, como se dicen en el mostrador: ".07" = 0,7 · ".10" = 1,0 ·
+      // ".12" = 1,2 (de .02 a .12). Con tres cifras (".080") se resuelve más abajo.
+      .replace(/(^|[^\d.,])[.,]([01])(\d)(?!\d)/g, (mm, p, a, b) => a === '0' ? `${p}0.${b}` : (b <= '2' ? `${p}1.${b}` : mm))
+      .replace(/(^|[^\d])[.,](\d+)/g, '$10.$2')
+      .replace(/(\d+)[.,](\d+)/g, (_, e, d) => { d = d.replace(/0+$/, ''); return d ? `${+e}d${d}` : String(+e); })
+      // "contra angulo", "contra-angulo" y "contraangulo" son lo mismo
+      .replace(/\bcontra[\s-]*angulos?\b/g, 'contraangulo')
       // unidades escritas con palabras: "3 kilos" = "3kg", "500 gramos" = "500g", "1 litro" = "1l"
       .replace(/(\d)\s*(?:kilogramos?|kilos?|kgs)\b/g, '$1 kg').replace(/\b(?:kilogramos?|kilos?|kgs)\b/g, 'kg')
       .replace(/(\d)\s*(?:gramos?|grms?)\b/g, '$1 g').replace(/\b(?:gramos?|grms?)\b/g, 'g')
@@ -7846,7 +7900,23 @@ function _aplicarCatalogoEnVivo(data){
     return _norm(s)
       .replace(/(\d)(mm|ml|cc|grs|gr|g|kg|mts|mt|cm|lts|lt|oz|mg|m|l)\b/g, '$1 $2')   // 25mm → 25 mm, 1kg → 1 kg
       .replace(/[^a-z0-9]+/g, ' ').split(' ').filter(Boolean)
-      .map(t => _ROMANOS[t] || t);   // "tipo III" = "tipo 3"
+      .map(t => _ROMANOS[t] || t)   // "tipo III" = "tipo 3"
+      // Espesores en pulgadas como se los nombra en el mostrador: .080" = "080" = "0.8" (y .040 = 0.4,
+      // .020 = 0.2, .035 = 0.35…). Se agrega el equivalente como palabra extra, sin sacar la original.
+      .flatMap(t => { const a = _aliasNum(t); return a && a !== t ? [t, a] : [t]; });
+  }
+  // Forma "normal" de una medida escrita de otra manera (o null si no es una de esas):
+  //   ".080"/".08" (0d08) → 0d8 · "080" → 0d8 · "08" → 0d8 · "10" → 1 · "11" → 1d1 · "12" → 1d2
+  function _aliasNum(t){
+    let m2 = t.match(/^0d0([1-9])(\d?)$/);
+    if (m2) return '0d' + m2[1] + (m2[2] && m2[2] !== '0' ? m2[2] : '');
+    m2 = t.match(/^0([1-9])(\d)$/);
+    if (m2) return '0d' + m2[1] + (m2[2] !== '0' ? m2[2] : '');
+    m2 = t.match(/^0([1-9])$/);
+    if (m2) return '0d' + m2[1];
+    m2 = t.match(/^1([0-2])$/);
+    if (m2) return m2[1] === '0' ? '1' : '1d' + m2[1];
+    return null;
   }
   const _ROMANOS = { ii: '2', iii: '3', iv: '4', vi: '6', vii: '7', viii: '8', ix: '9' };
   function _stem(w){
@@ -7931,6 +8001,7 @@ function _aplicarCatalogoEnVivo(data){
     ['medium', 'mediano', 'mediana', 'med', 'm'], ['small', 'chico', 'chica', 'pequeno', 'pequena', 's'],
     ['large', 'grande', 'l'], ['xl', 'extragrande'], ['xs', 'extrachico'],
     ['vacio', 'vacuum', 'vac'],
+    ['auto', 'autocurable', 'autocurado', 'autopolimerizable'], ['termo', 'termocurable', 'termocurado', 'termopolimerizable'],
     ['superior', 'arriba', 'sup'], ['inferior', 'abajo', 'inf'], ['adulto', 'adultos'], ['nino', 'ninos', 'infantil', 'pediatrico'],
   ];
   const _UNIDADES_MEDIDA = new Set('mm ml cc g gr grs grm kg mts mt m cm l lt lts oz mg'.split(' '));
@@ -7962,7 +8033,8 @@ function _aplicarCatalogoEnVivo(data){
   // Busca los productos más parecidos a un texto. Devuelve [{ sku, score }] ordenado.
   function _buscar(texto, limite = 8){
     const I = _indice();
-    const qs = _tokens(texto).filter(t => !_RELLENO.has(t) || /\d/.test(t));
+    const qs = _tokens(texto).filter(t => !_RELLENO.has(t) || /\d/.test(t))
+      .map(t => _aliasNum(t) || t).filter((t, k, arr) => arr.indexOf(t) === k);
     if (!qs.length) return [];
     // SKU escrito tal cual (ej: 68626-3)
     const directos = [];
@@ -7976,7 +8048,8 @@ function _aplicarCatalogoEnVivo(data){
     const qInfo = qs.map(q => {
       const parecidos = new Map(); // palabra del catálogo → parecido
       const alternativas = [[q, 1]];
-      I.sinon.forEach(g => { if (g.some(t => _sim(q, t) >= 0.9)) g.forEach(t => { if (t !== q) alternativas.push([t, 0.93]); }); });
+      // un sinónimo vale casi como la palabra exacta (0.98), así 'barbijo' también marca las 'Mascarilla…'
+      I.sinon.forEach(g => { if (g.some(t => _sim(q, t) >= 0.9)) g.forEach(t => { if (t !== q) alternativas.push([t, 0.98]); }); });
       I.vocab.forEach((v, t) => {
         let best = 0;
         for (const [a, f] of alternativas) { const s = _sim(a, t) * f; if (s > best) best = s; }
@@ -8028,7 +8101,8 @@ function _aplicarCatalogoEnVivo(data){
   // ── Separar el mensaje en renglones (un producto por renglón) ──
   function _separar(texto){
     const out = [];
-    String(texto || '').replace(/\r/g, '').split(/\n|;/).forEach(linea => {
+    // "0,8" es un número decimal, no dos productos separados por coma
+    String(texto || '').replace(/\r/g, '').replace(/(\d),(\d)/g, '$1.$2').split(/\n|;/).forEach(linea => {
       // Formato que pega WhatsApp al copiar varios mensajes: "[10:32, 2/11/2026] Juan: ..."
       linea = linea.replace(/^\s*\[[^\]]{4,30}\]\s*[^:]{1,40}:\s*/, '');
       // "2 tazas y 3 hilos" → dos renglones
@@ -8076,7 +8150,9 @@ function _aplicarCatalogoEnVivo(data){
     tomar(new RegExp('\\s(\\d{1,4})\\s*' + _ENVASES + '\\.?\\s*$'), m => +m[1]);
     tomar(/\s[-:=]\s*(\d{1,4})\s*$/, m => +m[1]);
     // "2 cajas de…" ya se sacó; quitar envases sueltos que quedaron al principio
-    s = s.replace(new RegExp('^\\s*' + _ENVASES + '\\b\\.?\\s*(?:de\\s+)?'), ' ');
+    // …pero solo si venía después de una cantidad ("una caja de guantes"): si el mensaje empieza
+    // con "cajas de ortodoncia", "caja" ES el producto y no se toca.
+    if (qty !== null) s = s.replace(new RegExp('^\\s*' + _ENVASES + '\\b\\.?\\s*(?:de\\s+)?'), ' ');
     return { qty: qty || 1, resto: s.trim(), detectada: qty !== null };
   }
 
@@ -8092,30 +8168,85 @@ function _aplicarCatalogoEnVivo(data){
   }
 
   // ── Interpretar el mensaje completo ──
+  // ── Atajos del buscador general, también acá ──
+  // Sinónimos de VARIAS palabras ("pieza de alta" → Turbina, "motor de implantes" → Fisiodispenser…):
+  // la frase se reemplaza por el nombre principal de su grupo antes de buscar.
+  let _frasesCache = null;
+  function _frasesSinonimos(){
+    if (_frasesCache) return _frasesCache;
+    const plano = t => _norm(t).replace(/[^a-z0-9]+/g, ' ').trim();
+    const out = [];
+    (typeof SINONIMOS_RAW !== 'undefined' ? SINONIMOS_RAW : []).forEach(g => {
+      const canon = plano(g[0]);
+      g.forEach(term => { const f = plano(term); if (f.includes(' ') && f !== canon) out.push([f, canon]); });
+    });
+    out.sort((a, b) => b[0].length - a[0].length);
+    return (_frasesCache = out);
+  }
+  function _expandirFrases(txt){
+    let t = ' ' + _norm(txt).replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+    const original = t;
+    for (const [f, c] of _frasesSinonimos()) {
+      if (t.includes(' ' + f + ' ')) t = t.replace(' ' + f + ' ', ' ' + c + ' ');
+    }
+    return t === original ? txt : t.trim();
+  }
+  // Grupos especiales del buscador general (acrílico + rosa, acrílico + cristal, adhesivo + composite):
+  // abren su lista fija de productos; cualquier otra palabra ("auto", "termo"…) filtra dentro de la lista.
+  function _grupoEspecialDe(txt){
+    if (typeof GRUPOS_ESPECIALES === 'undefined') return null;
+    const toks = _tokens(txt).filter(t => !_RELLENO.has(t));
+    const esta = w => toks.find(t => _stem(t) === _stem(w) || _sim(t, w) >= 0.9);
+    for (const grupo of GRUPOS_ESPECIALES) {
+      const usados = new Set();
+      const cumple = grupo.requiere.every(palabra => {
+        const alts = [palabra, ...((grupo.requiereAlt && grupo.requiereAlt[palabra]) || [])];
+        // todas las palabras que coinciden con alguna alternativa cuentan como parte del atajo
+        // (igual que en el buscador general), así no se usan como filtro extra
+        alts.forEach(a => toks.forEach(t => { if (_stem(t) === _stem(a) || _sim(t, a) >= 0.9) usados.add(t); }));
+        return alts.some(esta);
+      });
+      if (!cumple) continue;
+      const resto = toks.filter(t => !usados.has(t));
+      const skus = grupo.skus.filter(sku => {
+        const it = catalogoBySku.get(sku);
+        if (!it) return false;
+        const nToks = _tokens(it.n);
+        return resto.every(q => nToks.some(n => _sim(q, n) >= 0.85));
+      });
+      return { skus };
+    }
+    return null;
+  }
+
   function _interpretar(texto){
     const mem = _aprendido();
     const lineas = [];
     _separar(texto).forEach(orig => {
-      const { qty, resto, detectada } = _cantidad(orig);
+      const cant = _cantidad(orig);
+      const { qty, detectada } = cant;
+      const resto = _expandirFrases(cant.resto);
       const utiles = _tokens(resto).filter(t => !_RELLENO.has(t) || /\d/.test(t));
       if (!utiles.length) return; // saludo, "gracias", etc.
       const memo = mem[_claveTexto(resto)];
       const recordados = (Array.isArray(memo) ? memo : (memo ? [memo] : [])).filter(sku => catalogoBySku.has(sku));
-      let opciones = _opcionesDe(resto);
+      const especial = _grupoEspecialDe(resto);
+      let opciones = especial ? especial.skus.map(sku => ({ sku, score: 1, cob: 1 })) : _opcionesDe(resto);
       let estado;
       const elegidos = new Map();
+      // Lo recordado NO reemplaza la búsqueda: solo se suma después (lo agregado a mano otra vez)
       if (recordados.length) {
-        opciones = [...recordados.map(sku => ({ sku, score: 1 })), ...opciones.filter(o => !recordados.includes(o.sku))];
-        estado = 'ok';
-        recordados.forEach(sku => elegidos.set(sku, qty));
-      } else if (!opciones.length || opciones[0].score < 0.6) {
+        opciones = [...opciones, ...recordados.filter(sku => !opciones.some(o => o.sku === sku)).map(sku => ({ sku, score: 0, cob: 0, recordado: true }))];
+      }
+      if (!opciones.filter(o => !o.recordado).length || opciones[0].score < 0.6) {
         estado = 'nada';
       } else {
         const a = opciones[0].score, b = opciones[1] ? opciones[1].score : 0;
         estado = (opciones[0].porSku || (a >= 0.8 && (a - b >= 0.07 || b < 0.6))) ? 'ok' : 'duda';
         elegidos.set(opciones[0].sku, qty);
       }
-      lineas.push({ orig, resto, qty, opciones, elegidos, estado, recordado: recordados.length > 0,
+      if (especial) estado = opciones.length ? 'duda' : 'nada';
+      lineas.push({ orig, resto, qty, opciones, elegidos, estado, recordados, recordado: false, especial: !!especial,
         incluir: elegidos.size > 0, abierta: estado !== 'ok', busqueda: '', tocado: false });
     });
     return lineas;
@@ -8201,6 +8332,34 @@ function _aplicarCatalogoEnVivo(data){
   };
 
   // ── Interpretar: arma los grupos y carga lo detectado directo en "Tu pedido" (vaciando lo anterior) ──
+  function _prepararGrupo(g){
+    g.qty = 1; g.elegidos.forEach((_, k) => g.elegidos.set(k, 1));
+    g.generico = g.estado === 'duda' && !g.recordado;
+    // Producto puntual o recordado: también se marca solo si tiene stock suficiente
+    if (!g.generico && g.elegidos.size) {
+      const antes = g.elegidos.size;
+      Array.from(g.elegidos.keys()).forEach(k => { if (!_stockOk(k)) g.elegidos.delete(k); });
+      if (antes && !g.elegidos.size) g.sinStock = true;
+    }
+    if (g.especial) {
+      // Grupo especial (acrílico rosa, cristal, adhesivo composite): todos los de la lista con stock
+      const lista = g.opciones.map(o => o.sku).filter(s2 => _stockOk(s2) && precioDe(catalogoBySku.get(s2)) > 0)
+        .sort((a, b) => _precioOrden(a) - _precioOrden(b));
+      g.elegidos = new Map(lista.map(s2 => [s2, g.qty]));
+      if (!lista.length && g.opciones.length) g.sinStock = true;
+    } else if (g.generico) {
+      // Pedido genérico ("dame adhesivo", "densita"): se marcan TODOS los productos que tienen
+      // lo pedido en el nombre (igual de bien que el mejor), con stock y precio, de menor a mayor.
+      const lista = _todosLosQueCoinciden(g);
+      g.elegidos = new Map(lista.map(s2 => [s2, g.qty]));
+      if (!lista.length && g.opciones.length) g.sinStock = true;
+    }
+    // Lo que se había agregado a mano para este mismo texto se suma a lo encontrado
+    g.auto = Array.from(g.elegidos.keys());
+    (g.recordados || []).forEach(sku => { if (catalogoBySku.has(sku) && !g.elegidos.has(sku)) { g.elegidos.set(sku, g.qty); g.recordado = true; } });
+    g.inicial = Array.from(g.elegidos.keys()); g.abierta = true; g.verTodas = false;
+  }
+
   window._waInterpretarTexto = () => {
     const ta = document.getElementById('wa-texto');
     const texto = ta ? ta.value : _txtGuardado();
@@ -8209,25 +8368,9 @@ function _aplicarCatalogoEnVivo(data){
     _grupos = _interpretar(texto);
     // Las cantidades no se interpretan: todo entra con 1 y las cantidades las pone el admin
     // (Shift + Q o en la tarjeta). El número del mensaje solo se saca del texto para buscar mejor.
-    _grupos.forEach(g => { g.qty = 1; g.elegidos.forEach((_, k) => g.elegidos.set(k, 1)); });
-    _grupos.forEach(g => {
-      g.generico = g.estado === 'duda' && !g.recordado;
-      // Producto puntual o recordado: también se marca solo si tiene stock suficiente
-      if (!g.generico && g.elegidos.size) {
-        const antes = g.elegidos.size;
-        Array.from(g.elegidos.keys()).forEach(k => { if (!_stockOk(k)) g.elegidos.delete(k); });
-        if (antes && !g.elegidos.size) g.sinStock = true;
-      }
-      if (g.generico) {
-        // Pedido genérico ("dame adhesivo", "densita"): se marcan TODOS los productos que tienen
-        // lo pedido en el nombre (igual de bien que el mejor), con stock y precio, de menor a mayor.
-        const lista = _todosLosQueCoinciden(g);
-        g.elegidos = new Map(lista.map(s2 => [s2, g.qty]));
-        if (!lista.length && g.opciones.length) g.sinStock = true;
-      }
-      g.inicial = Array.from(g.elegidos.keys()); g.abierta = true; g.verTodas = false;
-    });
+    _grupos.forEach(_prepararGrupo);
     carrito.clear();
+
     if (typeof _preciosManualesCarrito !== 'undefined' && _preciosManualesCarrito && _preciosManualesCarrito.clear) _preciosManualesCarrito.clear();
     _skuGrupo.clear();
     _grupos.forEach((g, i) => g.elegidos.forEach((q, sku) => {
@@ -8263,6 +8406,10 @@ function _aplicarCatalogoEnVivo(data){
     else if (ord === 'desc') todas.sort((a, b) => { const va = _precioOrden(a), vb = _precioOrden(b); return (vb === Infinity ? -1 : vb) - (va === Infinity ? -1 : va); });
     // igual que en el catálogo: los agotados siempre al final
     if (ord) todas.sort((a, b) => (catalogoBySku.get(a).st ? 1 : 0) - (catalogoBySku.get(b).st ? 1 : 0));
+    // pedido genérico: primero los que EMPIEZAN con lo pedido, después los que solo lo contienen
+    if (g.generico && !(g.busqueda || '').trim() && g.empiezan && g.empiezan.size) {
+      todas.sort((a, b) => (g.empiezan.has(a) ? 0 : 1) - (g.empiezan.has(b) ? 0 : 1));
+    }
     return todas;
   }
   // En un pedido genérico se elige solo la opción más barata con stock, entre las que coinciden
@@ -8284,8 +8431,8 @@ function _aplicarCatalogoEnVivo(data){
     const esMedida = x => _UNIDADES_MEDIDA.has(x || '') || _ENVASE_SUELTO.has(x || '');
     for (let k = 0; k < t.length; k++) {
       const a = t[k], b = t[k + 1];
-      if (a === 'x' && /^\d+$/.test(b || '')) { k++; if (esMedida(t[k + 1])) k++; continue; }
-      if (/^\d+$/.test(a) && esMedida(b)) { k++; continue; }
+      if (a === 'x' && /^\d+(?:d\d+)?$/.test(b || '')) { k++; if (esMedida(t[k + 1])) k++; continue; }
+      if (/^\d+(?:d\d+)?$/.test(a) && esMedida(b)) { k++; continue; }
       out.push(a);
     }
     return out.sort().join(' ');
@@ -8303,17 +8450,81 @@ function _aplicarCatalogoEnVivo(data){
   // Solo se cotiza automáticamente lo que tiene stock real suficiente: Local + Depósito ≥ 5.
   // (Si un producto no trae el dato por depósito, se usa el estado general: que no esté agotado.)
   const STOCK_MINIMO_COTIZAR = 5;
+  // Productos "hijo" (la unidad fraccionada, ej. 32806-F "x Unidad") de un "padre" (la caja o el bulto,
+  // ej. 32806 "x 50 Und."). Misma lista que usa el CRM (PARES_HIJO_PADRE_TOPE): ahí el hijo nunca figura
+  // mejor que su padre, y figura "En stock" solo si el padre tiene ≥ 5. Acá: el hijo se cotiza solo si el
+  // CRM lo publicó "En stock" (= padre con ≥ 5), sin mirar su propio stock.
+  // ⚠ Si se agregan pares nuevos en el CRM, sumarlos también acá.
+  const _HIJOS_CON_PADRE = new Set([
+    '244-F', '32820-FRO', '32820-FAZ', '61350-1U', '61350-2U', '61350-3U', '61350-4U', '61351-1U',
+    '61351-2U', '61351-3U', '61351-4U', '61351-5U', '61351-BLU', '61351-MFU', '61351-MGU', '61351-REU',
+    '61325-F', '61326-F', '61327-F', '61328-F', '61329-F', '61330-F', '61331-F', '61332-F', '61333-F',
+    '61334-F', '61335-F', '34921-F', '34924-F', '5305-U', '5306-U', '5307-U', '5308-U', '5309-U', '5310-U',
+    '5311-U', '5312-U', '5313-U', '5314-U', '5335-U', '5336-U', '5337-U', '5338-U', '5339-U', '5340-U',
+    '5330-U', '5332-U', '5333-U', '5334-U', '5341-U', '5342-U', '5343-U', '5344-U', '5345-U', '5346-U',
+    '5347-U', '5348-U', '5349-U', '5350-U', '5351-U', '5352-U', '21267-F', '32806-F', '32809-F', '61318-U',
+    '748-F', '749-F', '750-F', '758-F', '760-F', '6121-F', '6122-F', '6123-F', '6001-F', '6002-F', '6003-F',
+    '6004-F', '5997-F', '5998-F', '5999-F', '6000-F', '6014-3F', '6014-4F', '6014-5F', '6015-3RF',
+    '6015-3TF', '6015-4RF', '6015-4TF', '52-F', '242-F', '245-F', '246-F', '286-F', '571-F', '572-F',
+    '573-F', '579-F', '580-F', '583-F', '586-F', '587-F', '759-F', '770-F', '771-F', '792-F', '794-F',
+    '1072-F', '1078-F', '1190-F', '1192-F', '1193-F', '1195-F', '4960-F', '5942-F', '6025-F', '6026-F',
+    '6027-F', '6028-F', '6062-F', '6063-F', '6068-F', '6124-F', '6125-F', '6126-F', '6127-F', '6128-F',
+    '6502-F', '6503-F', '6528-F', '6529-F', '6530-F', '6537-F', '6538-F', '6562-F', '6569-F', '9120-F',
+    '10000-F', '21007-F', '21915-F', '28898-F', '28899-F', '28900-F', '28905-F', '28906-F', '30102-F',
+    '31020-F', '31026-F', '31027-F', '31028-F', '31029-F', '31030-F', '31032-F', '31037-F', '31038-F',
+    '31336-F', '31337-F', '31603-F', '31806-F', '31816-F', '31820-F', '31826-F', '31828-F', '32783-F',
+    '32784-F', '32785-F', '32786-F', '32787-F', '32790-F', '32791-F', '32792-F', '32794-F', '32795-F',
+    '32796-F', '32797-F', '32798-F', '32799-F', '32800-F', '32802-F', '32814-F', '32826-F', '32832-F',
+    '32838-F', '33056-F', '33057-F', '33058-F', '33061-F', '33062-F', '33066-F', '33067-F', '33068-F',
+    '33069-F', '33070-F', '33071-F', '33072-F', '33073-F', '33074-F', '33077-F', '33078-F', '33079-F',
+    '33080-F', '33081-F', '33083-F', '33084-F', '33085-F', '33086-F', '33087-F', '33088-F', '33089-F',
+    '33096-F', '33105-F', '33109-F', '33110-F', '33111-F', '33112-F', '33113-F', '33220-F', '33230-F',
+    '33232-F', '33234-F', '33235-F', '33236-F', '33635-F', '34015-F', '34016-F', '34017-F', '34018-F',
+    '34218-F', '34219-F', '34249-F', '34256-F', '34257-F', '34258-F', '34567-F', '34580-F', '34614-F',
+    '34618-F', '34901-F', '34903-F', '34904-F', '34906-F', '34907-F', '34912-F', '34915-F', '34916-F',
+    '34917-F', '34918-F', '34919-F', '34920-F', '34922-F', '34925-F', '34940-F', '34945-F', '35094-F',
+    '40704-F', '60005-F', '61302-F', '61310-F', '61313-F', '61315-F', '61322-F', '61336-F', '61337-F',
+    '66678-F', '66679-F', '68102-F', '68104-F', '68105-F', '91764-F', '93005-F'
+  ]);
+  // Blísters armados partiendo una caja (PARES_BLISTER_PADRE del CRM): también cuentan si su caja tiene ≥ 5
+  const _BLISTERS_CON_PADRE = new Set(['6505-F', '6506-F', '6507-F', '6508-F']);
   function _stockOk(sku){
     const it = catalogoBySku.get(sku);
     if (!it || it.st) return false;
+    if (_HIJOS_CON_PADRE.has(sku) || it.hj) return !it.sb;          // padre con ≥ 5 → "En stock"
+    if (_BLISTERS_CON_PADRE.has(sku) && !it.sb) return true;
     if (it.d1 === undefined && it.dc === undefined) return true;
+    // "Stock a confirmar" con algo en el Depósito también se cotiza, aunque no llegue a 5 en total
+    if (it.sb && (+it.dc || 0) > 0) return true;
     return ((+it.d1 || 0) + (+it.dc || 0)) >= STOCK_MINIMO_COTIZAR;
+  }
+  // ¿El nombre del producto EMPIEZA con lo que pidió el cliente? ("contra angulo" → "Contra Ángulo
+  // NSK…" sí; "Lubricante p/ Contra Ángulo" no). Se ignoran palabras de relleno ("de", "p/", "para"…)
+  // y se toleran errores de tipeo y plurales; también vale todo junto ("contraangulo").
+  function _palabrasUtiles(txt){ return _tokens(txt).filter(t => !_RELLENO.has(t) && !/^\d+(?:d\d+)?$/.test(t)); }
+  // Regla: la PRIMERA palabra del nombre tiene que ser la primera palabra del pedido ("cajas de
+  // ortodoncia" → nombres que empiezan con "Caja"/"Cajas"). Las demás palabras pedidas tienen que estar
+  // en el nombre, en cualquier lugar (eso ya lo garantiza el filtro de coincidencia de antes).
+  function _empiezaCon(nombre, qToks){
+    if (!qToks.length) return false;
+    const n0 = _palabrasUtiles(nombre)[0] || '', q0 = qToks[0];
+    if (!n0) return false;
+    if (_sim(q0, n0) >= 0.85 || (q0.length >= 4 && n0.startsWith(q0))) return true;
+    // también vale un sinónimo de la primera palabra ("placa" → "Termoplaca…")
+    return _indice().sinon.some(g => g.some(t => _sim(q0, t) >= 0.9) && g.some(t => _sim(n0, t) >= 0.9));
   }
   function _todosLosQueCoinciden(g){
     if (!g.opciones.length) return [];
     const cobTop = Math.max(...g.opciones.map(o => o.cob != null ? o.cob : o.score));
-    return g.opciones.filter(o => (o.cob != null ? o.cob : o.score) >= cobTop - 0.03).map(o => o.sku)
-      .filter((s2, k, arr) => arr.indexOf(s2) === k)
+    let cands = g.opciones.filter(o => (o.cob != null ? o.cob : o.score) >= cobTop - 0.03).map(o => o.sku)
+      .filter((s2, k, arr) => arr.indexOf(s2) === k);
+    // Si hay productos cuyo nombre EMPIEZA con lo pedido, se marcan solo esos (si no hay ninguno,
+    // todos los que lo contienen, como antes)
+    const qToks = _palabrasUtiles(g.resto);
+    const empiezan = cands.filter(s2 => _empiezaCon(catalogoBySku.get(s2).n, qToks));
+    g.empiezan = new Set(g.opciones.map(o => o.sku).filter(s2 => catalogoBySku.has(s2) && _empiezaCon(catalogoBySku.get(s2).n, qToks)));
+    if (empiezan.length) cands = empiezan;
+    return cands
       .filter(s2 => _stockOk(s2) && precioDe(catalogoBySku.get(s2)) > 0)
       .sort((a, b) => _precioOrden(a) - _precioOrden(b));
   }
@@ -8326,7 +8537,7 @@ function _aplicarCatalogoEnVivo(data){
     const n = _elegidosDe(i).length;
     const tocado = _firma(g.inicial) !== _firma(_elegidosDe(i));
     const icono = !n ? '❌' : ((g.estado === 'ok' || tocado) ? '✅' : '⚠️');
-    const txt = !n ? (g.sinStock && _firma(g.inicial) === '' ? `sin stock suficiente (Local + Depósito ≥ ${STOCK_MINIMO_COTIZAR}) — agregalo a mano si querés` : (g.opciones.length ? 'ninguno elegido' : 'no lo encontré — buscalo acá →'))
+    const txt = !n ? (g.sinStock && _firma(g.inicial) === '' ? `sin stock suficiente (Local + Depósito ≥ ${STOCK_MINIMO_COTIZAR}, o a confirmar con Depósito) — agregalo a mano si querés` : (g.opciones.length ? 'ninguno elegido' : 'no lo encontré — buscalo acá →'))
       : `${n} elegido${n === 1 ? '' : 's'}${(!tocado && g.estado === 'duda') ? ' · revisá' : ''}`;
     const color = !n ? '#dc2626' : ((g.estado === 'ok' || tocado) ? '#0ea968' : '#d97706');
     return `<span style="font-size:16px;">${icono}</span><span style="font-size:12px;font-weight:800;color:${color};white-space:nowrap;">${txt}</span>`;
@@ -8371,8 +8582,9 @@ function _aplicarCatalogoEnVivo(data){
           <span style="font-size:12px;font-weight:800;color:var(--text3);flex-shrink:0;">${i + 1}/${_grupos.length}</span>
           <span style="font-size:14.5px;font-weight:800;color:var(--text);font-style:italic;min-width:0;flex:1 1 220px;" title="${escHtml(g.orig)}">“${escHtml(g.orig)}”</span>
           <span class="wa-estado" style="display:flex;align-items:center;gap:5px;flex-shrink:0;">${_estadoHtml(g, i)}</span>
-          ${g.generico ? '<span title="Pedido genérico: se marcaron todos los productos con stock que tienen lo pedido en el nombre, de menor a mayor precio" style="font-size:10.5px;font-weight:700;color:#0369a1;background:#e0f2fe;border-radius:6px;padding:2px 6px;flex-shrink:0;">🔤 todos los que coinciden</span>' : ''}
-          ${g.recordado ? '<span title="Lo elegiste vos la última vez para este mismo texto" style="font-size:10.5px;font-weight:700;color:#7c3aed;background:#ede9fe;border-radius:6px;padding:2px 6px;flex-shrink:0;">📌 recordado</span>' : ''}
+          ${g.especial ? '<span title="Atajo del buscador: se abrió la lista fija de este grupo de productos (igual que en el buscador general)" style="font-size:10.5px;font-weight:700;color:#b45309;background:#fef3c7;border-radius:6px;padding:2px 6px;flex-shrink:0;">⭐ grupo especial</span>' : ''}
+          ${g.generico && !g.especial ? '<span title="Pedido genérico: se marcaron todos los productos con stock que tienen lo pedido en el nombre, de menor a mayor precio" style="font-size:10.5px;font-weight:700;color:#0369a1;background:#e0f2fe;border-radius:6px;padding:2px 6px;flex-shrink:0;">🔤 todos los que coinciden</span>' : ''}
+          ${g.recordado ? '<span title="Se sumó lo que agregaste a mano la última vez para este mismo texto" style="font-size:10.5px;font-weight:700;color:#7c3aed;background:#ede9fe;border-radius:6px;padding:2px 6px;flex-shrink:0;">📌 recordado</span>' : ''}
           <input type="text" data-wa-busq="${i}" value="${escHtml(g.busqueda || '')}" placeholder="🔍 Buscar otro (nombre o SKU)…" autocomplete="off"
             oninput="_waBuscarEnGrupo(${i}, this.value)" onfocus="_waMarcarGrupo(${i})"
             style="flex:0 1 260px;min-width:170px;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;background:var(--panel);color:var(--text);">
@@ -8407,7 +8619,12 @@ function _aplicarCatalogoEnVivo(data){
     // Recordar lo que se cambió a mano en cada grupo, para la próxima vez que llegue el mismo texto
     _grupos.forEach((g, i) => {
       const el = _elegidosDe(i);
-      if (_firma(el) !== _firma(g.inicial)) { g.tocado = true; _aprender(g.resto, el); }
+      // Se recuerdan solo los productos AGREGADOS a mano (los que no había marcado la búsqueda).
+      // Lo que se saca para un cliente puntual no se recuerda: la próxima vez se vuelve a marcar.
+      if (_firma(el) !== _firma(g.inicial)) {
+        g.tocado = true;
+        _aprender(g.resto, el.filter(sku => !(g.auto || []).includes(sku)));
+      }
     });
   }
   // ── Orden de "Tu pedido": lo que se agrega en un grupo entra justo debajo de lo ya elegido de
