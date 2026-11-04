@@ -1506,6 +1506,38 @@ function _pwFinExtraerUmbral(condicion){
   const num = parseFloat(m[1].replace(/\./g, '').replace(',', '.'));
   return Number.isFinite(num) ? num : null;
 }
+// ¿La promo vale hoy, según su texto de días ("Miércoles y Sábados", "Lunes a Viernes"…)?
+// Se usa el día de Argentina, sin importar la hora del dispositivo del cliente.
+// Si el texto no nombra ningún día, la promo vale siempre.
+const _PW_DIAS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+function _pwFinDiaHoy(){
+  const nombre = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
+  return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].indexOf(nombre);
+}
+function _pwFinValeHoy(dias){
+  const t = String(dias || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const dia = '(' + _PW_DIAS.join('|') + ')s?';
+  const validos = new Set();
+  for (const m of t.matchAll(new RegExp('\\b' + dia + '\\b', 'g'))) validos.add(_PW_DIAS.indexOf(m[1]));
+  if (!validos.size) return true;
+  // Rangos: "lunes a viernes", "de lunes hasta sábado"
+  for (const m of t.matchAll(new RegExp('\\b' + dia + '\\s+(?:a|al|hasta)\\s+' + dia + '\\b', 'g'))) {
+    let i = _PW_DIAS.indexOf(m[1]); const fin = _PW_DIAS.indexOf(m[2]);
+    for (let c = 0; c < 7; c++) { validos.add(i); if (i === fin) break; i = (i + 1) % 7; }
+  }
+  return validos.has(_pwFinDiaHoy());
+}
+// ¿Es la opción de Payway? Sí si lo dice su condición, si no nombra a Mercado Pago, o si usa el texto
+// de la terminal pero solo vale días puntuales ("Miércoles y Sábados"). Con un rango como
+// "Lunes a Sábados" sigue siendo la opción común de la terminal de Mercado Pago.
+function _pwFinEsPayway(opt){
+  const cond = String(opt.condicion || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (/payway/.test(cond) || !/mercado\s*pago/.test(cond)) return true;
+  if (!/terminal\s+(?:fisica\s+)?de\s+mercado\s+pago/.test(cond)) return false;
+  const dias = String(opt.dias || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const dia = '(?:' + _PW_DIAS.join('|') + ')s?';
+  return new RegExp('\\b' + dia + '\\b').test(dias) && !new RegExp('\\b' + dia + '\\s+(?:a|al|hasta)\\s+' + dia + '\\b').test(dias);
+}
 function _pwFinBuildCuotas(precio, permitirTerminalMP){
   // La opción de 3 cuotas sin interés vía terminal física de Mercado Pago aplica a
   // productos de la categoría "Máquinas" o a los SKUs sumados puntualmente en
@@ -1514,7 +1546,9 @@ function _pwFinBuildCuotas(precio, permitirTerminalMP){
   const _esTerminalMP = (opt) => /terminal\s+(?:f[ií]sica\s+)?de\s+mercado\s+pago/i.test(opt.condicion || '');
   const sinInteres = (_finNoInt || [])
     .filter(r => r.activo !== false)
-    .filter(r => !_esTerminalMP(r) || permitirTerminalMP)
+    .filter(r => !_esTerminalMP(r) || _pwFinEsPayway(r) || permitirTerminalMP)
+    // Las opciones de Payway se ven solo los días que dice su campo "Días" en el CRM
+    .filter(r => !_pwFinEsPayway(r) || _pwFinValeHoy(r.dias))
     .filter(r => { const umbral = _pwFinExtraerUmbral(r.condicion); return umbral === null || precio >= umbral; })
     .map(opt => {
     const cuotaValor = _pwFinRound(precio / opt.n);
@@ -1551,8 +1585,11 @@ function _pwFinModalHtml(precio, titulo, subtitulo, permitirTerminalMP, sku){
   // Dentro de "sin interés" hay dos cosas distintas: la tarjeta física propia de Mercado
   // Pago (exclusiva de esa tarjeta) y la opción vía terminal (cualquier tarjeta menos
   // American Express, con link de pago) — se muestran con su propio encabezado cada una.
-  const cuotasTarjetaMP = cuotas.filter(c => c.sinInteres && !_esCuotaTerminalMP(c));
-  const cuotasTerminalMP = cuotas.filter(c => c.sinInteres && _esCuotaTerminalMP(c));
+  // Las opciones de Payway van en un grupo propio, con su logo (ver _pwFinEsPayway).
+  const _esCuotaBancaria = (c) => _pwFinEsPayway(c);
+  const cuotasBancaria = cuotas.filter(c => c.sinInteres && _esCuotaBancaria(c));
+  const cuotasTarjetaMP = cuotas.filter(c => c.sinInteres && !_esCuotaBancaria(c) && !_esCuotaTerminalMP(c));
+  const cuotasTerminalMP = cuotas.filter(c => c.sinInteres && !_esCuotaBancaria(c) && _esCuotaTerminalMP(c));
   const cuotasNave = cuotas.filter(c => !c.sinInteres);
   const filasTarjetaMP = cuotasTarjetaMP.length ? `
     <div class="pwfin-mp-header">
@@ -1568,6 +1605,12 @@ function _pwFinModalHtml(precio, titulo, subtitulo, permitirTerminalMP, sku){
       <span class="pwfin-mp-badge"><svg style="height:26px;width:auto;display:block;" viewBox="0 0 72 26" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="1" width="34" height="24" rx="4" fill="#1434CB"></rect><text x="17" y="17" font-family="Arial, sans-serif" font-size="10" font-weight="800" font-style="italic" fill="#fff" text-anchor="middle">VISA</text><circle cx="50" cy="13" r="10" fill="#EB001B"></circle><circle cx="60" cy="13" r="10" fill="#F79E1B"></circle><path d="M55 5.5a10 10 0 0 1 0 15 10 10 0 0 1 0-15z" fill="#FF5F00"></path></svg><span class="pwfin-mp-badge-txt">(Tarjeta Física o Link de pago)</span></span>
     </div>
     ${cuotasTerminalMP.map(c => _filaHtml(c, 'terminal')).join('')}
+  ` : '';
+  const filasBancaria = cuotasBancaria.length ? `
+    <div class="pwfin-mp-header">
+      <span class="pwfin-mp-badge"><img src="data:image/png;base64,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" alt="Payway" style="height:22px;width:auto;display:block;"><span class="pwfin-mp-badge-txt">(Tarjeta Física o Link de pago)</span></span>
+    </div>
+    ${cuotasBancaria.map(c => _filaHtml(c, 'bancaria')).join('')}
   ` : '';
   // Las cuotas con recargo las procesa la plataforma Nave, no Dentalab directamente — se
   // muestran aparte y con esa aclaración, para que el cliente no piense que ese
@@ -1589,7 +1632,7 @@ function _pwFinModalHtml(precio, titulo, subtitulo, permitirTerminalMP, sku){
         ${titulo ? `<div class="pwfin-prod-name">${escHtml(titulo)}</div>` : ''}
       </div>
     </div>
-    ${cuotas.length ? (filasTerminalMP + filasTarjetaMP + filasNave) : `<div style="font-size:12.5px;color:var(--text3,#64748b);text-align:center;padding:14px 0;">No hay cuotas configuradas por el momento.</div>`}`;
+    ${cuotas.length ? (filasTerminalMP + filasBancaria + filasTarjetaMP + filasNave) : `<div style="font-size:12.5px;color:var(--text3,#64748b);text-align:center;padding:14px 0;">No hay cuotas configuradas por el momento.</div>`}`;
 }
 let _pwFinModalReabrir = null;
 // Cuando es true, el modal de cuotas muestra un botón "Elegir esta opción" en cada fila
@@ -1605,6 +1648,7 @@ function _pwCerrarFinModal(){
 const PROVEEDOR_FIN_LABEL = {
   terminal: 'Mercado Pago (Tarjeta Física o Link de pago)',
   mp: 'Tarjeta de Mercado Pago (Tarjeta Física)',
+  bancaria: 'Payway (Tarjeta Física o Link de pago)',
   nave: 'Nave (Link de pago)'
 };
 window._pwElegirFinanciamiento = (proveedor, n, cuotaValor, totalFinal, sinInteresFlag, rate) => {
