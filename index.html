@@ -4391,7 +4391,7 @@ const _ALT_NAVECILLA = ['navecillas', 'nabecilla', 'nabecillas', 'navesilla', 'n
 const _ALT_BALL = ['bal', 'balls', 'bola', 'bolas', 'bolita', 'bolitas', 'ballattach', 'ballatach', 'ballattache', 'ballatache', 'ballattached'];
 const _ALT_BARRA = ['barras', 'rielera', 'rieleras', 'riel', 'rieles'];
 const _ALT_RIELERA = ['rieleras'];
-const _ALT_TEFLON = ['teflones'];
+const _ALT_TEFLON = ['teflones', 'cofia', 'cofias', 'hembra', 'hembras'];   // en attaches son la misma pieza
 const _ALT_ANCHA = ['anchas', 'ancho', 'anchos'];
 const _ALT_GOTA = ['gotas', 'gotita', 'gotitas'];
 const _ALT_VERTICAL = ['verticales', 'vert'];
@@ -4494,16 +4494,27 @@ const GRUPOS_ESPECIALES = [
   // Kit para barra / rielera → AR-18 R
   { requiere: ['kit', 'barra'], requiereAlt: { kit: _ALT_KIT, barra: _ALT_BARRA }, opcionales: _OPC_ATTACHE,
     get skus(){ return _skusAttache(['31105'], /^attache\s+ar[- ]?18\s*r\b/); } },
-  // Teflón para barra / rielera vertical → HE-1810V
+  // Cazoletas metálicas para teflón → Attache CM-… ("cazoleta" sola NO alcanza: es también la de pulido/profilaxis)
+  { requiere: ['cazoleta', 'metalica'],
+    requiereAlt: { cazoleta: ['cazoletas', 'casoleta', 'casoletas'], metalica: ['metalicas', 'metal', 'metalico', 'metalicos', 'teflon', 'teflones', 'attache', 'attaches', 'atache', 'ataches', 'attach', 'atach'] },
+    opcionales: [..._OPC_ATTACHE, 'ball', ..._ALT_BALL, 'barra', ..._ALT_BARRA],
+    get skus(){ return _skusAttache(['31170-18', '31170-19', '31170-21', '31170-23', '31170-25'], /^attache\s+cm-/); } },
+  // Teflón / cofia / hembra para ball vertical → HE-1810V (la hembra del kit AR-19V)
+  { requiere: ['teflon', 'ball', 'vertical'], requiereAlt: { teflon: _ALT_TEFLON, ball: _ALT_BALL, vertical: _ALT_VERTICAL }, opcionales: _OPC_ATTACHE,
+    get skus(){ return _skusAttache(['31126-A', '31126-T'], /^attache\s+he[- ]?1810\s*v\b/); } },
+  // Teflón / cofia / hembra para barra / rielera vertical → HE-1810V
   { requiere: ['teflon', 'barra', 'vertical'], requiereAlt: { teflon: _ALT_TEFLON, barra: _ALT_BARRA, vertical: _ALT_VERTICAL }, opcionales: _OPC_ATTACHE,
     get skus(){ return _skusAttache(['31126-A', '31126-T'], /^attache\s+he[- ]?1810\s*v\b/); } },
   { requiere: ['rielera', 'vertical'], requiereAlt: { rielera: _ALT_RIELERA, vertical: _ALT_VERTICAL }, opcionales: _OPC_ATTACHE,
     get skus(){ return _skusAttache(['31126-A', '31126-T'], /^attache\s+he[- ]?1810\s*v\b/); } },
-  // Teflón para barra / "Rielera" sola → HE-1810
+  // Teflón / cofia / hembra para barra / "Rielera" sola → HE-1810
   { requiere: ['teflon', 'barra'], requiereAlt: { teflon: _ALT_TEFLON, barra: _ALT_BARRA }, opcionales: _OPC_ATTACHE,
     get skus(){ return _skusAttache(['31112-A', '31112-T'], /^attache\s+he[- ]?1810\b/); } },
   { requiere: ['rielera'], requiereAlt: { rielera: _ALT_RIELERA }, opcionales: _OPC_ATTACHE,
     get skus(){ return _skusAttache(['31112-A', '31112-T'], /^attache\s+he[- ]?1810\b/); } },
+  // Teflón / cofia / hembra para ball attach → todos los "Attache HE-…" menos los HE-1810 y HE-1810V, que son de barra
+  { requiere: ['teflon', 'ball'], requiereAlt: { teflon: _ALT_TEFLON, ball: _ALT_BALL }, opcionales: _OPC_ATTACHE,
+    get skus(){ return _skusAttache(['31111-A', '31111-T', '31125-A', '31125-T', '31130-A', '31130-T', '31143-A', '31143-T', '31150-A', '31150-T'], /^attache\s+he(?![- ]?1810(?!\d))[- ]?\d/); } },
   // Macho / Macho Perno para ball attach ("perno" es opcional; va antes que el grupo de pernos)
   { requiere: ['macho', 'ball'], requiereAlt: { macho: ['machos', 'machoperno', 'machopernos'], ball: _ALT_BALL }, opcionales: _OPC_ATTACHE,
     skus: ['31107', '31124', '31142'] },
@@ -4516,11 +4527,6 @@ const GRUPOS_ESPECIALES = [
   // Barra gota / repuesto de barra gota → RE-18BG
   { requiere: ['barra', 'gota'], requiereAlt: { barra: ['barras'], gota: _ALT_GOTA }, opcionales: _OPC_ATTACHE,
     get skus(){ return _skusAttache(['31109'], /^attache\s+re[- ]?18\s*bg\b/); } },
-  // Cazoletas metálicas para teflón → Attache CM-… ("cazoleta" sola NO alcanza: es también la de pulido/profilaxis)
-  { requiere: ['cazoleta', 'metalica'],
-    requiereAlt: { cazoleta: ['cazoletas', 'casoleta', 'casoletas'], metalica: ['metalicas', 'metal', 'metalico', 'metalicos', 'teflon', 'teflones', 'attache', 'attaches', 'atache', 'ataches', 'attach', 'atach'] },
-    opcionales: _OPC_ATTACHE,
-    get skus(){ return _skusAttache(['31170-18', '31170-19', '31170-21', '31170-23', '31170-25'], /^attache\s+cm-/); } },
   // "Navecilla (para horno)" → Base Nido de Abeja c/ Pines Cerámicos / Metálicos. Si algún día hay un
   // producto que se llame "Navecilla…" también aparece acá. ("horno" es opcional: si viene escrito no filtra.)
   // "Navecilla cerámica / metálica" eligen una sola de las dos (el nombre dice "Cerámicos" / "Metálicos")
