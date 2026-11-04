@@ -4419,6 +4419,23 @@ const GRUPOS_ESPECIALES = [
         return /^polimeros?\s+termo(curable|curado)?\b/.test(n) && !/ortodoncia/.test(n);
       }).map(it => it.s);
     } },
+  // Porta radiografía: "porta rx / porta película(s)", "bolsa(s) / bolsista(s) / sobre(s) de película(s) o de rx".
+  // Va ANTES que el de películas, así "porta películas" no abre las películas.
+  { requiere: ['porta', 'rx'],
+    requiereAlt: { porta: ['bolsa', 'bolsas', 'bolsista', 'bolsistas', 'sobre', 'sobres'], rx: ['pelicula', 'peliculas', 'radiografia', 'radiografias'] },
+    skus: ['794', '794-12'] },
+  // Bolsa p/ Esterilizar c/ vapor: "bolsa/sobre (para) (esterilizar) (en) autoclave"
+  // ("esterilizar" va como alternativa de "autoclave" para que, si viene escrito, no filtre la lista)
+  { requiere: ['bolsa', 'autoclave'],
+    requiereAlt: { bolsa: ['bolsas', 'sobre', 'sobres'], autoclave: ['autoclaves', 'esterilizar'] },
+    skus: ['6124-F', '6124-f'] },
+  // "Rollo (para) esterilizar / estufa / esterilización" → todos los "Rollo de Esterilización Pouch…"
+  // del catálogo (también los que se agreguen después)
+  { requiere: ['rollo', 'esterilizar'],
+    requiereAlt: { rollo: ['rollos'], esterilizar: ['estufa', 'esterilizacion', 'esterilizado', 'esterilizados'] },
+    get skus(){
+      return (catalogo || []).filter(it => /^rollos?\s+de\s+esterilizacion\s+pouch\b/.test(String(it.n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())).map(it => it.s);
+    } },
   // "Películas rx" / "películas dentales" / "radiografías" → todos los "Películas Radiográficas…" del
   // catálogo (también los que se agreguen después). Van en dos entradas porque "radiografías" sola
   // alcanza y "películas" necesita la segunda palabra.
@@ -4432,7 +4449,7 @@ const GRUPOS_ESPECIALES = [
 function _skusPeliculasRx(){
   return (catalogo || []).filter(it => /^peliculas?\s+radiograficas?\b/.test(String(it.n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())).map(it => it.s);
 }
-const _STOPWORDS_BUSQUEDA = new Set(['para','de','del','la','el','los','las','p','y','o','con','sin']);
+const _STOPWORDS_BUSQUEDA = new Set(['para','de','del','la','el','los','las','p','y','o','con','sin','en','al','a']);
 
 // Familias de fresas/piedras/puntas cuyo SKU empieza con estos prefijos: cuando aparecen
 // en una búsqueda, las que tienen stock deben aparecer primero.
@@ -8195,7 +8212,9 @@ function _aplicarCatalogoEnVivo(data){
   // abren su lista fija de productos; cualquier otra palabra ("auto", "termo"…) filtra dentro de la lista.
   function _grupoEspecialDe(txt){
     if (typeof GRUPOS_ESPECIALES === 'undefined') return null;
-    const toks = _tokens(txt).filter(t => !_RELLENO.has(t));
+    // Para reconocer el atajo se miran TODAS las palabras (ej. "sobre" también es relleno en "info sobre…");
+    // las de relleno recién se descartan para el filtro de abajo.
+    const toks = _tokens(txt);
     const esta = w => toks.find(t => _stem(t) === _stem(w) || _sim(t, w) >= 0.9);
     for (const grupo of GRUPOS_ESPECIALES) {
       const usados = new Set();
@@ -8207,7 +8226,7 @@ function _aplicarCatalogoEnVivo(data){
         return alts.some(esta);
       });
       if (!cumple) continue;
-      const resto = toks.filter(t => !usados.has(t));
+      const resto = toks.filter(t => !usados.has(t) && !_RELLENO.has(t));
       const skus = grupo.skus.filter(sku => {
         const it = catalogoBySku.get(sku);
         if (!it) return false;
