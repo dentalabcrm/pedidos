@@ -4046,7 +4046,8 @@ function renderError(msg){
 }
 
 function _stripAccents(s){
-  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[-/.]/g, '');
+  // Los decimales quedan siempre con punto ("4,1" y "4.1" son lo mismo); el resto de los puntos se saca.
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/(\d),(\d)/g, '$1.$2').replace(/[-/]|(?<!\d)\.|\.(?!\d)/g, '');
 }
 
 // ── Textos informativos editables por el administrador (retiro, envío, formas de pago) ──
@@ -4073,7 +4074,9 @@ function _getSearchIdx(it){
   if (!it._sIdx) {
     const sku = String(it.s || '').toLowerCase();
     const nom = String(it.n || '').toLowerCase();
-    it._sIdx = [sku, nom, _stripAccents(sku), _stripAccents(nom)];
+    // El nombre va también sin el punto decimal, para que "195" siga encontrando "1.95"
+    const nomSin = _stripAccents(nom);
+    it._sIdx = [sku, nom, _stripAccents(sku), nomSin + ' ' + nomSin.replace(/\./g, '')];
   }
   return it._sIdx;
 }
@@ -4636,7 +4639,7 @@ function buscarProductos(){
     // Grupos especiales: abren una familia/lista fija de productos aunque el nombre real no
     // diga esas palabras exactas. Cualquier palabra extra filtra DENTRO de esa lista.
     // Para esto "p/barra" o "ball-attach" cuentan como dos palabras (las medidas como "1.8" quedan enteras).
-    const tokensGrupo = q.split(/\s+/).flatMap(t => /[a-z]/.test(t) ? t.split(/[-\/.,;:()]+/) : [t]).filter(Boolean).map(t => _stripAccents(t));
+    const tokensGrupo = q.split(/\s+/).flatMap(t => /[a-z]/.test(t) ? t.split(/[-\/;:()]+|(?<!\d)[.,]|[.,](?!\d)/) : [t]).filter(Boolean).map(t => _stripAccents(t));
     const grupoActivo = _buscarGrupoEspecial(tokensGrupo);
 
     if (grupoActivo) {
@@ -4708,6 +4711,15 @@ function buscarProductos(){
       const va = precioDe(a), vb = precioDe(b);
       return filtroOrdenPrecio === 'asc' ? va - vb : vb - va;
     });
+  }
+
+  // Con una búsqueda escrita, primero van los productos cuyo nombre EMPIEZA con la primera palabra
+  // buscada ("composite" → "Composite Z350…" antes que "Pincel para Composite"). Va después del
+  // orden por precio a propósito: dentro de cada parte se mantiene el orden elegido.
+  const _primera = tokens.find(t => !_STOPWORDS_BUSQUEDA.has(t));
+  if (_primera) {
+    const _empieza = it => _getSearchIdx(it)[3].startsWith(_primera) ? 0 : 1;
+    ordenados.sort((a, b) => _empieza(a) - _empieza(b));
   }
 
   // Los agotados siempre van al final, para no confundir al cliente mostrando primero
@@ -8522,6 +8534,10 @@ function _aplicarCatalogoEnVivo(data){
       g.elegidos = new Map(lista.map(s2 => [s2, g.qty]));
       if (!lista.length && g.opciones.length) g.sinStock = true;
     }
+    if (!g.empiezan) {
+      const qToks = _palabrasUtiles(g.resto);
+      g.empiezan = new Set(g.opciones.map(o => o.sku).filter(s2 => catalogoBySku.has(s2) && _empiezaCon(catalogoBySku.get(s2).n, qToks)));
+    }
     // Lo que se había agregado a mano para este mismo texto se suma a lo encontrado
     g.auto = Array.from(g.elegidos.keys());
     (g.recordados || []).forEach(sku => { if (catalogoBySku.has(sku) && !g.elegidos.has(sku)) { g.elegidos.set(sku, g.qty); g.recordado = true; } });
@@ -8574,8 +8590,8 @@ function _aplicarCatalogoEnVivo(data){
     else if (ord === 'desc') todas.sort((a, b) => { const va = _precioOrden(a), vb = _precioOrden(b); return (vb === Infinity ? -1 : vb) - (va === Infinity ? -1 : va); });
     // igual que en el catálogo: los agotados siempre al final
     if (ord) todas.sort((a, b) => (catalogoBySku.get(a).st ? 1 : 0) - (catalogoBySku.get(b).st ? 1 : 0));
-    // pedido genérico: primero los que EMPIEZAN con lo pedido, después los que solo lo contienen
-    if (g.generico && !(g.busqueda || '').trim() && g.empiezan && g.empiezan.size) {
+    // siempre primero los que EMPIEZAN con lo pedido, después los que solo lo contienen
+    if (!(g.busqueda || '').trim() && g.empiezan && g.empiezan.size) {
       todas.sort((a, b) => (g.empiezan.has(a) ? 0 : 1) - (g.empiezan.has(b) ? 0 : 1));
     }
     return todas;
