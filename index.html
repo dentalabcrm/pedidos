@@ -4383,7 +4383,29 @@ const ADHESIVO_COMPOSITE_SKUS = ['1542','1543','1545','1546','1548','1715','2125
 // ── Grupos especiales de búsqueda: cada uno se activa cuando el texto buscado contiene
 //    TODAS las palabras de "requiere" (en cualquier orden). Al activarse, muestra su lista
 //    fija de SKUs, y cualquier palabra extra que se haya escrito filtra dentro de esa lista.
+//    "opcionales": palabras que no hacen falta para activar el grupo, pero si vienen escritas
+//    no filtran la lista (ej: "attach" en "kit para ball attach").
 //    Para sumar uno nuevo: agregar un objeto acá, no hace falta tocar el resto del código. ──
+const _ALT_KIT = ['kits'];
+const _ALT_BALL = ['bal', 'balls', 'bola', 'bolas', 'bolita', 'bolitas', 'ballattach', 'ballatach', 'ballattache', 'ballatache', 'ballattached'];
+const _ALT_BARRA = ['barras', 'rielera', 'rieleras', 'riel', 'rieles'];
+const _ALT_RIELERA = ['rieleras'];
+const _ALT_TEFLON = ['teflones'];
+const _ALT_ANCHA = ['anchas', 'ancho', 'anchos'];
+const _ALT_GOTA = ['gotas', 'gotita', 'gotitas'];
+const _ALT_VERTICAL = ['verticales', 'vert'];
+const _OPC_ATTACHE = ['attach', 'attachs', 'atach', 'attache', 'atache', 'attaches', 'ataches', 'attached', 'atached', 'attachment', 'atachment', 'attachement',
+  'perno', 'pernos', 'repuesto', 'repuestos', 'rep', 'repu'];
+// SKU fijos + todo producto cuyo nombre EMPIEZA con ese modelo: "attache ar-19v" no debe agarrar
+// el "Attache HE-1810V Hembra p/ AR-19V", que lo nombra más adelante.
+function _skusAttache(fijos, patron){
+  const porNombre = (catalogo || []).filter(it => {
+    // sin _stripAccents: ese también saca los guiones, y acá hacen falta para reconocer el modelo
+    const n = String(it.n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    return patron.test(n);
+  }).map(it => it.s);
+  return Array.from(new Set([...fijos, ...porNombre]));
+}
 const GRUPOS_ESPECIALES = [
   { requiere: ['acrilico', 'rosa'], requiereAlt: { acrilico: ['polimero'] }, skus: ACRILICO_ROSA_TODOS_SKUS },
   { requiere: ['acrilico', 'cristal'], requiereAlt: { acrilico: ['polimero'], cristal: ['transparente'] }, skus: ACRILICO_CRISTAL_SKUS },
@@ -4451,6 +4473,53 @@ const GRUPOS_ESPECIALES = [
     skus: ['32830', '32791', '32791-F', '32791-f'] },
   // "Godiva" → Compuesto de Modelar
   { requiere: ['godiva'], skus: ['288-V', '286-F', '286', '285-M', '285-MF', '285-VF', '287-MAR', '287-VER', '288-M', '289', '285-V'] },
+
+  // ── Attaches ─────────────────────────────────────────────────────────────────────────
+  // El orden importa: se usa el PRIMER grupo que coincide, así que los más específicos van antes
+  // ("kit ball vertical" antes que "kit ball", "kit barra ancha" antes que "kit barra" y que "barra ancha").
+  // Cada grupo trae sus SKU fijos y, además, todo producto cuyo nombre tenga ese modelo (ver _skusAttache).
+  // Kit para ball attach vertical → AR-19V
+  { requiere: ['kit', 'ball', 'vertical'], requiereAlt: { kit: _ALT_KIT, ball: _ALT_BALL, vertical: _ALT_VERTICAL }, opcionales: _OPC_ATTACHE,
+    get skus(){ return _skusAttache(['31122'], /^attache\s+ar[- ]?19\s*v\b/); } },
+  // Kit para barra ancha → AR-18 B
+  { requiere: ['kit', 'barra', 'ancha'], requiereAlt: { kit: _ALT_KIT, barra: _ALT_BARRA, ancha: _ALT_ANCHA }, opcionales: _OPC_ATTACHE,
+    get skus(){ return _skusAttache(['31100'], /^attache\s+ar[- ]?18\s*b\b/); } },
+  // Kit para barra gota → AR-18 BG
+  { requiere: ['kit', 'barra', 'gota'], requiereAlt: { kit: _ALT_KIT, barra: _ALT_BARRA, gota: _ALT_GOTA }, opcionales: _OPC_ATTACHE,
+    get skus(){ return _skusAttache(['31102'], /^attache\s+ar[- ]?18\s*bg\b/); } },
+  // Kit para ball attach / bola → AR-19H y AR-23H
+  { requiere: ['kit', 'ball'], requiereAlt: { kit: _ALT_KIT, ball: _ALT_BALL }, opcionales: _OPC_ATTACHE,
+    get skus(){ return _skusAttache(['31120', '31140'], /^attache\s+ar[- ]?(19|23)\s*h\b/); } },
+  // Kit para barra / rielera → AR-18 R
+  { requiere: ['kit', 'barra'], requiereAlt: { kit: _ALT_KIT, barra: _ALT_BARRA }, opcionales: _OPC_ATTACHE,
+    get skus(){ return _skusAttache(['31105'], /^attache\s+ar[- ]?18\s*r\b/); } },
+  // Teflón para barra / rielera vertical → HE-1810V
+  { requiere: ['teflon', 'barra', 'vertical'], requiereAlt: { teflon: _ALT_TEFLON, barra: _ALT_BARRA, vertical: _ALT_VERTICAL }, opcionales: _OPC_ATTACHE,
+    get skus(){ return _skusAttache(['31126-A', '31126-T'], /^attache\s+he[- ]?1810\s*v\b/); } },
+  { requiere: ['rielera', 'vertical'], requiereAlt: { rielera: _ALT_RIELERA, vertical: _ALT_VERTICAL }, opcionales: _OPC_ATTACHE,
+    get skus(){ return _skusAttache(['31126-A', '31126-T'], /^attache\s+he[- ]?1810\s*v\b/); } },
+  // Teflón para barra / "Rielera" sola → HE-1810
+  { requiere: ['teflon', 'barra'], requiereAlt: { teflon: _ALT_TEFLON, barra: _ALT_BARRA }, opcionales: _OPC_ATTACHE,
+    get skus(){ return _skusAttache(['31112-A', '31112-T'], /^attache\s+he[- ]?1810\b/); } },
+  { requiere: ['rielera'], requiereAlt: { rielera: _ALT_RIELERA }, opcionales: _OPC_ATTACHE,
+    get skus(){ return _skusAttache(['31112-A', '31112-T'], /^attache\s+he[- ]?1810\b/); } },
+  // Macho / Macho Perno para ball attach ("perno" es opcional; va antes que el grupo de pernos)
+  { requiere: ['macho', 'ball'], requiereAlt: { macho: ['machos', 'machoperno', 'machopernos'], ball: _ALT_BALL }, opcionales: _OPC_ATTACHE,
+    skus: ['31107', '31124', '31142'] },
+  // Perno para ball attach → RE-18P
+  { requiere: ['perno', 'ball'], requiereAlt: { perno: ['pernos'], ball: _ALT_BALL }, opcionales: _OPC_ATTACHE,
+    get skus(){ return _skusAttache(['31110'], /^attache\s+re[- ]?18\s*p\b/); } },
+  // Barra ancha / repuesto de barra ancha → RE-18B
+  { requiere: ['barra', 'ancha'], requiereAlt: { barra: ['barras'], ancha: _ALT_ANCHA }, opcionales: _OPC_ATTACHE,
+    get skus(){ return _skusAttache(['31108'], /^attache\s+re[- ]?18\s*b\b/); } },
+  // Barra gota / repuesto de barra gota → RE-18BG
+  { requiere: ['barra', 'gota'], requiereAlt: { barra: ['barras'], gota: _ALT_GOTA }, opcionales: _OPC_ATTACHE,
+    get skus(){ return _skusAttache(['31109'], /^attache\s+re[- ]?18\s*bg\b/); } },
+  // Cazoletas metálicas para teflón → Attache CM-… ("cazoleta" sola NO alcanza: es también la de pulido/profilaxis)
+  { requiere: ['cazoleta', 'metalica'],
+    requiereAlt: { cazoleta: ['cazoletas', 'casoleta', 'casoletas'], metalica: ['metalicas', 'metal', 'metalico', 'metalicos', 'teflon', 'teflones', 'attache', 'attaches', 'atache', 'ataches', 'attach', 'atach'] },
+    opcionales: _OPC_ATTACHE,
+    get skus(){ return _skusAttache(['31170-18', '31170-19', '31170-21', '31170-23', '31170-25'], /^attache\s+cm-/); } },
 ];
 function _skusPeliculasRx(){
   return (catalogo || []).filter(it => /^peliculas?\s+radiograficas?\b/.test(String(it.n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())).map(it => it.s);
@@ -4472,7 +4541,10 @@ function _buscarGrupoEspecial(tokens){
       alternativas.forEach(a => conceptoTokens.add(a));
       return alternativas.some(a => tokens.includes(a));
     });
-    if (cumple) return { skus: grupo.skus, conceptoTokens };
+    if (cumple) {
+      (grupo.opcionales || []).forEach(a => conceptoTokens.add(a));
+      return { skus: grupo.skus, conceptoTokens };
+    }
   }
   return null;
 }
@@ -4502,10 +4574,12 @@ function buscarProductos(){
   if (tokens.length) {
     // Grupos especiales: abren una familia/lista fija de productos aunque el nombre real no
     // diga esas palabras exactas. Cualquier palabra extra filtra DENTRO de esa lista.
-    const grupoActivo = _buscarGrupoEspecial(tokens);
+    // Para esto "p/barra" o "ball-attach" cuentan como dos palabras (las medidas como "1.8" quedan enteras).
+    const tokensGrupo = q.split(/\s+/).flatMap(t => /[a-z]/.test(t) ? t.split(/[-\/.,;:()]+/) : [t]).filter(Boolean).map(t => _stripAccents(t));
+    const grupoActivo = _buscarGrupoEspecial(tokensGrupo);
 
     if (grupoActivo) {
-      const tokensRestantes = tokens.filter(t => !grupoActivo.conceptoTokens.has(t) && !_STOPWORDS_BUSQUEDA.has(t));
+      const tokensRestantes = tokensGrupo.filter(t => !grupoActivo.conceptoTokens.has(t) && !_STOPWORDS_BUSQUEDA.has(t));
       let candidatos = grupoActivo.skus.map(sku => catalogoBySku.get(sku)).filter(Boolean);
       if (tokensRestantes.length) {
         candidatos = candidatos.filter(it => {
@@ -8153,6 +8227,9 @@ function _aplicarCatalogoEnVivo(data){
     let s = ' ' + linea.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') + ' ';
     s = s.replace(/^\s*(?:[-*•·>]+|\d{1,2}[.)](?=\s))\s*/, ' ');   // viñetas y "1) …" de listas
     let qty = null;
+    // "2 kits para barra": acá "kit" ES el producto (el repuesto "barra ancha" es otra cosa), no el envase
+    const _especialKit = _grupoEspecialDe(s);
+    const envases = _especialKit && _especialKit.requiereKit ? _ENVASES.replace('kits?|', '') : _ENVASES;
     const tomar = (re, fn) => {
       if (qty !== null) return;
       const m = s.match(re);
@@ -8164,9 +8241,9 @@ function _aplicarCatalogoEnVivo(data){
     tomar(/\sx\s*(\d{1,4})(?=\s|$|[,.])/, m => +m[1]);
     tomar(/\s(\d{1,4})\s*x(?=\s)/, m => +m[1]);
     tomar(/\((\d{1,4})\s*(?:u|un|unid|unidades)?\)/, m => +m[1]);
-    tomar(new RegExp('^\\s*(\\d{1,4})\\s*(?:' + _ENVASES + '\\b\\.?\\s*(?:de\\s+)?)?(?=[a-z#])'), m => {
+    tomar(new RegExp('^\\s*(\\d{1,4})\\s*(?:' + envases + '\\b\\.?\\s*(?:de\\s+)?)?(?=[a-z#])'), m => {
       const sig = (s.slice(m.index + m[0].length).match(/^[a-z]+/) || [''])[0];
-      if (_UNIDADES_MEDIDA.has(sig) && !new RegExp('^\\s*\\d{1,4}\\s*' + _ENVASES).test(m[0])) return 0;
+      if (_UNIDADES_MEDIDA.has(sig) && !new RegExp('^\\s*\\d{1,4}\\s*' + envases).test(m[0])) return 0;
       return +m[1];
     });
     tomar(/^\s*(media docena|una docena|docena|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|quince|veinte|treinta|cincuenta|cien)\b/, m => {
@@ -8179,7 +8256,7 @@ function _aplicarCatalogoEnVivo(data){
     // "2 cajas de…" ya se sacó; quitar envases sueltos que quedaron al principio
     // …pero solo si venía después de una cantidad ("una caja de guantes"): si el mensaje empieza
     // con "cajas de ortodoncia", "caja" ES el producto y no se toca.
-    if (qty !== null) s = s.replace(new RegExp('^\\s*' + _ENVASES + '\\b\\.?\\s*(?:de\\s+)?'), ' ');
+    if (qty !== null) s = s.replace(new RegExp('^\\s*' + envases + '\\b\\.?\\s*(?:de\\s+)?'), ' ');
     return { qty: qty || 1, resto: s.trim(), detectada: qty !== null };
   }
 
@@ -8236,6 +8313,7 @@ function _aplicarCatalogoEnVivo(data){
         return alts.some(esta);
       });
       if (!cumple) continue;
+      (grupo.opcionales || []).forEach(a => toks.forEach(t => { if (_stem(t) === _stem(a) || _sim(t, a) >= 0.9) usados.add(t); }));
       const resto = toks.filter(t => !usados.has(t) && !_RELLENO.has(t));
       const skus = grupo.skus.filter(sku => {
         const it = catalogoBySku.get(sku);
@@ -8243,7 +8321,7 @@ function _aplicarCatalogoEnVivo(data){
         const nToks = _tokens(it.n);
         return resto.every(q => nToks.some(n => _sim(q, n) >= 0.85));
       });
-      return { skus };
+      return { skus, requiereKit: grupo.requiere.includes('kit') };
     }
     return null;
   }
