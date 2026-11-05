@@ -4756,6 +4756,11 @@ function buscarProductos(){
     });
   }
 
+  // "Composite" no muestra los Flow: esos aparecen solo si la búsqueda dice "flow" ("composite flow").
+  if (tokens.some(t => /^composites?$/.test(t)) && !tokens.some(t => /^(?:flow|fluid)/.test(t))) {
+    ordenados = ordenados.filter(it => !_getSearchIdx(it)[3].includes('flow'));
+  }
+
   // Con una búsqueda escrita, primero van los productos cuyo nombre EMPIEZA con la primera palabra
   // buscada ("composite" → "Composite Z350…" antes que "Pincel para Composite"). Va después del
   // orden por precio a propósito: dentro de cada parte se mantiene el orden elegido.
@@ -8455,6 +8460,11 @@ function _aplicarCatalogoEnVivo(data){
       const recordados = (Array.isArray(memo) ? memo : (memo ? [memo] : [])).filter(sku => catalogoBySku.has(sku));
       const especial = _grupoEspecialDe(resto);
       let opciones = especial ? especial.skus.map(sku => ({ sku, score: 1, cob: 1 })) : _opcionesDe(resto);
+      // Igual que en el buscador general: "composite" sin decir "flow" no trae los Flow
+      const _toksResto = _tokens(resto);
+      if (_toksResto.some(t => t.startsWith('composit') || _sim(t, 'composite') >= 0.85) && !_toksResto.some(t => /^(?:flow|fluid)/.test(t))) {
+        opciones = opciones.filter(o => { const it = catalogoBySku.get(o.sku); return !it || !/flow/i.test(_norm(it.n)); });
+      }
       let estado;
       const elegidos = new Map();
       // Lo recordado NO reemplaza la búsqueda: solo se suma después (lo agregado a mano otra vez)
