@@ -4454,6 +4454,23 @@ function _skusAttache(fijos, patron){
   }).map(it => it.s);
   return Array.from(new Set([...fijos, ...porNombre]));
 }
+// Colores de las ceras: la raíz para buscar en el nombre (así "roja" encuentra "Rojo") y el final del SKU.
+const _COLORES_CERA = [
+  { palabras: ['azul', 'azules'], raiz: 'azul', sufijo: /-azu?$/i },
+  { palabras: ['verde', 'verdes'], raiz: 'verde', sufijo: /-(?:v|ve|ver)$/i },
+  { palabras: ['amarillo', 'amarilla', 'amarillos', 'amarillas'], raiz: 'amarill', sufijo: /-am$/i },
+  { palabras: ['gris', 'grises'], raiz: 'gris', sufijo: /-gr$/i },
+  { palabras: ['blanco', 'blanca', 'blancos', 'blancas'], raiz: 'blanc', sufijo: /-bla?$/i },
+  { palabras: ['beige', 'beiges', 'beis'], raiz: 'beige', sufijo: /-bei?$/i },
+  { palabras: ['marfil', 'marfiles'], raiz: 'marfil', sufijo: /-(?:m|mar)$/i },
+  { palabras: ['rojo', 'roja', 'rojos', 'rojas'], raiz: 'roj', sufijo: /-(?:r|roj)$/i },
+];
+function _coincideColorCera(palabra, it){
+  const color = _COLORES_CERA.find(c => c.palabras.includes(palabra));
+  if (!color) return false;
+  const n = String(it.n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return new RegExp('\\b' + color.raiz).test(n) || color.sufijo.test(String(it.s || ''));
+}
 const GRUPOS_ESPECIALES = [
   { requiere: ['acrilico', 'rosa'], requiereAlt: { acrilico: ['polimero'] }, skus: ACRILICO_ROSA_TODOS_SKUS },
   { requiere: ['acrilico', 'cristal'], requiereAlt: { acrilico: ['polimero'], cristal: ['transparente'] }, skus: ACRILICO_CRISTAL_SKUS },
@@ -4584,6 +4601,31 @@ const GRUPOS_ESPECIALES = [
   { requiere: ['navecilla'], requiereAlt: { navecilla: _ALT_NAVECILLA },
     opcionales: ['horno', 'hornos'],
     get skus(){ return _skusAttache(['31692', '31690'], /^base\s+nido\s+de\s+abeja\b|navecilla/); } },
+  // "Taza / tasa (de) goma" → Taza Siliconada Nacional. Si hay productos que se llamen "Taza de Goma…" también aparecen.
+  { requiere: ['taza', 'goma'], requiereAlt: { taza: ['tazas', 'tasa', 'tasas'], goma: ['gomas'] },
+    get skus(){ return _skusAttache(['68628', '68629', '68626-1', '68626-2', '68626-3', '68626-4', '68626-5'], /^tazas?\s+(?:de\s+)?(?:goma|siliconada\s+nacional)\b/); } },
+  // Ceras para modelar / encerar / caracterizar y "cera renfert". Un color escrito ("cera para modelar azul")
+  // filtra por el nombre del producto o por el final del SKU (-AZU, -VE, -BL…).
+  { requiere: ['cera', 'modelar'],
+    requiereAlt: { cera: ['ceras', 'cerade', 'cerapara'], modelar: ['modelado', 'modelados', 'encerado', 'encerados', 'encerar', 'caracterizar', 'caracterizacion', 'caracterizado', 'renfert'] },
+    coincide: _coincideColorCera,
+    skus: ['34258', '34258-F', '34232-ROJ', '61302-F', '61302', '34252-CER', '34231', '34231-ROJ', '34210-100', '34210-200', '34258-BA', '34232-AZU', '34231-AZU', '34250-AZ', '34212-100', '34209-200', '34209-100', '61358-AZ', '34257', '34257-BA', '34257-F', '34231-VER', '34250-VE', '61358-V', '34250-BL', '34232-BEI', '34250-BE', '34231-MAR', '61358-M', '34252-MAR', '34256', '34256-BA', '34256-F', '34250-GR', '34250-AM', '34251'] },
+  // "Pigmentos (para) porcelana / CZR / zirconio / Noritake" → Paste Stain CZR, Glaze FC y líquidos de stain.
+  // Con "pigmento" más cualquiera de esas palabras alcanza, y ninguna filtra la lista.
+  { requiere: ['pigmento', 'porcelana'],
+    requiereAlt: { pigmento: ['pigmentos', 'pigmentacion', 'pigmentar', 'pigmentante', 'pigmentantes', 'pigmetos', 'stain', 'stains', 'maquillaje', 'maquillajes'],
+      porcelana: ['porcelanas', 'czr', 'noritake', 'noritaque', 'zirconio', 'zirconios', 'zirconia', 'zirconias', 'circonio', 'circonia', 'zir', 'zr'] },
+    get skus(){ return _skusAttache(['33739-A', '33739-B', '33739-C', '33739-C1', '33739-C2', '33739-D', '33739-DG', '33739-RB', '33739-SP', '33739-W', '33739-EB', '33739-GB', '33739-LG', '33737', '33675', '33403-L'], /^porcelana\s+czr\s+fc\s+paste\s+stain\b/); } },
+  // "Separador (de/para) porcelana" / "Líquido separador" → Die Lube (va antes que los otros grupos de líquidos)
+  { requiere: ['separador', 'porcelana'], requiereAlt: { separador: ['separadores'], porcelana: ['porcelanas', 'liquido', 'liquidos', 'liq'] },
+    get skus(){ return _skusAttache(['34223', '34225', '34224'], /\bdie\s*lube\b/); } },
+  // "Líquido (para/de) glaze" → líquidos de stain EX3 y C-MIX
+  { requiere: ['liquido', 'glaze'], requiereAlt: { liquido: ['liquidos', 'liq'], glaze: ['glazes', 'glase', 'glaseado', 'glaseador'] },
+    skus: ['33403-L', '33675'] },
+  // "Líquido (para/de) porcelana / modelar / Noritake" → líquidos Modelar/Forming, también los que se agreguen después
+  { requiere: ['liquido', 'porcelana'],
+    requiereAlt: { liquido: ['liquidos', 'liq'], porcelana: ['porcelanas', 'noritake', 'noritaque', 'modelar', 'modelado', 'modeling', 'forming', 'formador'] },
+    get skus(){ return _skusAttache(['33674-100', '33678', '30674-100', '30674'], /\bliquido\s+p\/\s*modelar\b|\bmodeling\s*\/\s*forming\b/); } },
 ];
 function _skusPeliculasRx(){
   return (catalogo || []).filter(it => /^peliculas?\s+radiograficas?\b/.test(String(it.n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())).map(it => it.s);
@@ -4607,7 +4649,7 @@ function _buscarGrupoEspecial(tokens){
     });
     if (cumple) {
       (grupo.opcionales || []).forEach(a => conceptoTokens.add(a));
-      return { skus: grupo.skus, conceptoTokens };
+      return { skus: grupo.skus, conceptoTokens, coincide: grupo.coincide };
     }
   }
   return null;
@@ -4651,7 +4693,8 @@ function buscarProductos(){
           const fields = [idx[0], idx[1]];
           const fieldsSinPunt = [idx[2], idx[3]];
           return tokensRestantes.every(t =>
-            fields.some(f => f.includes(t)) || fieldsSinPunt.some(f => f.includes(_stripAccents(t)))
+            fields.some(f => f.includes(t)) || fieldsSinPunt.some(f => f.includes(_stripAccents(t))) ||
+            (grupoActivo.coincide && grupoActivo.coincide(t, it))
           );
         });
       }
@@ -8392,7 +8435,7 @@ function _aplicarCatalogoEnVivo(data){
         const it = catalogoBySku.get(sku);
         if (!it) return false;
         const nToks = _tokens(it.n);
-        return resto.every(q => nToks.some(n => _sim(q, n) >= 0.85));
+        return resto.every(q => nToks.some(n => _sim(q, n) >= 0.85) || (grupo.coincide && grupo.coincide(q, it)));
       });
       return { skus, requiereKit: grupo.requiere.includes('kit') };
     }
