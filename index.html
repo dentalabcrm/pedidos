@@ -4655,8 +4655,13 @@ function _buscarGrupoEspecial(tokens){
   return null;
 }
 
+// "Composites" es lo mismo que "composite", y junto a composite "fluido/a" es lo mismo que "flow".
+function _normBusquedaComposite(q){
+  const t = String(q || '').replace(/\bc[oó]mposites\b/g, 'composite');
+  return /\bc[oó]mposite\b/.test(t) ? t.replace(/\bfluid[oa]s?\b/g, 'flow') : t;
+}
 function buscarProductos(){
-  const q = busqueda.trim().toLowerCase();
+  const q = _normBusquedaComposite(busqueda.trim().toLowerCase());
   const tokensPre = q.split(/\s+/).filter(Boolean).map(t => _stripAccents(t));
   const hayBusqueda = tokensPre.length > 0;
   let base = catalogo;
@@ -4762,10 +4767,10 @@ function buscarProductos(){
   }
 
   // Con una búsqueda escrita, primero van los productos cuyo nombre EMPIEZA con la primera palabra
-  // buscada ("composite" → "Composite Z350…" antes que "Pincel para Composite"). Va después del
-  // orden por precio a propósito: dentro de cada parte se mantiene el orden elegido.
+  // buscada ("composite" → "Composite Z350…" antes que "Pincel para Composite"). Si se eligió
+  // ordenar por precio, manda ese orden.
   const _primera = tokens.find(t => !_STOPWORDS_BUSQUEDA.has(t));
-  if (_primera) {
+  if (_primera && filtroOrdenPrecio !== 'asc' && filtroOrdenPrecio !== 'desc') {
     const _empieza = it => _getSearchIdx(it)[3].startsWith(_primera) ? 0 : 1;
     ordenados.sort((a, b) => _empieza(a) - _empieza(b));
   }
@@ -8453,7 +8458,7 @@ function _aplicarCatalogoEnVivo(data){
     _separar(texto).forEach(orig => {
       const cant = _cantidad(orig);
       const { qty, detectada } = cant;
-      const resto = _expandirFrases(cant.resto);
+      const resto = _normBusquedaComposite(_expandirFrases(cant.resto));
       const utiles = _tokens(resto).filter(t => !_RELLENO.has(t) || /\d/.test(t));
       if (!utiles.length) return; // saludo, "gracias", etc.
       const memo = mem[_claveTexto(resto)];
