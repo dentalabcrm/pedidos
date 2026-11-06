@@ -4626,6 +4626,17 @@ const GRUPOS_ESPECIALES = [
   { requiere: ['liquido', 'porcelana'],
     requiereAlt: { liquido: ['liquidos', 'liq'], porcelana: ['porcelanas', 'noritake', 'noritaque', 'modelar', 'modelado', 'modeling', 'forming', 'formador'] },
     get skus(){ return _skusAttache(['33674-100', '33678', '30674-100', '30674'], /\bliquido\s+p\/\s*modelar\b|\bmodeling\s*\/\s*forming\b/); } },
+  // "Revestimiento (para) cromo" / "Rev cromo" → revestimientos para cromo-cobalto
+  { requiere: ['revestimiento', 'cromo'],
+    requiereAlt: { revestimiento: ['revestimientos', 'rev', 'revest', 'revestim', 'revestimento'], cromo: ['cromos', 'cromocobalto', 'cr', 'crco', 'esqueletico', 'esqueleticos'] },
+    opcionales: ['cobalto', 'co'],
+    skus: ['34709-A', '34709-B', '34709', '34709-P', '34708-A25', '34708-B25', '34707-25', '34708-25', '34708-5', '34707-P25', '34708-P25', '34697', '34696', '34697-A', '34697-B', '34697-P', '34650-P', '34650', '34579', '34710'] },
+  // "Revestimiento (para) fija / fosfatado / (de) fosfato / (de) alta" → Gilvest, Bellavest, Formula 1, CB-30.
+  // También aparecen los productos nuevos de esas líneas.
+  { requiere: ['revestimiento', 'fija'],
+    requiereAlt: { revestimiento: ['revestimientos', 'rev', 'revest', 'revestim', 'revestimento'],
+      fija: ['fijas', 'fosfatado', 'fosfatados', 'fosfatada', 'fostatado', 'fosfatdo', 'fosfato', 'fosfatos', 'fostato', 'alta', 'altas'] },
+    get skus(){ return _skusAttache(['34580-F', '34569', '34557', '34576', '34572', '34578', '34579', '34575-400', '34575', '34580', '34577', '34594', '34592', '34591', '34590', '34586-P', '34586', '34585', '34567'], /^revestimiento\s+(?:gilvest|bellavest|formula\s*1\b|cb-?30\b)/); } },
 ];
 function _skusPeliculasRx(){
   return (catalogo || []).filter(it => /^peliculas?\s+radiograficas?\b/.test(String(it.n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())).map(it => it.s);
