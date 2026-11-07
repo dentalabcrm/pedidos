@@ -4671,7 +4671,94 @@ function _normBusquedaComposite(q){
   const t = String(q || '').replace(/\bc[oó]mposites\b/g, 'composite');
   return /\bc[oó]mposite\b/.test(t) ? t.replace(/\bfluid[oa]s?\b/g, 'flow') : t;
 }
+// ══════════════════════════════════════════════════════
+//  AUTOCORRECTOR DE BÚSQUEDA (se puede desactivar)
+//  Si lo escrito no encuentra nada, prueba con la palabra más parecida que exista en los
+//  productos / marcas / clientes y avisa "Mostrando resultados para…". La preferencia se guarda
+//  en este navegador (dentalab_autocorrector = '0' desactivado).
+// ══════════════════════════════════════════════════════
+(function(){
+  if (window._acCorregirTexto) return;
+  const LS = 'dentalab_autocorrector';
+  window._acActivo = () => { try { return localStorage.getItem(LS) !== '0'; } catch (e) { return true; } };
+  window._acSetActivo = on => { try { localStorage.setItem(LS, on ? '1' : '0'); } catch (e) {} };
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  function dist(a, b) { // Damerau-Levenshtein (transposiciones incluidas: "anesetsia")
+    const m = a.length, n = b.length, d = [];
+    for (let i = 0; i <= m; i++) { d[i] = [i]; }
+    for (let j = 0; j <= n; j++) d[0][j] = j;
+    for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) {
+      const c = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+    return d[m][n];
+  }
+  const cache = {};
+  // getTexts(add) llama add(texto) por cada texto del que se aprenden palabras; sig cambia cuando cambian los datos
+  window._acVocab = (key, sig, getTexts) => {
+    let c = cache[key];
+    if (c && c.sig === sig) return c;
+    const f = new Map();
+    try { getTexts(t => { norm(t).split(/[^a-z0-9]+/).forEach(w => { if (w.length >= 3 && /[a-z]/.test(w) && !/\d/.test(w)) f.set(w, (f.get(w) || 0) + 1); }); }); } catch (e) {}
+    c = { sig, f, blob: ' ' + [...f.keys()].join(' ') + ' ' };
+    cache[key] = c;
+    return c;
+  };
+  function corrPalabra(t, V) {
+    if (t.length < 3 || /\d/.test(t) || V.blob.includes(t)) return t; // ya existe (o es medida/código): no se toca
+    const max = t.length <= 4 ? 1.5 : 2.5;
+    let best = null, bd = 99, bf = 0;
+    for (const [w, fq] of V.f) {
+      if (w.length < t.length - 2) continue;
+      let d = Math.abs(w.length - t.length) <= 2 ? dist(t, w) : 99;
+      if (w.length > t.length) { const p = dist(t, w.slice(0, t.length)) + 0.5; if (p < d) d = p; } // palabra a medio escribir (cuenta un poco menos que la palabra entera)
+      if (d <= max && (d < bd || (d === bd && fq > bf))) { best = w; bd = d; bf = fq; }
+    }
+    return best || t;
+  }
+  window._acCorregirTexto = (texto, V) => {
+    if (!V || !V.f.size) return null;
+    const parts = norm(texto).trim().split(/\s+/).filter(Boolean);
+    let cambio = false;
+    const out = parts.map(p => { const c = corrPalabra(p, V); if (c !== p) cambio = true; return c; });
+    return cambio ? out.join(' ') : null;
+  };
+  window._acNotaHTML = (orig, corr, onExacto, onOff) => {
+    const e = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    return `✨ No se encontró <b>"${e(orig)}"</b> — mostrando resultados para <b>"${e(corr)}"</b>` +
+      (onExacto ? ` · <a href="#" onclick="${onExacto};return false" style="color:inherit;text-decoration:underline">Buscar exactamente "${e(orig)}"</a>` : '') +
+      (onOff ? ` · <a href="#" onclick="${onOff};return false" style="color:inherit;opacity:.8;text-decoration:underline">Desactivar autocorrector</a>` : '');
+  };
+})();
+
+// Catálogo: si la búsqueda no encuentra nada, se reintenta con la palabra corregida
+let _acNotaCat = null, _acIgnorarCat = null;
+function _acVocabCat(){ return window._acVocab('cat', catalogo.length, add => catalogo.forEach(it => { add(it.n); }) /* solo lo que el buscador realmente revisa: el nombre */); }
 function buscarProductos(){
+  const r = _buscarProductosBase();
+  _acNotaCat = null;
+  const txt = String(busqueda || '').trim();
+  if (_acIgnorarCat !== null && _acIgnorarCat !== txt) _acIgnorarCat = null;
+  if (r.length || !txt || !window._acActivo() || _acIgnorarCat === txt) return r;
+  const corr = window._acCorregirTexto(txt, _acVocabCat());
+  if (!corr) return r;
+  const orig = busqueda; let r2 = [];
+  busqueda = corr; try { r2 = _buscarProductosBase(); } finally { busqueda = orig; }
+  if (r2.length) { _acNotaCat = { orig: txt, corr }; return r2; }
+  return r;
+}
+function _acPintarNotaCat(){
+  const cont = document.getElementById('resultados'); if (!cont) return;
+  let el = document.getElementById('ac-nota');
+  if (!_acNotaCat) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'ac-nota'; cont.parentNode.insertBefore(el, cont); }
+  el.style.cssText = 'margin:0 0 10px;padding:9px 14px;border-radius:10px;background:#fef9c3;border:1px solid #fde047;color:#713f12;font-size:13px;line-height:1.45;';
+  el.innerHTML = window._acNotaHTML(_acNotaCat.orig, _acNotaCat.corr, '_acBuscarExactoCat()', '_acToggleCat(false)');
+}
+window._acBuscarExactoCat = () => { _acIgnorarCat = String(busqueda || '').trim(); paginaActual = 1; renderResultados(); };
+window._acToggleCat = on => { window._acSetActivo(on); const c = document.getElementById('chk-autocorrector'); if (c) c.checked = on; paginaActual = 1; renderResultados(); if (typeof showToast === 'function') showToast(on ? '✨ Autocorrector activado' : 'Autocorrector desactivado', 'ok'); };
+function _buscarProductosBase(){
   const q = _normBusquedaComposite(busqueda.trim().toLowerCase());
   const tokensPre = q.split(/\s+/).filter(Boolean).map(t => _stripAccents(t));
   const hayBusqueda = tokensPre.length > 0;
@@ -5048,8 +5135,9 @@ function renderResultados(){
   renderCatTabs();
   renderVistaToggle();
   // Modo "Pedido de WhatsApp": en vez de la búsqueda normal se muestran los grupos del mensaje
-  if (typeof _waRenderEnResultados === 'function' && _waRenderEnResultados(cont)) return;
+  if (typeof _waRenderEnResultados === 'function' && _waRenderEnResultados(cont)) { document.getElementById('ac-nota')?.remove(); return; }
   const resultados = buscarProductos();
+  _acPintarNotaCat();
   if (!resultados.length) {
     cont.innerHTML = `<div class="sin-resultados">No se encontraron productos.</div>`;
     return;
@@ -6720,6 +6808,7 @@ function renderPrincipal(){
             </select>
             <label class="chk-ofertas"><input type="checkbox" id="chk-ofertas" onchange="onFiltroChange()"> Solo en ofertas</label>
             <label class="chk-ofertas"><input type="checkbox" id="chk-stock" onchange="onFiltroChange()"> Solo en stock</label>
+            <label class="chk-ofertas" title="Si lo que escribís no encuentra nada, busca la palabra más parecida (ej.: 'anestecia' → 'anestesia')"><input type="checkbox" id="chk-autocorrector" ${window._acActivo() ? 'checked' : ''} onchange="_acToggleCat(this.checked)"> ✨ Autocorrector</label>
             ${_frecuentesSkusOrdenados().length ? `<label class="chk-ofertas"><input type="checkbox" id="chk-frecuentes" onchange="onFiltroChange()"> ⭐ Solo lo que pedís seguido</label>` : ''}
             ${esAdminCatalogo() ? `<button id="btn-modo-seleccion-fotos" onclick="toggleModoSeleccionFotos()" style="background:${_modoSeleccionFotos ? '#dc2626' : 'var(--panel2)'};color:${_modoSeleccionFotos ? '#fff' : 'var(--text)'};border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">${_modoSeleccionFotos ? '✕ Cancelar selección' : '☑️ Seleccionar fotos para borrar'}</button>` : ''}
             ${esAdminCatalogo() ? `<button id="btn-agregar-todos-stock" onclick="agregarTodosLosEnStock()" title="Agrega 1 unidad de cada producto con stock o stock a confirmar de lo que se ve ahora" style="background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">✅ Agregar todos los que hay en stock</button>` : ''}
