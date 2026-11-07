@@ -4650,6 +4650,22 @@ function _esFamiliaPrioridadStock(it) {
   return _FAMILIAS_PRIORIDAD_STOCK.has(String(it.s || '').split('-')[0]);
 }
 
+// ── Atajos que SUMAN productos a la búsqueda normal (no la reemplazan) ──
+// Al escribir una de las "palabras", además de lo que se encuentra normalmente, aparecen estos SKU.
+// Si se escriben más palabras, esas filtran dentro de estos SKU (ej: "cofia 31125").
+const EXTRAS_BUSQUEDA = [
+  // "Cofia / Cofias" → además de las cofias descartables, los Attache HE (cofias/teflones para ball attach)
+  { palabras: ['cofia', 'cofias'],
+    skus: ['31111-A', '31111-T', '31125-A', '31125-T', '31130-A', '31130-T', '31143-A', '31143-T', '31150-A', '31150-T'] },
+];
+function _extrasBusqueda(tokens){
+  const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const tn = tokens.map(norm);
+  const skus = new Set(), triggers = new Set();
+  EXTRAS_BUSQUEDA.forEach(e => { if (e.palabras.some(p => tn.includes(p))) { e.skus.forEach(s => skus.add(String(s).trim().toUpperCase())); e.palabras.forEach(p => triggers.add(p)); } });
+  return skus.size ? { skus, triggers, norm } : null;
+}
+
 function _buscarGrupoEspecial(tokens){
   for (const grupo of GRUPOS_ESPECIALES) {
     const conceptoTokens = new Set();
@@ -4809,16 +4825,20 @@ function _buscarProductosBase(){
       if (filtroSoloFrecuentes) { const _fs = new Set(_frecuentesSkusOrdenados()); candidatos = candidatos.filter(it => _fs.has(it.s)); }
       ordenados = candidatos.sort((a, b) => a.n.localeCompare(b.n, 'es'));
     } else {
+      const _extra = _extrasBusqueda(tokens);
       const resultados = base.filter(it => {
         const idx = _getSearchIdx(it);
         const fields = [idx[0], idx[1]];
         const fieldsSinPunt = [idx[2], idx[3]];
-        return tokens.every(t => {
+        const _ok = t => {
           const candidatos = _candidatosSinonimos(t);
           return candidatos.some(c =>
             fields.some(f => f.includes(c)) || fieldsSinPunt.some(f => f.includes(_stripAccents(c)))
           );
-        });
+        };
+        if (tokens.every(_ok)) return true;
+        // Atajo que suma productos (ej: "cofia" → también los Attache HE)
+        return !!(_extra && _extra.skus.has(String(it.s || '').trim().toUpperCase()) && tokens.every(t => _extra.triggers.has(_extra.norm(t)) || _ok(t)));
       });
       // Coincidencias exactas con lo que se escribió van primero; las que aparecen
       // solo por sinónimo (ej: "Gorro" encontrando "Cofia") van después. Dentro de eso,
