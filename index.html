@@ -2224,7 +2224,7 @@ window.abrirZoomProducto = (sku) => {
             ${(!it.cp && listaActiva === 'p1' && _adminVistaPrecio === 'normal') ? `<div style="font-size:11px;font-weight:700;color:#0ea968;margin-top:4px;">✓ Precios ya con 10% off</div>` : ''}
             ${(!it.cp && _adminVistaPrecio === 'normal') ? `<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
               <span>${listaActiva === 'p1' ? 'Pagando en efectivo, transferencia bancaria o tarjeta de débito' : 'Tarjeta de crédito en 1 pago'} — precio final, IVA incluido</span>
-              ${(listaActiva === 'p2' && precio && !it.st && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}', '${encodeURIComponent(it.s)}')">💳 Ver cuotas</button>` : ''}
+              ${(listaActiva === 'p2' && _adminVistaPrecio === 'normal' && precio && !it.st && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}', '${encodeURIComponent(it.s)}')">💳 Ver cuotas</button>` : ''}
             </div>` : ''}
           </div>
           ${qtyEnCarrito > 0
@@ -5051,7 +5051,7 @@ function _htmlTarjetaProducto(it, _avisosEsperandoSet){
     const proveedorAdminHtml = esAdminCatalogo() && it.prov
       ? `<div class="prod-stock-admin" title="Solo vos ves esto — proveedor">🏭 <span>${escHtml(it.prov)}</span></div>`
       : '';
-    const cuotasHtml = (listaActiva === 'p2' && precio && !it.cp && !it.st && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}', '${encodeURIComponent(it.s)}')">💳 Ver cuotas</button>` : '';
+    const cuotasHtml = (listaActiva === 'p2' && _adminVistaPrecio === 'normal' && precio && !it.cp && !it.st && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}', '${encodeURIComponent(it.s)}')">💳 Ver cuotas</button>` : '';
     const categoriaHtml = it.g
       ? `<div class="prod-categoria">
           <span onclick="event.stopPropagation(); irACategoriaDesdeProducto('${escHtml(it.g).replace(/'/g, "\\'")}')">${escHtml(it.g)}</span>
@@ -5545,7 +5545,7 @@ function renderCarrito(){
             </div>
             <div class="ci-subtotal-col">
               <div class="ci-subtotal">${fmtMoney(precio * qty)}</div>
-              ${(listaActiva === 'p2' && precio && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link ci-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio * qty}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}', '${encodeURIComponent(sku)}')">💳 Cuotas</button>` : ''}
+              ${(listaActiva === 'p2' && _adminVistaPrecio === 'normal' && precio && _pwHayFinanciamiento()) ? `<button class="prod-cuotas-link ci-cuotas-link" onclick="event.stopPropagation(); abrirCuotasModal(${precio * qty}, '${encodeURIComponent(it.n)}', '${encodeURIComponent(it.g || '')}', '${encodeURIComponent(sku)}')">💳 Cuotas</button>` : ''}
             </div>
             <button class="ci-quitar" onclick="quitarDelCarrito('${sku}')">✕</button>
           </div>
@@ -5556,7 +5556,7 @@ function renderCarrito(){
   _actualizarResumenEnvio();
   const finTotalCont = document.getElementById('fin-total-cuotas');
   if (finTotalCont) {
-    finTotalCont.innerHTML = (listaActiva === 'p2' && carrito.size && _pwHayFinanciamiento())
+    finTotalCont.innerHTML = (listaActiva === 'p2' && _adminVistaPrecio === 'normal' && carrito.size && _pwHayFinanciamiento())
       ? `<button class="total-cuotas-link" onclick="abrirCuotasTotalModal()">💳 Ver el total en cuotas</button>`
       : '';
   }
@@ -6669,7 +6669,7 @@ function _htmlMedioPagoBlock(){
         <div id="cf-medio-pago-cards" class="pago-opciones" style="margin-top:6px;">${_htmlMedioPagoCards()}</div>
       </div>`;
   }
-  if (listaActiva === 'p2' && _pwHayFinanciamiento()) {
+  if (listaActiva === 'p2' && _adminVistaPrecio === 'normal' && _pwHayFinanciamiento()) {
     return `
       <div class="field">
         <label class="paso-titulo" style="margin-bottom:6px;"><span class="paso-badge paso-badge-chica">3c</span>Financiar en cuotas <span style="font-weight:400;color:var(--text3,#8592a6);">(opcional)</span></label>
