@@ -5218,7 +5218,7 @@ window.agregarTodosLosEnStock = () => {
   });
 };
 // Shift + clic izquierdo EN CUALQUIER PARTE de la página = agrega lo que marcaría "Pedido de WhatsApp"
-// para lo que está escrito en el buscador (antes era lo mismo que el botón "Agregar todos los que hay en stock")
+// para lo que está escrito en el buscador — o, si no hay nada escrito, para la categoría/subcategoría/marca abierta (antes era lo mismo que el botón "Agregar todos los que hay en stock")
 // (solo admin). Se ignora sobre campos de texto/desplegables, con una ventana abierta o con un
 // modo de selección de fotos / asignar manual activo (que usan su propio clic).
 function _shiftClickTodosAplica(e) {
@@ -9079,7 +9079,32 @@ function _aplicarCatalogoEnVivo(data){
     if (!esAdminCatalogo()) return;
     // Sin carteles: lo hace directamente (no hay avisos emergentes que haya que cerrar)
     const texto = String(typeof busqueda === 'string' ? busqueda : '').trim();
-    if (!texto) return;
+    const _aviso = (m, t) => { if (typeof showToast === 'function') showToast(m, t || 'ok'); };
+    if (!texto) {
+      // Sin nada escrito, pero parado en una categoría / subcategoría / marca (o "Solo ofertas" / "Lo que pedís
+      // seguido"): se aplican las mismas reglas del modo WhatsApp (stock Local + Depósito ≥ 5 o a confirmar con
+      // Depósito, padre/hijo, con precio) a TODO lo que se ve en esa sección, en el mismo orden de la pantalla.
+      const hayFiltro = (typeof filtroCategoria !== 'undefined' && filtroCategoria !== 'todas') ||
+        (typeof filtroSubgrupo !== 'undefined' && filtroSubgrupo !== 'todas') ||
+        (typeof filtroMarca !== 'undefined' && filtroMarca !== 'todas') ||
+        (typeof filtroSoloOfertas !== 'undefined' && filtroSoloOfertas) ||
+        (typeof filtroSoloFrecuentes !== 'undefined' && filtroSoloFrecuentes);
+      if (!hayFiltro) { _aviso('Escribí algo en el buscador o elegí una categoría para usar Shift + clic.', 'info'); return; }
+      const enPantalla = (typeof buscarProductos === 'function' ? buscarProductos() : []);
+      if (!enPantalla.length) { _aviso('No hay productos en esta sección.', 'info'); return; }
+      const aptos = enPantalla.filter(it => _stockOk(it.s) && precioDe(it) > 0).map(it => it.s);
+      const nuevosCat = aptos.filter(sku => !carrito.has(sku));
+      if (!nuevosCat.length) { _aviso(aptos.length ? 'Los productos con stock de esta sección ya están en el pedido.' : `No hay productos con stock suficiente en esta sección (Local + Depósito ≥ ${STOCK_MINIMO_COTIZAR}, o a confirmar con Depósito).`, 'info'); return; }
+      nuevosCat.forEach(sku => carrito.set(sku, 1));
+      if (typeof _guardarCarritoLS === 'function') _guardarCarritoLS();
+      requestAnimationFrame(() => {
+        nuevosCat.forEach(sku => { if (typeof _actualizarTarjetaProducto === 'function') _actualizarTarjetaProducto(sku); });
+        renderCarrito();
+      });
+      const salt = enPantalla.length - nuevosCat.length;
+      _aviso(`✅ ${nuevosCat.length} producto${nuevosCat.length === 1 ? '' : 's'} agregado${nuevosCat.length === 1 ? '' : 's'} de esta sección` + (salt ? ` · ${salt} salteado${salt === 1 ? '' : 's'} (stock insuficiente, sin precio o ya en el pedido)` : ''), 'ok');
+      return;
+    }
     const lineas = _interpretar(texto);
     lineas.forEach(_prepararGrupo);
     const skus = [];
