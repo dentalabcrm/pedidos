@@ -4473,6 +4473,24 @@ function _coincideColorCera(palabra, it){
   return new RegExp('\\b' + color.raiz).test(n) || color.sufijo.test(String(it.s || ''));
 }
 const GRUPOS_ESPECIALES = [
+  // "Blanqueamiento consultorio / profesional" (también "blanq", "blan", "consul", "pro", "profe") → toda la
+  // subcategoría Blanqueamiento Dental › Consultorio (también los productos que se agreguen después)
+  { requiere: ['blanqueamiento', 'consultorio'],
+    requiereAlt: { blanqueamiento: ['blanqueamientos', 'blanq', 'blan', 'blanqueo', 'blanquear'], consultorio: ['consultorios', 'consul', 'profesional', 'profesionales', 'pro', 'profe', 'office'] },
+    opcionales: ['en', 'de', 'para', 'p'],
+    get skus(){
+      const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      return (catalogo || []).filter(it => /blanqueamiento/.test(nz(it.g)) && nz(it.sg) === 'consultorio').map(it => it.s);
+    } },
+  // "Blanqueamiento ambulatorio / en casa" (también "blanq", "blan", "ambu") → toda la subcategoría
+  // Blanqueamiento Dental › Ambulatorio (también los productos que se agreguen después)
+  { requiere: ['blanqueamiento', 'ambulatorio'],
+    requiereAlt: { blanqueamiento: ['blanqueamientos', 'blanq', 'blan', 'blanqueo', 'blanquear'], ambulatorio: ['ambulatorios', 'ambulatoria', 'ambu', 'casa', 'hogar'] },
+    opcionales: ['en', 'de', 'para', 'p'],
+    get skus(){
+      const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      return (catalogo || []).filter(it => /blanqueamiento/.test(nz(it.g)) && nz(it.sg) === 'ambulatorio').map(it => it.s);
+    } },
   { requiere: ['acrilico', 'rosa'], requiereAlt: { acrilico: ['polimero'] }, skus: ACRILICO_ROSA_TODOS_SKUS },
   { requiere: ['acrilico', 'cristal'], requiereAlt: { acrilico: ['polimero'], cristal: ['transparente'] }, skus: ACRILICO_CRISTAL_SKUS },
   { requiere: ['adhesivo', 'composite'], skus: ADHESIVO_COMPOSITE_SKUS },
