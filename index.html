@@ -4658,8 +4658,8 @@ const EXTRAS_BUSQUEDA = [
   // "Cofia / Cofias" → además de las cofias descartables, los Attache HE (cofias/teflones para ball attach)
   { palabras: ['cofia', 'cofias'],
     skus: ['31111-A', '31111-T', '31125-A', '31125-T', '31130-A', '31130-T', '31143-A', '31143-T', '31150-A', '31150-T'] },
-  // "Cera resinosa" → Cera pegajosa
-  { palabras: ['cera resinosa'], skus: ['61316'] },
+  // "Cera resinosa" / "Cera resi" → Cera pegajosa
+  { palabras: ['cera resinosa', 'cera resi'], skus: ['61316'] },
 ];
 function _extrasBusqueda(tokens){
   const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
