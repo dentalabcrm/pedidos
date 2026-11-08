@@ -4337,6 +4337,7 @@ window.cambiarPago = () => {
 // ── Sinónimos de búsqueda: si el término escrito coincide con cualquiera de un
 //    grupo, también se busca con los demás términos de ese mismo grupo. ──
 const SINONIMOS_RAW = [
+  ['Polímero', 'Acrílico'], // "acrilico auto 66" = "Polimero Autocurable … 66"
   ['Irrigador', 'Duchador'],
   ['Placas', 'Termoplaca'],
   ['Campos', 'Campo', 'Compresas'],
@@ -8413,7 +8414,12 @@ function _aplicarCatalogoEnVivo(data){
       if (!c || !/\d/.test(c)) return;
       [c, c.toUpperCase()].forEach(s => { if (catalogoBySku.has(s) && !directos.includes(s)) directos.push(s); });
     });
-    if (directos.length) return directos.map(sku => ({ sku, score: 1, porSku: true }));
+    // Un número SOLO (ej. "66") junto a otras palabras suele ser color/medida ("polimero auto 66"), no un SKU:
+    // en ese caso primero se busca por nombre, y el SKU se usa solo si por nombre no aparece nada bueno.
+    const _hayPalabras = qs.some(t => !/\d/.test(t));
+    const _fuertes = directos.filter(sku => !/^\d+$/.test(sku) || !_hayPalabras);
+    if (_fuertes.length) return _fuertes.map(sku => ({ sku, score: 1, porSku: true }));
+    const _debiles = directos;
 
     const qInfo = qs.map(q => {
       const parecidos = new Map(); // palabra del catálogo → parecido
@@ -8455,6 +8461,7 @@ function _aplicarCatalogoEnVivo(data){
       res.push({ sku: p.it.s, score, cob: cobertura });   // cob = cuánto de lo pedido tiene el nombre (1 = todas las palabras)
     });
     res.sort((a, b) => b.score - a.score || (catalogoBySku.get(a.sku)?.n || '').length - (catalogoBySku.get(b.sku)?.n || '').length);
+    if (_debiles.length && (!res.length || res[0].score < 0.6)) return _debiles.map(sku => ({ sku, score: 1, porSku: true }));
     return res.slice(0, limite);
   }
 
