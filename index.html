@@ -4660,7 +4660,12 @@ const EXTRAS_BUSQUEDA = [
     skus: ['31111-A', '31111-T', '31125-A', '31125-T', '31130-A', '31130-T', '31143-A', '31143-T', '31150-A', '31150-T'] },
   // "Cera resinosa" / "Cera resi" → Cera pegajosa
   { palabras: ['cera resinosa', 'cera resi'], skus: ['61316'] },
+  // "Caja(s) (de/para) ortodoncia / ortopedia" → Cajas ortodoncia
+  { palabras: ['caja ortodoncia', 'caja ortopedia'],
+    skus: ['242', '242-f', '245-F', '251-BLA', '251-CEL', '251-LIL', '251-NAR', '251-NEG', '251-VEA', '244', '244-F', '247', '251-ROS', '246-F', 'COMBO-22', 'COMBO-21'] },
 ];
+// Palabras de unión que no filtran cuando se usa un atajo ("caja PARA ortodoncia", "caja DE ortopedia")
+const _EXTRAS_UNION = new Set(['de', 'del', 'para', 'p', 'p/', 'la', 'las', 'el', 'los', 'con', 'y', 'x']);
 function _extrasBusqueda(tokens){
   const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const sing = w => w.replace(/(?:es|s)$/, '');
@@ -4675,6 +4680,7 @@ function _extrasBusqueda(tokens){
     });
     if (hit) e.skus.forEach(s => skus.add(String(s).trim().toUpperCase()));
   });
+  if (skus.size) tn.forEach(t => { if (_EXTRAS_UNION.has(t)) triggers.add(t); });
   return skus.size ? { skus, triggers, norm } : null;
 }
 // ¿Este SKU entra por un atajo? (para los buscadores chicos: autocompletar, etc.) okT(t) = la palabra coincide normalmente
