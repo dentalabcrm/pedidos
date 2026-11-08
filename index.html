@@ -9275,13 +9275,35 @@ function _aplicarCatalogoEnVivo(data){
         if (_atajo.has(String(it.s).trim().toUpperCase()) && _stockOk(it.s) && precioDe(it) > 0 && !skus.includes(it.s)) skus.push(it.s);
       });
     }
-    const nuevos = skus.filter(sku => !carrito.has(sku));
+    // Shift + clic agrega lo que se VE en pantalla: si lo interpretado no está entre los resultados (ej. "polimero
+    // auto 66" tomaba el "66" como el SKU 66 = una bandeja), se usa lo que muestra el buscador, con las mismas reglas
+    // de stock y precio. Si se escribió un número (color/medida), se priorizan los que lo tienen en el nombre.
+    try {
+      const _vis = (typeof buscarProductos === 'function' ? buscarProductos() : []);
+      if (_vis.length) {
+        const _visSet = new Set(_vis.map(it => it.s));
+        let _dentro = skus.filter(x => _visSet.has(x));
+        if (!_dentro.length) {
+          const _nums = texto.split(/\s+/).filter(t => /^\d+$/.test(t));
+          let _cand = _vis;
+          if (_nums.length) {
+            const _conNum = _vis.filter(it => _nums.every(n => new RegExp('(^|[^\\d])' + n + '([^\\d]|$)').test(String(it.n || ''))));
+            if (_conNum.length) _cand = _conNum;
+          }
+          _dentro = _cand.filter(it => _stockOk(it.s) && precioDe(it) > 0).map(it => it.s);
+          if (!_dentro.length) _cand.forEach(it => { if (!skus.includes(it.s)) skus.push(it.s); }); // para el aviso
+          else skus.length = 0;
+        } else skus.length = 0;
+        if (_dentro.length) _dentro.forEach(x => skus.push(x));
+      }
+    } catch (e) {}
+    const nuevos = skus.filter(sku => !carrito.has(sku) && _stockOk(sku) && precioDe(catalogoBySku.get(sku) || {}) > 0);
     if (!nuevos.length) {
       // Antes no decía nada: ahora explica por qué no se agregó
       const vistos = new Set(); lineas.forEach(g => g.opciones.forEach(o => vistos.add(o.sku))); _atajo.forEach(x => vistos.add(x));
       const enc = Array.from(vistos).filter(x => catalogoBySku.has(x));
       _aviso(!enc.length ? `No encontré productos para "${texto}".`
-        : skus.length ? 'Lo encontrado ya está en el pedido.'
+        : skus.some(x => _stockOk(x) && precioDe(catalogoBySku.get(x) || {}) > 0) ? 'Lo encontrado ya está en el pedido.'
         : `No se agregó nada: lo encontrado no tiene stock suficiente (Local + Depósito ≥ ${STOCK_MINIMO_COTIZAR}, o "Stock a confirmar" con algo en Depósito; si es un hijo, depende del stock del padre).`, 'info');
       return;
     }
