@@ -4651,19 +4651,36 @@ function _esFamiliaPrioridadStock(it) {
 }
 
 // ── Atajos que SUMAN productos a la búsqueda normal (no la reemplazan) ──
-// Al escribir una de las "palabras", además de lo que se encuentra normalmente, aparecen estos SKU.
-// Si se escriben más palabras, esas filtran dentro de estos SKU (ej: "cofia 31125").
+// Al escribir una de las "palabras" (o frases: tienen que estar todas sus palabras), además de lo que se
+// encuentra normalmente, aparecen estos SKU. Singular/plural da igual. Si se escriben más palabras, esas
+// filtran dentro de estos SKU (ej: "cofia 31125").
 const EXTRAS_BUSQUEDA = [
   // "Cofia / Cofias" → además de las cofias descartables, los Attache HE (cofias/teflones para ball attach)
   { palabras: ['cofia', 'cofias'],
     skus: ['31111-A', '31111-T', '31125-A', '31125-T', '31130-A', '31130-T', '31143-A', '31143-T', '31150-A', '31150-T'] },
+  // "Cera resinosa" → Cera pegajosa
+  { palabras: ['cera resinosa'], skus: ['61316'] },
 ];
 function _extrasBusqueda(tokens){
   const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  const tn = tokens.map(norm);
+  const sing = w => w.replace(/(?:es|s)$/, '');
+  const tn = (tokens || []).map(norm).filter(Boolean);
   const skus = new Set(), triggers = new Set();
-  EXTRAS_BUSQUEDA.forEach(e => { if (e.palabras.some(p => tn.includes(p))) { e.skus.forEach(s => skus.add(String(s).trim().toUpperCase())); e.palabras.forEach(p => triggers.add(p)); } });
+  EXTRAS_BUSQUEDA.forEach(e => {
+    let hit = false;
+    e.palabras.forEach(frase => {
+      const ws = norm(frase).split(/\s+/).filter(Boolean);
+      const usados = ws.map(w => tn.filter(t => t === w || sing(t) === sing(w)));
+      if (ws.length && usados.every(u => u.length)) { hit = true; usados.forEach(u => u.forEach(t => triggers.add(t))); }
+    });
+    if (hit) e.skus.forEach(s => skus.add(String(s).trim().toUpperCase()));
+  });
   return skus.size ? { skus, triggers, norm } : null;
+}
+// ¿Este SKU entra por un atajo? (para los buscadores chicos: autocompletar, etc.) okT(t) = la palabra coincide normalmente
+function _extrasMatchSku(tokens, sku, okT){
+  const ex = _extrasBusqueda(tokens);
+  return !!(ex && ex.skus.has(String(sku || '').trim().toUpperCase()) && tokens.every(t => ex.triggers.has(ex.norm(t)) || (okT ? okT(t) : false)));
 }
 
 function _buscarGrupoEspecial(tokens){
@@ -4750,7 +4767,7 @@ function _normBusquedaComposite(q){
 
 // Catálogo: si la búsqueda no encuentra nada, se reintenta con la palabra corregida
 let _acNotaCat = null, _acIgnorarCat = null;
-function _acVocabCat(){ return window._acVocab('cat', catalogo.length, add => catalogo.forEach(it => { add(it.n); }) /* solo lo que el buscador realmente revisa: el nombre */); }
+function _acVocabCat(){ return window._acVocab('cat', catalogo.length, add => { catalogo.forEach(it => { add(it.n); }); if (typeof EXTRAS_BUSQUEDA !== 'undefined') EXTRAS_BUSQUEDA.forEach(e => e.palabras.forEach(add)); } /* solo lo que el buscador realmente revisa: el nombre */); }
 function buscarProductos(){
   const r = _buscarProductosBase();
   _acNotaCat = null;
@@ -8583,7 +8600,17 @@ function _aplicarCatalogoEnVivo(data){
       if (!utiles.length) return; // saludo, "gracias", etc.
       const memo = mem[_claveTexto(resto)];
       const recordados = (Array.isArray(memo) ? memo : (memo ? [memo] : [])).filter(sku => catalogoBySku.has(sku));
-      const especial = _grupoEspecialDe(resto);
+      let especial = _grupoEspecialDe(resto);
+      // Atajos que suman productos (ej. "cofia" → Attache HE, "cera resinosa" → Cera pegajosa): el renglón
+      // pasa a ser como un grupo especial con lo que coincide bien + los SKU del atajo.
+      if (!especial && typeof _extrasBusqueda === 'function') {
+        const _exL = _extrasBusqueda(_tokens(resto));
+        if (_exL) {
+          const bien = _opcionesDe(resto).filter(o => o.score >= 0.8).map(o => o.sku);
+          const exSkus = catalogo.filter(it => _exL.skus.has(String(it.s).trim().toUpperCase())).map(it => it.s);
+          especial = { skus: [...bien, ...exSkus.filter(x => !bien.includes(x))] };
+        }
+      }
       let opciones = especial ? especial.skus.map(sku => ({ sku, score: 1, cob: 1 })) : _opcionesDe(resto);
       // Igual que en el buscador general: "composite" sin decir "flow" no trae los Flow
       const _toksResto = _tokens(resto);
@@ -8850,9 +8877,12 @@ function _aplicarCatalogoEnVivo(data){
   ]);
   // Blísters armados partiendo una caja (PARES_BLISTER_PADRE del CRM): también cuentan si su caja tiene ≥ 5
   const _BLISTERS_CON_PADRE = new Set(['6505-F', '6506-F', '6507-F', '6508-F']);
+  // Productos que se cotizan aunque digan "Stock a confirmar" (siempre que no estén Agotados)
+  const _COTIZAR_CON_STOCK_A_CONFIRMAR = new Set(['6068-F']);
   function _stockOk(sku){
     const it = catalogoBySku.get(sku);
     if (!it || it.st) return false;
+    if (_COTIZAR_CON_STOCK_A_CONFIRMAR.has(String(sku).trim().toUpperCase())) return true;
     if (_HIJOS_CON_PADRE.has(sku) || it.hj) return !it.sb;          // padre con ≥ 5 → "En stock"
     if (_BLISTERS_CON_PADRE.has(sku) && !it.sb) return true;
     if (it.d1 === undefined && it.dc === undefined) return true;
@@ -9187,8 +9217,12 @@ function _aplicarCatalogoEnVivo(data){
   window._waAgregarComoWhatsapp = () => {
     if (!esAdminCatalogo()) return;
     // Sin carteles: lo hace directamente (no hay avisos emergentes que haya que cerrar)
-    const texto = String(typeof busqueda === 'string' ? busqueda : '').trim();
+    let texto = String(typeof busqueda === 'string' ? busqueda : '').trim();
     const _aviso = (m, t) => { if (typeof showToast === 'function') showToast(m, t || 'ok'); };
+    // Si el autocorrector cambió lo escrito (ej. "rilera" → "rielera"), se usa lo corregido: lo mismo que se ve en pantalla
+    if (texto && typeof buscarProductos === 'function') {
+      try { buscarProductos(); if (typeof _acNotaCat !== 'undefined' && _acNotaCat && _acNotaCat.corr) texto = String(_acNotaCat.corr).trim(); } catch (e) {}
+    }
     if (!texto) {
       // Sin nada escrito, pero parado en una categoría / subcategoría / marca (o "Solo ofertas" / "Lo que pedís
       // seguido"): se aplican las mismas reglas del modo WhatsApp (stock Local + Depósito ≥ 5 o a confirmar con
@@ -9218,14 +9252,40 @@ function _aplicarCatalogoEnVivo(data){
     lineas.forEach(_prepararGrupo);
     const skus = [];
     lineas.forEach(g => g.elegidos.forEach((_, sku) => { if (catalogoBySku.has(sku) && !skus.includes(sku)) skus.push(sku); }));
+    // TODOS los atajos del buscador (grupos especiales como "acrílico rosa", "pasta provi", "placa protector"…
+    // y los extras como "cofia" → Attache HE): lo que el atajo muestra en pantalla también se agrega, con las
+    // mismas reglas de stock y precio. Así Shift + clic agrega lo mismo que se ve.
+    const _ex = (typeof _extrasBusqueda === 'function') ? _extrasBusqueda(texto.split(/\s+/)) : null;
+    const _atajo = new Set(_ex ? _ex.skus : []);
+    try {
+      const qG = _normBusquedaComposite(texto.toLowerCase());
+      const tG = qG.split(/\s+/).flatMap(t => /[a-z]/.test(t) ? t.split(/[-\/;:()]+|(?<!\d)[.,]|[.,](?!\d)/) : [t]).filter(Boolean).map(t => _stripAccents(t));
+      const gA = (typeof _buscarGrupoEspecial === 'function') ? _buscarGrupoEspecial(tG) : null;
+      if (gA) gA.skus.forEach(x => _atajo.add(String(x).trim().toUpperCase()));
+    } catch (e) {}
+    if (_atajo.size) {
+      const enPantallaTxt = (typeof buscarProductos === 'function' ? buscarProductos() : []);
+      enPantallaTxt.forEach(it => {
+        if (_atajo.has(String(it.s).trim().toUpperCase()) && _stockOk(it.s) && precioDe(it) > 0 && !skus.includes(it.s)) skus.push(it.s);
+      });
+    }
     const nuevos = skus.filter(sku => !carrito.has(sku));
-    if (!nuevos.length) return;
+    if (!nuevos.length) {
+      // Antes no decía nada: ahora explica por qué no se agregó
+      const vistos = new Set(); lineas.forEach(g => g.opciones.forEach(o => vistos.add(o.sku))); _atajo.forEach(x => vistos.add(x));
+      const enc = Array.from(vistos).filter(x => catalogoBySku.has(x));
+      _aviso(!enc.length ? `No encontré productos para "${texto}".`
+        : skus.length ? 'Lo encontrado ya está en el pedido.'
+        : `No se agregó nada: lo encontrado no tiene stock suficiente (Local + Depósito ≥ ${STOCK_MINIMO_COTIZAR}, o "Stock a confirmar" con algo en Depósito; si es un hijo, depende del stock del padre).`, 'info');
+      return;
+    }
     nuevos.forEach(sku => carrito.set(sku, 1));
     if (typeof _guardarCarritoLS === 'function') _guardarCarritoLS();
     requestAnimationFrame(() => {
       nuevos.forEach(sku => { if (typeof _actualizarTarjetaProducto === 'function') _actualizarTarjetaProducto(sku); });
       renderCarrito();
     });
+    _aviso(`✅ ${nuevos.length} producto${nuevos.length === 1 ? '' : 's'} agregado${nuevos.length === 1 ? '' : 's'} al pedido`, 'ok');
   };
 
   // ── Teclado del modo (en "captura", antes que los atajos del catálogo) ──
