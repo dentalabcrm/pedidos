@@ -656,7 +656,7 @@
   .total-cuotas-link:hover{background:#0284c710;}
 
   /* ── Modal de financiamiento en cuotas ── */
-  .pf-cols > div{break-inside:avoid;}
+  .pf-cols > div{break-inside:avoid;min-width:0;}
   .pwfin-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:900;display:flex;align-items:flex-end;justify-content:center;}
   @media (min-width:640px){ .pwfin-backdrop{align-items:center;} }
   .pwfin-panel{background:#fff;width:100%;max-width:440px;max-height:85vh;border-radius:16px 16px 0 0;overflow:hidden;display:flex;flex-direction:column;animation:pwfinSlideUp .25s ease-out;}
@@ -5649,6 +5649,18 @@ let _pedidoEnvioAdmin = { activo: false, tipo: 'Envío a domicilio', costo: '', 
 // SKU cuyo precio se está editando a mano ahora mismo en el modal "Pantalla completa"
 // (solo puede haber uno a la vez, como con el envío) — null cuando no se está editando nada.
 let _pedidoEditandoPrecioSku = null;
+// Pantalla completa (Ampliar): columnas anchas (como antes), pero se llena primero cada columna hasta abajo
+// de la pantalla y recién después se pasa a la siguiente. Si los productos no entran en la pantalla, vuelve a
+// repartirlos parejo entre las columnas con barra para bajar (así nunca hay que moverse para el costado).
+function _pfColsAjustar(){
+  const g = document.querySelector('#pedido-full-backdrop .pf-cols');
+  const body = document.getElementById('pedido-full-body');
+  if (!g || !body) return;
+  g.style.columnFill = 'auto';
+  g.style.height = Math.max(200, body.clientHeight - 8) + 'px';
+  if (g.scrollWidth > g.clientWidth + 2) { g.style.columnFill = 'balance'; g.style.height = ''; }
+}
+window.addEventListener('resize', () => _pfColsAjustar());
 window.abrirVistaCompletaPedido = (preservarEstado) => {
   if (!preservarEstado) {
     _pedidoFullModo = esAdminCatalogo() ? 'presupuesto' : 'pedido';
@@ -5840,6 +5852,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
       </div>
     </div>`;
   document.body.appendChild(bd);
+  _pfColsAjustar();
   bd.addEventListener('click', e => { if (e.target === bd) bd.remove(); });
 };
 
