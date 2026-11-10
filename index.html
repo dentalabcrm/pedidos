@@ -4473,6 +4473,17 @@ function _coincideColorCera(palabra, it){
   return new RegExp('\\b' + color.raiz).test(n) || color.sufijo.test(String(it.s || ''));
 }
 const GRUPOS_ESPECIALES = [
+  // "Matizador / Pigmento(s) (de/para) (caracterización / caracterizar) acrílico" → matizadores y pigmentos para
+  // acrílico: los SKU de la lista + toda la subcategoría "Pigmentos" (también lo que se agregue después)
+  { requiere: ['matizador', 'acrilico'],
+    requiereAlt: { matizador: ['matizadores', 'matrizador', 'matrizadores', 'pigmento', 'pigmentos'], acrilico: ['acrilicos', 'acrilica', 'acrilicas', 'polimero', 'polimeros'] },
+    opcionales: ['caracterizacion', 'caracterizar', 'caracterizaciones', 'de', 'para', 'p'],
+    get skus(){
+      const base = ['60129-AZU', '60129-BLA', '60129-GRI', '60129-MAR', '60129-PAR', '60129-ROJ', '60129-ROS', '60129-VIO', '60129-AMA', '60129-VER', '66716-AMA', '66716-NAR', '66716-ROJ', '66716-ROS', '66716-VER', '66716-VIO', '66716-AZU', '60132', '66711', '60131'];
+      const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      const din = (catalogo || []).filter(it => nz(it.sg) === 'pigmentos').map(it => String(it.s));
+      return [...base, ...din.filter(x => !base.includes(x))];
+    } },
   // "Pasta provi(soria) (de) (foto) jeringa/jer" / "Material de obturación temporario (foto) jeringa" (y con "foto" sin
   // jeringa) → Material De Obturación Temporario Fotopolimerizable (va ANTES del atajo general "pasta provisoria")
   { requiere: ['pasta', 'provisoria', 'jeringa'],
