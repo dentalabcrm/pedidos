@@ -4473,6 +4473,28 @@ function _coincideColorCera(palabra, it){
   return new RegExp('\\b' + color.raiz).test(n) || color.sufijo.test(String(it.s || ''));
 }
 const GRUPOS_ESPECIALES = [
+  // "Caja(s) metálica(s) / de metal / de acero inoxidable" → Cajas de Acero Inoxidable (también las que se
+  // agreguen después con "Caja … Acero Inoxidable" en el nombre)
+  { requiere: ['caja', 'metalica'],
+    requiereAlt: { caja: ['cajas'], metalica: ['metalicas', 'metalico', 'metalicos', 'metal', 'acero', 'inoxidable', 'inox'] },
+    opcionales: ['de', 'para', 'p', 'acero', 'inoxidable', 'inox'],
+    get skus(){
+      const base = ['10020', '206', '200', '10021', '10022', '218-L', '217', '210', '207', '198', '10025', '10026', '212', '10027', '208', '218-P', '211', '60237'];
+      const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const din = (catalogo || []).filter(it => /^caja\b/.test(nz(it.n)) && /acero inox/.test(nz(it.n))).map(it => String(it.s));
+      return [...base, ...din.filter(x => !base.includes(x))];
+    } },
+  // "Cubeta(s) metálica(s) / de acero / de metal / tipo rimlock" → Cubetas t/ Rimlock (también las que se agreguen
+  // después con "Rimlock" en el nombre)
+  { requiere: ['cubeta', 'metalica'],
+    requiereAlt: { cubeta: ['cubetas'], metalica: ['metalicas', 'metalico', 'metalicos', 'metal', 'acero', 'rimlock', 'rimlok', 'rinlock'] },
+    opcionales: ['tipo', 't', 'de', 'para', 'p', 'inoxidable', 'inox'],
+    get skus(){
+      const base = ['591', '598', '589', '593', '592', '599', '588', '595', '603', '602'];
+      const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const din = (catalogo || []).filter(it => /\bcubetas?\b/.test(nz(it.n)) && /rimlock/.test(nz(it.n))).map(it => String(it.s));
+      return [...base, ...din.filter(x => !base.includes(x))];
+    } },
   // "Blanqueamiento consultorio / profesional" (también "blanq", "blan", "consul", "pro", "profe") → toda la
   // subcategoría Blanqueamiento Dental › Consultorio (también los productos que se agreguen después)
   { requiere: ['blanqueamiento', 'consultorio'],
