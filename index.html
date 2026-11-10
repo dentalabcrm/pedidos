@@ -4682,6 +4682,10 @@ const EXTRAS_BUSQUEDA = [
   // "Caja(s) (de/para) ortodoncia / ortopedia" → Cajas ortodoncia
   { palabras: ['caja ortodoncia', 'caja ortopedia'],
     skus: ['242', '242-f', '245-F', '251-BLA', '251-CEL', '251-LIL', '251-NAR', '251-NEG', '251-VEA', '244', '244-F', '247', '251-ROS', '246-F', 'COMBO-22', 'COMBO-21'] },
+  // "Ácido clorhídrico" (y abreviado) → Pasta para Pulido Opalustre ULTRADENT
+  { palabras: ['acido clorhidrico', 'acido clor', 'acido clorh', 'clorhidrico', 'clorhi'], skus: ['6520'] },
+  // "Ácido (grabador) (de/para) porcelana" / "Acondicionador (de/para) porcelana"
+  { palabras: ['acido grabador porcelana', 'acido porcelana', 'acondicionador porcelana'], skus: ['1549', '1565', '1562', '1539', '1541'] },
 ];
 // Palabras de unión que no filtran cuando se usa un atajo ("caja PARA ortodoncia", "caja DE ortopedia")
 const _EXTRAS_UNION = new Set(['de', 'del', 'para', 'p', 'p/', 'la', 'las', 'el', 'los', 'con', 'y', 'x']);
