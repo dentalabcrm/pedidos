@@ -4481,45 +4481,45 @@ const GRUPOS_ESPECIALES = [
   // "(Cemento) (temporario) hidróxido (de calcio) (en) polvo" / "Hidro polvo" / "Cemento temp(orario) polvo"
   // → Hidróxido de calcio en polvo
   { requiere: ['hidroxido', 'polvo'],
-    requiereAlt: { hidroxido: ['hidroxidos', 'hidro', 'hidrox'], polvo: ['polvos'] },
+    requiereAlt: { hidroxido: ['hidroxidos', 'hidro', 'hidrox', 'hid'], polvo: ['polvos'] },
     opcionales: ['cemento', 'cementos', 'temporario', 'temporarios', 'temporal', 'temp', 'calcio', 'ca', 'de', 'en', 'para', 'p'],
     skus: ['6617-P'] },
   { requiere: ['cemento', 'temporario', 'polvo'],
     requiereAlt: { cemento: ['cementos'], temporario: ['temporarios', 'temporal', 'temporales', 'temp'], polvo: ['polvos'] },
-    opcionales: ['hidroxido', 'hidro', 'calcio', 'ca', 'de', 'en', 'para', 'p'],
+    opcionales: ['hidroxido', 'hidro', 'hid', 'calcio', 'ca', 'de', 'en', 'para', 'p'],
     skus: ['6617-P'] },
   // (también escrito todo junto: "cemento temporariopolvo")
   { requiere: ['cemento', 'temporariopolvo'], requiereAlt: { cemento: ['cementos'], temporariopolvo: ['temppolvo'] },
-    opcionales: ['hidroxido', 'hidro', 'calcio', 'ca', 'de', 'en'], skus: ['6617-P'] },
+    opcionales: ['hidroxido', 'hidro', 'hid', 'calcio', 'ca', 'de', 'en'], skus: ['6617-P'] },
   // "(Cemento) (temporario) hidróxido (de calcio) (en) jeringa / jer" / "Hidro jer" / "Cemento temp(orario) jeringa"
   // → Hidróxido de calcio en jeringa
   { requiere: ['hidroxido', 'jeringa'],
-    requiereAlt: { hidroxido: ['hidroxidos', 'hidro', 'hidrox'], jeringa: ['jeringas', 'jer', 'jering'] },
+    requiereAlt: { hidroxido: ['hidroxidos', 'hidro', 'hidrox', 'hid'], jeringa: ['jeringas', 'jer', 'jering'] },
     opcionales: ['cemento', 'cementos', 'temporario', 'temporarios', 'temporal', 'temp', 'calcio', 'ca', 'de', 'en', 'para', 'p'],
     skus: ['1137', '6615'] },
   { requiere: ['cemento', 'temporario', 'jeringa'],
     requiereAlt: { cemento: ['cementos'], temporario: ['temporarios', 'temporal', 'temporales', 'temp'], jeringa: ['jeringas', 'jer', 'jering'] },
-    opcionales: ['hidroxido', 'hidro', 'calcio', 'ca', 'de', 'en', 'para', 'p'],
+    opcionales: ['hidroxido', 'hidro', 'hid', 'calcio', 'ca', 'de', 'en', 'para', 'p'],
     skus: ['1137', '6615'] },
   // "(Cemento) (temporario) hidróxido (de calcio) líquido / liq / liqui" / "Hidro liq" / "Cemento temp(orario) líquido"
   // → Hidróxido de calcio líquido
   { requiere: ['hidroxido', 'liquido'],
-    requiereAlt: { hidroxido: ['hidroxidos', 'hidro', 'hidrox'], liquido: ['liquidos', 'liquida', 'liq', 'liqui'] },
+    requiereAlt: { hidroxido: ['hidroxidos', 'hidro', 'hidrox', 'hid'], liquido: ['liquidos', 'liquida', 'liq', 'liqui'] },
     opcionales: ['cemento', 'cementos', 'temporario', 'temporarios', 'temporal', 'temp', 'calcio', 'ca', 'de', 'en', 'para', 'p'],
     skus: ['6616', '6617'] },
   { requiere: ['cemento', 'temporario', 'liquido'],
     requiereAlt: { cemento: ['cementos'], temporario: ['temporarios', 'temporal', 'temporales', 'temp'], liquido: ['liquidos', 'liquida', 'liq', 'liqui'] },
-    opcionales: ['hidroxido', 'hidro', 'calcio', 'ca', 'de', 'en', 'para', 'p'],
+    opcionales: ['hidroxido', 'hidro', 'hid', 'calcio', 'ca', 'de', 'en', 'para', 'p'],
     skus: ['6616', '6617'] },
   // "(Cemento) (temporario) hidróxido (de calcio) (en) pasta" / "Hidro pasta" / "Cemento temp(orario) pasta"
   // → Cementos de hidróxido de calcio en pasta
   { requiere: ['hidroxido', 'pasta'],
-    requiereAlt: { hidroxido: ['hidroxidos', 'hidro', 'hidrox'], pasta: ['pastas'] },
+    requiereAlt: { hidroxido: ['hidroxidos', 'hidro', 'hidrox', 'hid'], pasta: ['pastas'] },
     opcionales: ['cemento', 'cementos', 'temporario', 'temporarios', 'temporal', 'temp', 'calcio', 'ca', 'de', 'en', 'para', 'p'],
     skus: ['1136', '6618', '1143', '1149', '1140'] },
   { requiere: ['cemento', 'temporario', 'pasta'],
     requiereAlt: { cemento: ['cementos'], temporario: ['temporarios', 'temporal', 'temporales', 'temp'], pasta: ['pastas'] },
-    opcionales: ['hidroxido', 'hidro', 'calcio', 'ca', 'de', 'en', 'para', 'p'],
+    opcionales: ['hidroxido', 'hidro', 'hid', 'calcio', 'ca', 'de', 'en', 'para', 'p'],
     skus: ['1136', '6618', '1143', '1149', '1140'] },
   // "Cera (rosa) dura / extradura / extra dura" → Cera Beauty Pink: los SKU de la lista + todo lo que diga
   // "Cera Beauty Pink" en el nombre (también lo que se agregue después)
