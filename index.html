@@ -4473,15 +4473,37 @@ function _coincideColorCera(palabra, it){
   return new RegExp('\\b' + color.raiz).test(n) || color.sufijo.test(String(it.s || ''));
 }
 const GRUPOS_ESPECIALES = [
-  // "Caja(s) metálica(s) / de metal / de acero inoxidable" → Cajas de Acero Inoxidable (también las que se
-  // agreguen después con "Caja … Acero Inoxidable" en el nombre)
+  // "Cera (rosa) dura / extradura / extra dura" → Cera Beauty Pink: los SKU de la lista + todo lo que diga
+  // "Cera Beauty Pink" en el nombre (también lo que se agregue después)
+  { requiere: ['cera', 'dura'],
+    requiereAlt: { cera: ['ceras'], dura: ['duras', 'extradura', 'extraduras'] },
+    opcionales: ['rosa', 'rosas', 'extra', 'de', 'para', 'p'],
+    get skus(){
+      const base = ['61313-F', '61322', '61322-F', '61313'];
+      const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const din = (catalogo || []).filter(it => /cera beauty pink/.test(nz(it.n))).map(it => String(it.s));
+      return [...base, ...din.filter(x => !base.includes(x))];
+    } },
+  // "Acrílico / Polímero / Material / Resina (acrílica) (para) rebasado" → Materiales de rebasado: los SKU de la
+  // lista + toda la subcategoría "Rebasado" (también los que se agreguen después)
+  { requiere: ['acrilico', 'rebasado'],
+    requiereAlt: { acrilico: ['acrilicos', 'acrilica', 'acrilicas', 'polimero', 'polimeros', 'material', 'materiales', 'resina', 'resinas'], rebasado: ['rebasados', 'rebase', 'rebasar'] },
+    opcionales: ['para', 'p', 'de', 'en', 'acrilico', 'acrilica', 'resina'],
+    get skus(){
+      const base = ['60011', '60010', '1358', '1355', '1357', '1356-INC'];
+      const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      const din = (catalogo || []).filter(it => nz(it.sg) === 'rebasado').map(it => String(it.s));
+      return [...base, ...din.filter(x => !base.includes(x))];
+    } },
+  // "Caja(s) metálica(s) / de metal / de acero inoxidable" → Cajas de Acero Inoxidable: los SKU de la lista +
+  // CUALQUIER producto que diga "Caja de Acero Inoxidable" en el nombre (también los que se agreguen después)
   { requiere: ['caja', 'metalica'],
     requiereAlt: { caja: ['cajas'], metalica: ['metalicas', 'metalico', 'metalicos', 'metal', 'acero', 'inoxidable', 'inox'] },
     opcionales: ['de', 'para', 'p', 'acero', 'inoxidable', 'inox'],
     get skus(){
       const base = ['10020', '206', '200', '10021', '10022', '218-L', '217', '210', '207', '198', '10025', '10026', '212', '10027', '208', '218-P', '211', '60237'];
       const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const din = (catalogo || []).filter(it => /^caja\b/.test(nz(it.n)) && /acero inox/.test(nz(it.n))).map(it => String(it.s));
+      const din = (catalogo || []).filter(it => { const t = nz(it.n); return /caja de acero inox/.test(t) || (/^caja\b/.test(t) && /acero inox/.test(t)); }).map(it => String(it.s));
       return [...base, ...din.filter(x => !base.includes(x))];
     } },
   // "Cubeta(s) metálica(s) / de acero / de metal / tipo rimlock" → Cubetas t/ Rimlock (también las que se agreguen
