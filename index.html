@@ -4577,10 +4577,16 @@ const GRUPOS_ESPECIALES = [
   // Kit para barra / rielera → AR-18 R
   { requiere: ['kit', 'barra'], requiereAlt: { kit: _ALT_KIT, barra: _ALT_BARRA }, opcionales: _OPC_ATTACHE,
     get skus(){ return _skusAttache(['31105'], /^attache\s+ar[- ]?18\s*r\b/); } },
+  // Cazoleta (de/para) bola / ball attach / pilar → Cazoleta Metálica con O'Ring (va ANTES de "cazoleta metálica",
+  // si no "cazoleta ball attach" caería en los Attache CM- por la palabra "attach")
+  { requiere: ['cazoleta', 'bola'],
+    requiereAlt: { cazoleta: ['cazoletas', 'casoleta', 'casoletas'], bola: ['bolas', 'ball', 'balls', 'pilar', 'pilares'] },
+    opcionales: ['bola', 'bolas', 'ball', 'balls', 'pilar', 'pilares', 'attach', 'atach', 'attache', 'atache', 'metalica', 'metalicas', 'oring', 'o', 'ring', 'de', 'para', 'p', 'con'],
+    skus: ['71501', '71500'] },
   // Cazoletas metálicas para teflón → Attache CM-… ("cazoleta" sola NO alcanza: es también la de pulido/profilaxis)
   { requiere: ['cazoleta', 'metalica'],
-    requiereAlt: { cazoleta: ['cazoletas', 'casoleta', 'casoletas'], metalica: ['metalicas', 'metal', 'metalico', 'metalicos', 'teflon', 'teflones', 'attache', 'attaches', 'atache', 'ataches', 'attach', 'atach'] },
-    opcionales: [..._OPC_ATTACHE, 'ball', ..._ALT_BALL, 'barra', ..._ALT_BARRA],
+    requiereAlt: { cazoleta: ['cazoletas', 'casoleta', 'casoletas'], metalica: ['metalicas', 'metal', 'metalico', 'metalicos', 'teflon', 'teflones', 'attache', 'attaches', 'atache', 'ataches', 'attach', 'atach', 'cofia', 'cofias'] },
+    opcionales: [..._OPC_ATTACHE, 'ball', ..._ALT_BALL, 'barra', ..._ALT_BARRA, 'metalica', 'metalicas', 'metalico', 'metalicos', 'cofia', 'cofias'],
     get skus(){ return _skusAttache(['31170-18', '31170-19', '31170-21', '31170-23', '31170-25'], /^attache\s+cm-/); } },
   // Teflón / cofia / hembra para ball vertical → HE-1810V (la hembra del kit AR-19V)
   { requiere: ['teflon', 'ball', 'vertical'], requiereAlt: { teflon: _ALT_TEFLON, ball: _ALT_BALL, vertical: _ALT_VERTICAL }, opcionales: _OPC_ATTACHE,
@@ -4690,26 +4696,35 @@ const EXTRAS_BUSQUEDA = [
 // Palabras de unión que no filtran cuando se usa un atajo ("caja PARA ortodoncia", "caja DE ortopedia")
 const _EXTRAS_UNION = new Set(['de', 'del', 'para', 'p', 'p/', 'la', 'las', 'el', 'los', 'con', 'y', 'x']);
 function _extrasBusqueda(tokens){
-  const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const sing = w => w.replace(/(?:es|s)$/, '');
   const tn = (tokens || []).map(norm).filter(Boolean);
-  const skus = new Set(), triggers = new Set();
+  const union = tn.filter(t => _EXTRAS_UNION.has(t));
+  const skus = new Set(), triggers = new Set(), bySku = new Map();
   EXTRAS_BUSQUEDA.forEach(e => {
-    let hit = false;
+    const propios = new Set();
     e.palabras.forEach(frase => {
       const ws = norm(frase).split(/\s+/).filter(Boolean);
       const usados = ws.map(w => tn.filter(t => t === w || sing(t) === sing(w)));
-      if (ws.length && usados.every(u => u.length)) { hit = true; usados.forEach(u => u.forEach(t => triggers.add(t))); }
+      if (ws.length && usados.every(u => u.length)) usados.forEach(u => u.forEach(t => propios.add(t)));
     });
-    if (hit) e.skus.forEach(s => skus.add(String(s).trim().toUpperCase()));
+    if (!propios.size) return;
+    union.forEach(t => propios.add(t));
+    propios.forEach(t => triggers.add(t));
+    e.skus.forEach(s => {
+      const k = String(s).trim().toUpperCase(); skus.add(k);
+      if (!bySku.has(k)) bySku.set(k, new Set());
+      propios.forEach(t => bySku.get(k).add(t));
+    });
   });
-  if (skus.size) tn.forEach(t => { if (_EXTRAS_UNION.has(t)) triggers.add(t); });
-  return skus.size ? { skus, triggers, norm } : null;
+  // trig(sku): palabras que "cubre" el atajo de ESE producto (así "cazoleta cofia" no trae los Attache HE de "cofia")
+  const trig = sku => bySku.get(String(sku || '').trim().toUpperCase()) || new Set();
+  return skus.size ? { skus, triggers, trig, norm } : null;
 }
 // ¿Este SKU entra por un atajo? (para los buscadores chicos: autocompletar, etc.) okT(t) = la palabra coincide normalmente
 function _extrasMatchSku(tokens, sku, okT){
   const ex = _extrasBusqueda(tokens);
-  return !!(ex && ex.skus.has(String(sku || '').trim().toUpperCase()) && tokens.every(t => ex.triggers.has(ex.norm(t)) || (okT ? okT(t) : false)));
+  return !!(ex && ex.skus.has(String(sku || '').trim().toUpperCase()) && tokens.every(t => ex.trig(sku).has(ex.norm(t)) || (okT ? okT(t) : false)));
 }
 
 function _buscarGrupoEspecial(tokens){
@@ -4884,7 +4899,7 @@ function _buscarProductosBase(){
         };
         if (tokens.every(_ok)) return true;
         // Atajo que suma productos (ej: "cofia" → también los Attache HE)
-        return !!(_extra && _extra.skus.has(String(it.s || '').trim().toUpperCase()) && tokens.every(t => _extra.triggers.has(_extra.norm(t)) || _ok(t)));
+        return !!(_extra && _extra.skus.has(String(it.s || '').trim().toUpperCase()) && tokens.every(t => _extra.trig(it.s).has(_extra.norm(t)) || _ok(t)));
       });
       // Coincidencias exactas con lo que se escribió van primero; las que aparecen
       // solo por sinónimo (ej: "Gorro" encontrando "Cofia") van después. Dentro de eso,
@@ -8655,7 +8670,8 @@ function _aplicarCatalogoEnVivo(data){
         const _exL = _extrasBusqueda(_tokens(resto));
         if (_exL) {
           const bien = _opcionesDe(resto).filter(o => o.score >= 0.8).map(o => o.sku);
-          const exSkus = catalogo.filter(it => _exL.skus.has(String(it.s).trim().toUpperCase())).map(it => it.s);
+          const _tkL = _tokens(resto).map(_exL.norm);
+          const exSkus = catalogo.filter(it => _exL.skus.has(String(it.s).trim().toUpperCase()) && _tkL.every(t => _exL.trig(it.s).has(t) || _exL.norm(it.n).includes(t))).map(it => it.s);
           especial = { skus: [...bien, ...exSkus.filter(x => !bien.includes(x))] };
         }
       }
