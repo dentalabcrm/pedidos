@@ -4473,6 +4473,18 @@ function _coincideColorCera(palabra, it){
   return new RegExp('\\b' + color.raiz).test(n) || color.sufijo.test(String(it.s || ''));
 }
 const GRUPOS_ESPECIALES = [
+  // "Pasta provi(soria) (de) (foto) jeringa/jer" / "Material de obturación temporario (foto) jeringa" (y con "foto" sin
+  // jeringa) → Material De Obturación Temporario Fotopolimerizable (va ANTES del atajo general "pasta provisoria")
+  { requiere: ['pasta', 'provisoria', 'jeringa'],
+    requiereAlt: { pasta: ['pastas', 'pata'], provisoria: ['provi', 'provisorias', 'provisorio', 'provisorios', 'temporaria', 'temporario', 'temp'],
+                   jeringa: ['jeringas', 'jer', 'foto', 'fotocurado', 'fotocurable', 'fotopolimerizable', 'fotopolimerizables'] },
+    opcionales: ['jeringa', 'jeringas', 'jer', 'foto', 'fotocurado', 'fotocurable', 'fotopolimerizable', 'de', 'en', 'para', 'p'],
+    skus: ['1142', '1142-F', '1142-f', '1141'] },
+  { requiere: ['material', 'obturacion', 'jeringa'],
+    requiereAlt: { material: ['materiales'], obturacion: ['obturar', 'obt'],
+                   jeringa: ['jeringas', 'jer', 'foto', 'fotocurado', 'fotocurable', 'fotopolimerizable', 'fotopolimerizables'] },
+    opcionales: ['jeringa', 'jeringas', 'jer', 'foto', 'fotocurado', 'fotocurable', 'fotopolimerizable', 'temporario', 'temporaria', 'temporal', 'provisorio', 'provisoria', 'provi', 'de', 'en', 'para', 'p'],
+    skus: ['1142', '1142-F', '1142-f', '1141'] },
   // "Ionómero / IV (vítreo) (de) foto(curado) (en) jeringa" → 1138
   { requiere: ['ionomero', 'foto', 'jeringa'],
     requiereAlt: { ionomero: ['ionomeros', 'iono', 'iv'], foto: ['fotocurado', 'fotocurable', 'fotocurada', 'fotopolimerizable', 'fotocura'], jeringa: ['jeringas', 'jer'] },
