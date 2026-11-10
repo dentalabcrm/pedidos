@@ -4473,9 +4473,9 @@ function _coincideColorCera(palabra, it){
   return new RegExp('\\b' + color.raiz).test(n) || color.sufijo.test(String(it.s || ''));
 }
 const GRUPOS_ESPECIALES = [
-  // "Ionómero (vítreo) (de) foto(curado) (en) jeringa" → 1138
+  // "Ionómero / IV (vítreo) (de) foto(curado) (en) jeringa" → 1138
   { requiere: ['ionomero', 'foto', 'jeringa'],
-    requiereAlt: { ionomero: ['ionomeros', 'iono'], foto: ['fotocurado', 'fotocurable', 'fotocurada', 'fotopolimerizable', 'fotocura'], jeringa: ['jeringas', 'jer'] },
+    requiereAlt: { ionomero: ['ionomeros', 'iono', 'iv'], foto: ['fotocurado', 'fotocurable', 'fotocurada', 'fotopolimerizable', 'fotocura'], jeringa: ['jeringas', 'jer'] },
     opcionales: ['vitreo', 'vitreos', 'vidrio', 'de', 'en', 'para', 'p'],
     skus: ['1138'] },
   // "(Cemento) (temporario) hidróxido (de calcio) (en) polvo" / "Hidro polvo" / "Cemento temp(orario) polvo"
