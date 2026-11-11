@@ -7,10 +7,13 @@
 //    Google; además, en segundo plano, se guarda una copia liviana en este dispositivo. Si no hay
 //    internet (o Google las frena), se muestra la copia guardada. Si algo falla al guardar, se
 //    ignora: las fotos siguen funcionando igual que antes.
-//  - Todo lo demás (Firebase, APIs externas, WhatsApp, etc.): SIEMPRE va directo a la red,
+//  - LIBRERÍAS externas con versión fija (Firebase JS, jsPDF, pdf.js de cdnjs) y fuentes: se guarda
+//    una copia la primera vez y después se usa esa (cache primero). Así la página puede abrir SIN
+//    INTERNET: el catálogo en sí lo guarda la página (IndexedDB) y lo muestra con un aviso.
+//  - Todo lo demás (datos de Firebase, APIs externas, WhatsApp, etc.): SIEMPRE va directo a la red,
 //    el service worker no lo toca.
 
-const CACHE_NAME = 'dentalab-pedidos-v24';
+const CACHE_NAME = 'dentalab-pedidos-v25';
 // v2: una sola copia por foto, sirve tanto para la vista lista (w150) como para la grilla (w300).
 // Antes se guardaba una copia por tamaño y la misma foto ocupaba el doble.
 const FOTOS_CACHE = 'dentalab-fotos-v2';   // fotos guardadas para usar sin internet (se conserva entre versiones)
@@ -19,6 +22,31 @@ const FOTOS_MAX_ANCHO = 400;               // solo se guardan miniaturas (sz=w15
 const FOTOS_HOST = 'drive.google.com';
 const FOTOS_PATH = '/thumbnail';
 const FOTOS_PROXY = 'https://images.weserv.nl/'; // proxy con CORS (el mismo que ya usa el PDF con fotos) para poder guardar una copia legible
+const LIBS_CACHE = 'dentalab-libs-v1';     // librerías externas con versión fija (se conserva entre versiones)
+const LIBS = [
+  'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+];
+function esLibreria(urlStr) {
+  try {
+    const u = new URL(urlStr);
+    return (u.hostname === 'www.gstatic.com' && u.pathname.startsWith('/firebasejs/'))
+        || (u.hostname === 'cdnjs.cloudflare.com' && u.pathname.startsWith('/ajax/libs/'))
+        || u.hostname === 'fonts.googleapis.com' || u.hostname === 'fonts.gstatic.com';
+  } catch (e) { return false; }
+}
+async function responderLibreria(req) {
+  const cache = await caches.open(LIBS_CACHE);
+  const guardada = await cache.match(req, { ignoreVary: true });
+  if (guardada) return guardada;
+  const res = await fetch(req);
+  if (res && (res.ok || res.type === 'opaque')) { try { await cache.put(req, res.clone()); } catch (e) {} }
+  return res;
+}
 const APP_SHELL = [
   './',
   './index.html',
@@ -32,6 +60,9 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(APP_SHELL))
+      // Librerías: se intenta dejarlas guardadas ya; si alguna falla no pasa nada (se guarda al usarse)
+      .then(() => caches.open(LIBS_CACHE).then((c) => Promise.all(LIBS.map((u) =>
+        c.match(u).then((ya) => ya || fetch(u, { mode: 'cors', credentials: 'omit' }).then((r) => r.ok ? c.put(u, r) : null)).catch(() => null)))))
       .then(() => self.skipWaiting())
   );
 });
@@ -39,7 +70,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME && k !== FOTOS_CACHE).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== CACHE_NAME && k !== FOTOS_CACHE && k !== LIBS_CACHE).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
@@ -156,6 +187,9 @@ self.addEventListener('fetch', (event) => {
     const key = fotoClave(req.url);
     if (key) { event.respondWith(responderFoto(event, req, key)); return; }
   }
+
+  // Librerías externas con versión fija y fuentes: copia local (para abrir sin internet)
+  if (req.method === 'GET' && esLibreria(req.url)) { event.respondWith(responderLibreria(req)); return; }
 
   // Solo manejar GET del mismo origen — todo lo demás (Firebase, WhatsApp, APIs) pasa directo.
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;

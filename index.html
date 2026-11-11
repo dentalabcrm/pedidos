@@ -952,6 +952,13 @@ const firebaseConfig = {
 // la sesión, y cada vez que el CRM se abre o se recarga (fuerza "solo esta pestaña") le sacaría la
 // sesión a Pedidos y habría que volver a loguearse. Con una app propia, la sesión de Pedidos no
 // la toca nadie más.
+if (typeof firebase === 'undefined') {
+  // Sin internet y sin las librerías guardadas todavía (primera vez en este dispositivo con esta versión)
+  document.addEventListener('DOMContentLoaded', () => {
+    const a = document.getElementById('app');
+    if (a) a.innerHTML = '<div class="loading" style="text-align:center;padding:40px 20px">📴 Sin internet.<br><br>Este dispositivo todavía no tiene guardado lo necesario para abrir el catálogo sin conexión. Abrilo una vez con internet y después va a funcionar sin conexión.</div>';
+  });
+}
 const _fbApp = firebase.initializeApp(firebaseConfig, 'pedidos');
 const db = _fbApp.database();
 const auth = _fbApp.auth();
@@ -2764,6 +2771,8 @@ window._logoAdminClickCount = function() {
       if (confirm('¿Salir del modo administrador?')) {
         try { localStorage.removeItem(LS_KEY_MANTENER_SESION); } catch (e) {}
         _salidaManual = true;
+        try { localStorage.removeItem(LS_KEY_TUVO_SESION); } catch (e) {}
+        _offBorrar();
         auth.signOut().then(_refrescarVistaAdmin);
       }
       return;
@@ -4081,12 +4090,88 @@ function _getSearchIdx(it){
   return it._sIdx;
 }
 
+// ── Catálogo sin internet ───────────────────────────────────────────────────────
+// Cada vez que el catálogo carga bien con internet, se guarda una copia en este dispositivo
+// (IndexedDB). Si después se abre sin conexión (o Firebase no responde en unos segundos), se
+// muestra esa copia con un aviso arriba. Cuando vuelve la conexión, el catálogo se actualiza solo.
+const _OFF_DB = 'dentalab-offline', _OFF_STORE = 'kv', _OFF_KEY = 'catalogo';
+const LS_KEY_TUVO_SESION = 'dentalab_pedido_tuvo_sesion';
+let _catalogoOffline = false, _catalogoOfflineFecha = 0;
+function _offAbrir(){
+  return new Promise((resolve, reject) => {
+    try {
+      const r = indexedDB.open(_OFF_DB, 1);
+      r.onupgradeneeded = () => { try { r.result.createObjectStore(_OFF_STORE); } catch (e) {} };
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    } catch (e) { reject(e); }
+  });
+}
+async function _offGuardar(valor){
+  try {
+    const dbi = await _offAbrir();
+    await new Promise((res, rej) => { const tx = dbi.transaction(_OFF_STORE, 'readwrite'); tx.objectStore(_OFF_STORE).put(valor, _OFF_KEY); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+    dbi.close();
+  } catch (e) { /* sin copia offline: el catálogo sigue funcionando igual con internet */ }
+}
+async function _offLeer(){
+  try {
+    const dbi = await _offAbrir();
+    const v = await new Promise((res, rej) => { const tx = dbi.transaction(_OFF_STORE, 'readonly'); const rq = tx.objectStore(_OFF_STORE).get(_OFF_KEY); rq.onsuccess = () => res(rq.result || null); rq.onerror = () => rej(rq.error); });
+    dbi.close();
+    return v;
+  } catch (e) { return null; }
+}
+async function _offBorrar(){
+  try { const dbi = await _offAbrir(); const tx = dbi.transaction(_OFF_STORE, 'readwrite'); tx.objectStore(_OFF_STORE).delete(_OFF_KEY); tx.oncomplete = () => dbi.close(); } catch (e) {}
+}
+// Promesa con tiempo máximo (Firebase, sin conexión, se queda esperando para siempre)
+function _conTiempo(prom, ms){
+  return Promise.race([prom, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+}
+function _offFechaTxt(ts){
+  try { const d = new Date(ts), z = n => String(n).padStart(2, '0'); return `${z(d.getDate())}/${z(d.getMonth() + 1)} a las ${z(d.getHours())}:${z(d.getMinutes())}`; } catch (e) { return ''; }
+}
+function _offMostrarAviso(){
+  let bar = document.getElementById('aviso-offline');
+  if (!_catalogoOffline) { if (bar) bar.remove(); return; }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'aviso-offline';
+    bar.style.cssText = 'position:sticky;top:0;z-index:9999;background:#7c2d12;color:#fff;font-size:13px;line-height:1.35;padding:9px 14px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.25)';
+    document.body.prepend(bar);
+  }
+  const f = _catalogoOfflineFecha ? ` del <b>${_offFechaTxt(_catalogoOfflineFecha)}</b>` : '';
+  bar.innerHTML = navigator.onLine
+    ? `🔄 Volvió la conexión. <button type="button" onclick="location.reload()" style="margin-left:6px;background:#fff;color:#7c2d12;border:none;border-radius:6px;padding:4px 10px;font-weight:700;cursor:pointer">Actualizar catálogo</button>`
+    : `📴 <b>Sin internet</b> — estás viendo el catálogo guardado${f}. Precios y stock pueden haber cambiado. Podés armar el pedido; para enviarlo hace falta conexión.`;
+}
+window.addEventListener('online', () => { if (_catalogoOffline) _offMostrarAviso(); });
+window.addEventListener('offline', () => { if (_catalogoOffline) _offMostrarAviso(); });
+
 async function cargarCatalogo(){
   try {
-    const snap = await db.ref('dentalab/catalogo_publico').once('value');
-    const data = snap.val();
+    let data = null;
+    _catalogoOffline = false;
+    // Con internet: Firebase como siempre (con tiempo máximo). Sin internet o si no responde: la copia guardada.
+    if (navigator.onLine) {
+      try { const snap = await _conTiempo(db.ref('dentalab/catalogo_publico').once('value'), 15000); data = snap.val(); } catch (e) { data = null; }
+    }
     if (!data || !Array.isArray(data.items) || !data.items.length) {
-      renderError('No pudimos cargar el catálogo en este momento. Probá de nuevo en unos minutos.');
+      const guardado = await _offLeer();
+      if (guardado && Array.isArray(guardado.items) && guardado.items.length) {
+        data = guardado;
+        _catalogoOffline = true;
+        _catalogoOfflineFecha = guardado.guardadoAt || 0;
+        if (guardado.textos) Object.assign(_textosCatalogo, guardado.textos);
+        if (Array.isArray(guardado.finRates)) _finRates = guardado.finRates;
+        if (Array.isArray(guardado.finNoInt)) _finNoInt = guardado.finNoInt;
+      }
+    }
+    if (!data || !Array.isArray(data.items) || !data.items.length) {
+      renderError(navigator.onLine
+        ? 'No pudimos cargar el catálogo en este momento. Probá de nuevo en unos minutos.'
+        : 'Sin internet, y en este dispositivo todavía no hay un catálogo guardado. Abrilo una vez con conexión y después va a funcionar sin internet.');
       return;
     }
     _catalogoActualizadoAt = data.actualizadoAt || 0;
@@ -4109,8 +4194,8 @@ async function cargarCatalogo(){
     // Cada SKU puede tener varias fotos: en Firebase se guarda como array de IDs de Drive.
     // Compatibilidad: si todavía queda algún SKU viejo guardado como un solo string (antes
     // de este cambio), se lo trata como un array de una sola foto.
-    try {
-      const snapImg = await db.ref('dentalab/sku_imagenes').once('value');
+    if (!_catalogoOffline) try {
+      const snapImg = await _conTiempo(db.ref('dentalab/sku_imagenes').once('value'), 15000);
       const imagenesVivo = snapImg.val() || {};
       const claveImg = s => String(s).trim().replace(/[.#$\[\]/]/g, '_');
       catalogo.forEach(it => {
@@ -4123,8 +4208,8 @@ async function cargarCatalogo(){
     // Manuales (PDF / Word / foto) por SKU: un solo archivo por producto, guardado en Drive
     // y referenciado acá igual que las fotos — así el catálogo publicado nunca queda
     // desactualizado si se sube/cambia un manual después de publicar.
-    try {
-      const snapManual = await db.ref('dentalab/sku_manuales').once('value');
+    if (!_catalogoOffline) try {
+      const snapManual = await _conTiempo(db.ref('dentalab/sku_manuales').once('value'), 15000);
       const manualesVivo = snapManual.val() || {};
       const claveManual = s => String(s).trim().replace(/[.#$\[\]/]/g, '_');
       catalogo.forEach(it => {
@@ -4149,23 +4234,34 @@ async function cargarCatalogo(){
       if (_SIEMPRE_STOCK_A_CONFIRMAR.has(String(it.s || '')) && !it.st) it.sb = true;
     });
     catalogo.forEach(it => catalogoBySku.set(it.s, it));
-    try {
-      const snapTextos = await db.ref('dentalab/textos_catalogo').once('value');
+    if (!_catalogoOffline) try {
+      const snapTextos = await _conTiempo(db.ref('dentalab/textos_catalogo').once('value'), 10000);
       Object.assign(_textosCatalogo, snapTextos.val() || {});
     } catch (e) { /* si falla, seguimos con los textos por defecto */ }
     const horariosEl = document.getElementById('horarios-bar-texto');
     if (horariosEl) horariosEl.textContent = _textosCatalogo.horarios;
     try {
-      await _pwEscucharFinanciamiento();
+      // Sin internet no se espera (Firebase no contesta): se usan las tasas guardadas y los
+      // listeners quedan puestos para cuando vuelva la conexión.
+      if (_catalogoOffline) _pwEscucharFinanciamiento().catch(() => {});
+      else await _conTiempo(_pwEscucharFinanciamiento(), 10000);
     } catch (e) { /* si falla, seguimos sin mostrar financiamiento */ }
-    await _cargarCarruselBanners();
+    if (_catalogoOffline) { _bannersCarrusel = []; _renderCarruselBanners(); }
+    else { try { await _conTiempo(_cargarCarruselBanners(), 10000); } catch (e) {} }
+    // Copia para usar sin internet (solo si vino de Firebase)
+    if (!_catalogoOffline) {
+      _offGuardar({ items: catalogo, actualizadoAt: _catalogoActualizadoAt, textos: { ..._textosCatalogo },
+                    finRates: _finRates, finNoInt: _finNoInt, guardadoAt: Date.now() });
+    }
+    _offMostrarAviso();
 
     // ¿Se abrió como link de edición para vendedor? (?id=XXXX&modo=vendedor)
     const paramsUrl = new URLSearchParams(location.search);
     const idParam = paramsUrl.get('id');
     if (idParam && paramsUrl.get('modo') === 'vendedor') {
       try {
-        const snapPedido = await db.ref('dentalab/pedidos_web/' + idParam).once('value');
+        if (_catalogoOffline) { renderError('Para abrir un pedido para editar hace falta internet.'); return; }
+        const snapPedido = await _conTiempo(db.ref('dentalab/pedidos_web/' + idParam).once('value'), 15000);
         const pedido = snapPedido.val();
         if (!pedido) {
           renderError('No encontramos ese pedido (puede que ya no exista, o el link esté mal). Volvé a "Pedidos Whatsapp" y probá de nuevo.');
@@ -7353,6 +7449,7 @@ window.enviarPedido = async () => {
   const observaciones = document.getElementById('cf-obs')?.value.trim() || '';
 
   if (!carrito.size) { alert('Agregá al menos un producto antes de enviar.'); return; }
+  if (!navigator.onLine) { alert('📴 No hay internet. El pedido queda armado en este dispositivo: envialo cuando vuelva la conexión.'); return; }
   if (!nombre) {
     alert('Ingresá tu nombre y apellido antes de enviar el pedido.');
     const campoNombre = document.getElementById('cf-nombre');
@@ -7625,9 +7722,27 @@ function _iniciarConAcceso() {
   }
   _renderGate('verificando'); // hasta que Firebase diga si hay una sesión guardada
   let catalogoIniciado = false, huboSesion = false;
+  // Sin internet: si en este dispositivo ya se había entrado con "mantener la sesión", se abre el
+  // catálogo guardado sin esperar a Firebase (que sin conexión puede tardar o no contestar).
+  let _tuvoSesion = false;
+  try { _tuvoSesion = localStorage.getItem(LS_KEY_TUVO_SESION) === '1'; } catch (e) {}
+  const _entrarSinInternet = () => {
+    if (catalogoIniciado) return;
+    if (!_tuvoSesion) {
+      // Nunca se entró en este dispositivo: sin internet no hay forma de verificar el acceso
+      if (!document.getElementById('gate-email')) app.innerHTML = '<div class="loading" style="text-align:center;padding:40px 20px">📴 Sin internet.<br><br>Para usar el catálogo sin conexión, abrilo primero una vez con internet e iniciá sesión con “Mantener la sesión iniciada”.</div>';
+      return;
+    }
+    catalogoIniciado = true;
+    document.body.classList.remove('gate-activo');
+    cargarCatalogo();
+  };
+  if (!navigator.onLine) setTimeout(_entrarSinInternet, 1500);
+  else setTimeout(() => { if (!navigator.onLine) _entrarSinInternet(); }, 8000);
   auth.onAuthStateChanged(user => {
     if (user) {
       huboSesion = true;
+      try { if (localStorage.getItem(LS_KEY_MANTENER_SESION) !== '0') localStorage.setItem(LS_KEY_TUVO_SESION, '1'); } catch (e) {}
       document.body.classList.remove('gate-activo');
       if (!catalogoIniciado) { catalogoIniciado = true; cargarCatalogo(); }
     } else {
@@ -7720,6 +7835,10 @@ function _aplicarCatalogoEnVivo(data){
   catalogoBySku.clear();
   catalogo.forEach(it => catalogoBySku.set(it.s, it));
   _catalogoActualizadoAt = data.actualizadoAt || Date.now();
+  // La copia para usar sin internet también se actualiza cuando llega un cambio en vivo
+  _offGuardar({ items: catalogo, actualizadoAt: _catalogoActualizadoAt, textos: { ..._textosCatalogo },
+                finRates: _finRates, finNoInt: _finNoInt, guardadoAt: Date.now() });
+  if (_catalogoOffline) { _catalogoOffline = false; _offMostrarAviso(); } // volvió internet y ya está al día
   // Volver a dibujar lo que se ve, sin saltar de lugar
   const sy = window.scrollY;
   const resCont = document.getElementById('resultados');
