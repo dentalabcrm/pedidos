@@ -4433,6 +4433,7 @@ window.cambiarPago = () => {
 // ── Sinónimos de búsqueda: si el término escrito coincide con cualquiera de un
 //    grupo, también se busca con los demás términos de ese mismo grupo. ──
 const SINONIMOS_RAW = [
+  ['Flexible', 'Blanda'], // "placa blanda" = Termoplaca Flexible
   ['Polímero', 'Acrílico'], // "acrilico auto 66" = "Polimero Autocurable … 66"
   ['Irrigador', 'Duchador'],
   ['Placas', 'Termoplaca'],
@@ -4569,6 +4570,36 @@ function _coincideColorCera(palabra, it){
   return new RegExp('\\b' + color.raiz).test(n) || color.sufijo.test(String(it.s || ''));
 }
 const GRUPOS_ESPECIALES = [
+  // Placas blandas (= Termoplacas Flexibles) por espesor: "placa(s) blanda(s) 0.4 / 04 / .040 / 1mm",
+  // "0.6 / 06 / .060 / 1.5mm", "0.8 / 08 / .080 / 2mm" (cualquier orden). Trae los SKU de la lista + toda
+  // Termoplaca Flexible de ese espesor que se agregue después.
+  { requiere: ['placa', 'blanda', '040'],
+    requiereAlt: { placa: ['placas', 'termoplaca', 'termoplacas'], blanda: ['blandas', 'flexible', 'flexibles'], '040': ['0.4', '0,4', '04', '.04', '.040', '040', '0.40', '0,40', '1mm', '1.0', '1,0', '1.00', '1,00'] },
+    opcionales: ['de', 'para', 'p', 'mm', 'x'],
+    get skus(){
+      const base = ['32834', '32792', '32792-F', '32796-F', 'COMBO-22', '32802', '32802-F', '32796', '32795', '32795-F'];
+      const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const din = (catalogo || []).filter(it => { const n = nz(it.n); return /termoplaca/.test(n) && /flexible/.test(n) && /\.040\b/.test(n); }).map(it => String(it.s));
+      return [...base, ...din.filter(x => !base.includes(x))];
+    } },
+  { requiere: ['placa', 'blanda', '060'],
+    requiereAlt: { placa: ['placas', 'termoplaca', 'termoplacas'], blanda: ['blandas', 'flexible', 'flexibles'], '060': ['0.6', '0,6', '06', '.06', '.060', '060', '0.60', '0,60', '1.5', '1,5', '1.5mm', '1,5mm', '1.50', '1,50'] },
+    opcionales: ['de', 'para', 'p', 'mm', 'x'],
+    get skus(){
+      const base = ['32839', '32799', '32799-F'];
+      const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const din = (catalogo || []).filter(it => { const n = nz(it.n); return /termoplaca/.test(n) && /flexible/.test(n) && /\.060\b/.test(n); }).map(it => String(it.s));
+      return [...base, ...din.filter(x => !base.includes(x))];
+    } },
+  { requiere: ['placa', 'blanda', '080'],
+    requiereAlt: { placa: ['placas', 'termoplaca', 'termoplacas'], blanda: ['blandas', 'flexible', 'flexibles'], '080': ['0.8', '0,8', '08', '.08', '.080', '080', '0.80', '0,80', '2mm', '2.0', '2,0', '2.00', '2,00'] },
+    opcionales: ['de', 'para', 'p', 'mm', 'x'],
+    get skus(){
+      const base = ['32840', '32790', '32790-F', '32800', '32800-F'];
+      const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const din = (catalogo || []).filter(it => { const n = nz(it.n); return /termoplaca/.test(n) && /flexible/.test(n) && /\.080\b/.test(n); }).map(it => String(it.s));
+      return [...base, ...din.filter(x => !base.includes(x))];
+    } },
   // Kit / combo de silicona por ADICIÓN (cualquier orden y abreviado: "kit sil adi", "silicona combo adicion"…)
   { requiere: ['silicona', 'kit', 'adicion'],
     requiereAlt: { silicona: ['siliconas', 'sil', 'silic', 'silicon', 'silicone', 'silicones'], kit: ['kits', 'combo', 'combos', 'set', 'juego'], adicion: ['adi', 'adic', 'adiccion', 'adicional', 'adiciones', 'adision'] },
