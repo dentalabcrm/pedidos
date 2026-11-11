@@ -9643,6 +9643,24 @@ function _aplicarCatalogoEnVivo(data){
           const _conNum = _vis.filter(it => _nums.every(n => new RegExp('(^|[^\\d])' + n + '([^\\d]|$)').test(String(it.n || ''))));
           if (_conNum.length) _cand = _conNum;
         }
+        // Sin atajo: se quedan los productos donde lo escrito es el PRODUCTO en sí, no un "para qué" o una
+        // aclaración. Ej. "turbina" → las Turbinas, no "Fresas … (Turbina)" ni "Aceite … p/ Turbina".
+        // (Se ignora lo que está entre paréntesis y lo que va después de "p/", "para" o "c/".) Si ninguno
+        // cumple, quedan todos los de la pantalla.
+        if (!_atajo.size && !_exacto.length) {
+          const nz = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+          const sing = w => w.replace(/(?:es|s)$/, '');
+          const principal = n => nz(n).replace(/\([^)]*\)/g, ' ').split(/\s(?:p\/|para|c\/|con)\s/)[0];
+          const toks = nz(texto).split(/\s+/).filter(t => t && !/^\d+$/.test(t) && !(typeof _STOPWORDS_BUSQUEDA !== 'undefined' && _STOPWORDS_BUSQUEDA.has(t)));
+          if (toks.length) {
+            const okTok = (t, pr) => {
+              const cands = (typeof _candidatosSinonimos === 'function' ? _candidatosSinonimos(t) : [t]).map(nz);
+              return cands.some(c => pr.includes(c) || pr.includes(sing(c)));
+            };
+            const _princ = _cand.filter(it => { const pr = principal(it.n); return toks.every(t => okTok(t, pr)); });
+            if (_princ.length) _cand = _princ;
+          }
+        }
         skus.length = 0;
         _cand.forEach(it => { if (!skus.includes(it.s)) skus.push(it.s); });
       } else {
