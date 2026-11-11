@@ -4570,10 +4570,14 @@ function _coincideColorCera(palabra, it){
   return new RegExp('\\b' + color.raiz).test(n) || color.sufijo.test(String(it.s || ''));
 }
 const GRUPOS_ESPECIALES = [
+  // "Lidocaína / lido (anestesia) local" → 6513, 6514 (va antes que el atajo general de lidocaína)
+  { requiere: ['lidocaina', 'local'],
+    requiereAlt: { lidocaina: ['lido', 'lidoc'], local: ['locales', 'loc'] },
+    opcionales: ['anestesia', 'anestesias', 'anes', 'de', 'con', 'para', 'p'], skus: ['6513', '6514'] },
   // "Cemento(s) definitivo(s) / permanente(s)" → Cementos › Permanentes: los SKU de la lista + toda esa
   // subcategoría (también lo que se agregue después)
   { requiere: ['cemento', 'definitivo'],
-    requiereAlt: { cemento: ['cementos'], definitivo: ['definitivos', 'definitiva', 'definitivas', 'permanente', 'permanentes'] },
+    requiereAlt: { cemento: ['cementos'], definitivo: ['definitivos', 'definitiva', 'definitivas', 'def', 'defin', 'definit', 'permanente', 'permanentes', 'perma', 'perm', 'permanen'] },
     opcionales: ['de', 'para', 'p'],
     get skus(){
       const base = ['1106', '1100', '1111', '1109', '1108', '1099'];
