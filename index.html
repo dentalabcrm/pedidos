@@ -4577,7 +4577,7 @@ const GRUPOS_ESPECIALES = [
   // "Cemento(s) definitivo(s) / permanente(s)" → Cementos › Permanentes: los SKU de la lista + toda esa
   // subcategoría (también lo que se agregue después)
   { requiere: ['cemento', 'definitivo'],
-    requiereAlt: { cemento: ['cementos'], definitivo: ['definitivos', 'definitiva', 'definitivas', 'def', 'defin', 'definit', 'permanente', 'permanentes', 'perma', 'perm', 'permanen'] },
+    requiereAlt: { cemento: ['cementos', 'cem', 'cemen', 'cement'], definitivo: ['definitivos', 'definitiva', 'definitivas', 'def', 'defi', 'defin', 'definit', 'permanente', 'permanentes', 'perma', 'perm', 'permanen'] },
     opcionales: ['de', 'para', 'p'],
     get skus(){
       const base = ['1106', '1100', '1111', '1109', '1108', '1099'];
