@@ -4570,6 +4570,42 @@ function _coincideColorCera(palabra, it){
   return new RegExp('\\b' + color.raiz).test(n) || color.sufijo.test(String(it.s || ''));
 }
 const GRUPOS_ESPECIALES = [
+  // "Cemento(s) definitivo(s) / permanente(s)" → Cementos › Permanentes: los SKU de la lista + toda esa
+  // subcategoría (también lo que se agregue después)
+  { requiere: ['cemento', 'definitivo'],
+    requiereAlt: { cemento: ['cementos'], definitivo: ['definitivos', 'definitiva', 'definitivas', 'permanente', 'permanentes'] },
+    opcionales: ['de', 'para', 'p'],
+    get skus(){
+      const base = ['1106', '1100', '1111', '1109', '1108', '1099'];
+      const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      const din = (catalogo || []).filter(it => nz(it.g) === 'cementos' && nz(it.sg) === 'permanentes').map(it => String(it.s));
+      return [...base, ...din.filter(x => !base.includes(x))];
+    } },
+  // Anestesia para cardíacos: "anestesia cardiacos/cardi", "anes cardi", o solo "cardiacos", "cardi"
+  // ("car" sigue siendo de carticaína)
+  { requiere: ['anestesia', 'cardiaco'],
+    requiereAlt: { anestesia: ['anestesias', 'anes', 'anest', 'anestesico', 'anestesicos'], cardiaco: ['cardiacos', 'cardiaca', 'cardiacas', 'cardi', 'cardio', 'card'] },
+    opcionales: ['de', 'con', 'para', 'p', 'x'], skus: ['6502', '6502-F', '6502-f'] },
+  { requiere: ['cardiaco'], requiereAlt: { cardiaco: ['cardiacos', 'cardiaca', 'cardiacas', 'cardi'] },
+    opcionales: ['anestesia', 'anestesias', 'anes', 'de', 'para', 'p'], skus: ['6502', '6502-F', '6502-f'] },
+  // Anestesia local: "anestesia local/loc/lo", "anes loc/local"
+  { requiere: ['anestesia', 'local'],
+    requiereAlt: { anestesia: ['anestesias', 'anes', 'anest', 'anestesico', 'anestesicos'], local: ['locales', 'loc', 'lo'] },
+    opcionales: ['de', 'con', 'para', 'p', 'x'], skus: ['6513', '6514'] },
+  // Anestesia con lidocaína: "anestesia lidocaina/lido", "anes lido/li", o solo "lidocaina", "lido"
+  { requiere: ['anestesia', 'lidocaina'],
+    requiereAlt: { anestesia: ['anestesias', 'anes', 'anest', 'anestesico', 'anestesicos'], lidocaina: ['lido', 'lidoc', 'li'] },
+    opcionales: ['de', 'con', 'para', 'p', 'x'], skus: ['6513', '6503', '6503-F', '6503-f', '6502', '6502-F', '6502-f', '6514'] },
+  { requiere: ['lidocaina'], requiereAlt: { lidocaina: ['lido', 'lidoc'] },
+    opcionales: ['anestesia', 'anestesias', 'anes', 'de', 'con'], skus: ['6513', '6503', '6503-F', '6503-f', '6502', '6502-F', '6502-f', '6514'] },
+  // Anestesia con carticaína / articaína: "anestesia carti/car/cart", "anes car/ca", "anestesia arti/art",
+  // "anes art/ar", o solo "carticaina", "carti", "articaina", "arti"
+  { requiere: ['anestesia', 'carticaina'],
+    requiereAlt: { anestesia: ['anestesias', 'anes', 'anest', 'anestesico', 'anestesicos'],
+                   carticaina: ['carti', 'cart', 'car', 'ca', 'articaina', 'arti', 'art', 'ar'] },
+    opcionales: ['de', 'con', 'para', 'p', 'x'], skus: ['6505', '6505-F', '6505-f', '6507', '6507-F', '6507-f', '6504', '6506', '6506-F', '6506-f', '6508', '6508-F', '6508-f'] },
+  { requiere: ['carticaina'], requiereAlt: { carticaina: ['carti', 'articaina', 'arti'] },
+    opcionales: ['anestesia', 'anestesias', 'anes', 'de', 'con'], skus: ['6505', '6505-F', '6505-f', '6507', '6507-F', '6507-f', '6504', '6506', '6506-F', '6506-f', '6508', '6508-F', '6508-f'] },
   // Placas blandas (= Termoplacas Flexibles) por espesor: "placa(s) blanda(s) 0.4 / 04 / .040 / 1mm",
   // "0.6 / 06 / .060 / 1.5mm", "0.8 / 08 / .080 / 2mm" (cualquier orden). Trae los SKU de la lista + toda
   // Termoplaca Flexible de ese espesor que se agregue después.
@@ -4728,6 +4764,13 @@ const GRUPOS_ESPECIALES = [
       const din = (catalogo || []).filter(it => /cera beauty pink/.test(nz(it.n))).map(it => String(it.s));
       return [...base, ...din.filter(x => !base.includes(x))];
     } },
+  // "Duralay / Acrílico / Polímero / Resina acrílica (rojo/roja/ro) (para) patrones" → Acrílico rojo para patrones
+  // (va DESPUÉS del de matizadores, así "matizador acrílico rojo" sigue trayendo los matizadores)
+  { requiere: ['acrilico', 'rojo'],
+    requiereAlt: { acrilico: ['acrilicos', 'acrilica', 'acrilicas', 'polimero', 'polimeros', 'resina', 'resinas', 'duralay'],
+                   rojo: ['roja', 'rojos', 'rojas', 'ro', 'patrones', 'patron'] },
+    opcionales: ['para', 'p', 'de', 'resina', 'acrilica', 'acrilico', 'rojo', 'roja', 'ro', 'patrones', 'patron', 'duralay'],
+    skus: ['1390', '1389-1OZ', '1391', '1394'] },
   // "Acrílico / Polímero / Material / Resina (acrílica) (para) rebasado" → Materiales de rebasado: los SKU de la
   // lista + toda la subcategoría "Rebasado" (también los que se agreguen después)
   { requiere: ['acrilico', 'rebasado'],
