@@ -9062,7 +9062,8 @@ function _aplicarCatalogoEnVivo(data){
     const it = catalogoBySku.get(sku);
     if (!it || it.st) return false;
     if (_COTIZAR_CON_STOCK_A_CONFIRMAR.has(String(sku).trim().toUpperCase())) return true;
-    if (_HIJOS_CON_PADRE.has(sku) || it.hj) return !it.sb;          // padre con ≥ 5 → "En stock"
+    // Hijo (ej. "x Unidad" de una caja): vale si el padre tiene ≥ 5 ("En stock") o si el propio hijo tiene stock en Depósito
+    if (_HIJOS_CON_PADRE.has(sku) || it.hj) return !it.sb || (+it.dc || 0) > 0;
     if (_BLISTERS_CON_PADRE.has(sku) && !it.sb) return true;
     if (it.d1 === undefined && it.dc === undefined) return true;
     // "Stock a confirmar" con algo en el Depósito también se cotiza, aunque no llegue a 5 en total
