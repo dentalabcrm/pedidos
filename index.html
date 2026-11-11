@@ -4574,17 +4574,12 @@ const GRUPOS_ESPECIALES = [
   { requiere: ['lidocaina', 'local'],
     requiereAlt: { lidocaina: ['lido', 'lidoc'], local: ['locales', 'loc'] },
     opcionales: ['anestesia', 'anestesias', 'anes', 'de', 'con', 'para', 'p'], skus: ['6513', '6514'] },
-  // "Cemento(s) definitivo(s) / permanente(s)" → Cementos › Permanentes: los SKU de la lista + toda esa
-  // subcategoría (también lo que se agregue después)
+  // "Cemento(s) / cem definitivo(s) / def / permanente(s) / perma" → solo los cementos de fosfato de zinc
+  // de la lista (no toda la subcategoría Permanentes, que tiene RelyX, IRM, ZOE, etc.)
   { requiere: ['cemento', 'definitivo'],
     requiereAlt: { cemento: ['cementos', 'cem', 'cemen', 'cement'], definitivo: ['definitivos', 'definitiva', 'definitivas', 'def', 'defi', 'defin', 'definit', 'permanente', 'permanentes', 'perma', 'perm', 'permanen'] },
     opcionales: ['de', 'para', 'p'],
-    get skus(){
-      const base = ['1106', '1100', '1111', '1109', '1108', '1099'];
-      const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-      const din = (catalogo || []).filter(it => nz(it.g) === 'cementos' && nz(it.sg) === 'permanentes').map(it => String(it.s));
-      return [...base, ...din.filter(x => !base.includes(x))];
-    } },
+    skus: ['1106', '1100', '1111', '1109', '1108', '1099'] },
   // Anestesia para cardíacos: "anestesia cardiacos/cardi", "anes cardi", o solo "cardiacos", "cardi"
   // ("car" sigue siendo de carticaína)
   { requiere: ['anestesia', 'cardiaco'],
