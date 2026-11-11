@@ -4570,6 +4570,17 @@ function _coincideColorCera(palabra, it){
   return new RegExp('\\b' + color.raiz).test(n) || color.sufijo.test(String(it.s || ''));
 }
 const GRUPOS_ESPECIALES = [
+  // "Yeso París" → Yeso Taller PESCIO (amarillo y blanco)
+  { requiere: ['yeso', 'paris'], requiereAlt: { yeso: ['yesos'] }, opcionales: ['de', 'para', 'p'],
+    skus: ['69610', '69600', '69618', '69613', '69603', '69616'] },
+  // Densita / yeso (de/para) zócalos: "densita zoca", "den zo", "yeso densita zo", "yeso zocalos", "ye zocalos"…
+  { requiere: ['densita', 'zocalo'],
+    requiereAlt: { densita: ['den', 'dens', 'densi', 'yeso', 'yesos', 'yes', 'ye'], zocalo: ['zocalos', 'zocal', 'zoca', 'zo'] },
+    opcionales: ['para', 'p', 'de', 'yeso', 'yesos', 'densita', 'den', 'densi'], skus: ['34573', '34573-25', '34486'] },
+  // Densita / yeso (de/para) montaje o núcleo: "densita montaje", "den nucleo", "yeso den mo", "yeso mon"…
+  { requiere: ['densita', 'montaje'],
+    requiereAlt: { densita: ['den', 'dens', 'densi', 'yeso', 'yesos', 'yes', 'ye'], montaje: ['montajes', 'monta', 'mon', 'mo', 'nucleo', 'nucleos'] },
+    opcionales: ['para', 'p', 'de', 'yeso', 'yesos', 'densita', 'den', 'densi'], skus: ['34420'] },
   // "Lidocaína / lido (anestesia) local" → 6513, 6514 (va antes que el atajo general de lidocaína)
   { requiere: ['lidocaina', 'local'],
     requiereAlt: { lidocaina: ['lido', 'lidoc'], local: ['locales', 'loc'] },
