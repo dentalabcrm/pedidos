@@ -4570,6 +4570,17 @@ function _coincideColorCera(palabra, it){
   return new RegExp('\\b' + color.raiz).test(n) || color.sufijo.test(String(it.s || ''));
 }
 const GRUPOS_ESPECIALES = [
+  // "Adhesivo (para) carillas" → Cemento p/ Carillas BISCO Choice 2
+  { requiere: ['adhesivo', 'carillas'], requiereAlt: { adhesivo: ['adhesivos'], carillas: ['carilla'] },
+    opcionales: ['para', 'p', 'de'], skus: ['1165-A1', '1165-B1', '1165-TRA', '1165-A2', 'M-BISCO-7', 'M-BISCO-8'] },
+  // Cemento provisorio / temporario SIN EUGENOL: "cemento (provi/pro/temp/tempo) sin eugenol/euge", "cem sin euge",
+  // "cemento (provi/pro) NE", "cem NE", "cemento provisorio" → 1159, 1150
+  { requiere: ['cemento', 'sin', 'eugenol'],
+    requiereAlt: { cemento: ['cementos', 'cem', 'cemen', 'cement'], eugenol: ['euge', 'eug', 'eugen'] }, opcionales: ['provisorio', 'provisoria', 'provisorios', 'provi', 'pro', 'temporario', 'temporaria', 'temporal', 'temp', 'tempo', 'de', 'para', 'p'], skus: ['1159', '1150'] },
+  { requiere: ['cemento', 'ne'], requiereAlt: { cemento: ['cementos', 'cem', 'cemen', 'cement'] }, opcionales: ['provisorio', 'provisoria', 'provisorios', 'provi', 'pro', 'temporario', 'temporaria', 'temporal', 'temp', 'tempo', 'de', 'para', 'p'], skus: ['1159', '1150'] },
+  { requiere: ['cemento', 'provisorio'],
+    requiereAlt: { cemento: ['cementos', 'cem', 'cemen', 'cement'], provisorio: ['provisorios', 'provisoria', 'provisorias', 'provi'] },
+    opcionales: ['de', 'para', 'p'], skus: ['1159', '1150'] },
   // "Yeso París" → Yeso Taller PESCIO (amarillo y blanco)
   { requiere: ['yeso', 'paris'], requiereAlt: { yeso: ['yesos'] }, opcionales: ['de', 'para', 'p'],
     skus: ['69610', '69600', '69618', '69613', '69603', '69616'] },
