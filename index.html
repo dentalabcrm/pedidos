@@ -4569,6 +4569,38 @@ function _coincideColorCera(palabra, it){
   return new RegExp('\\b' + color.raiz).test(n) || color.sufijo.test(String(it.s || ''));
 }
 const GRUPOS_ESPECIALES = [
+  // Kit / combo de silicona por ADICIÓN (cualquier orden y abreviado: "kit sil adi", "silicona combo adicion"…)
+  { requiere: ['silicona', 'kit', 'adicion'],
+    requiereAlt: { silicona: ['siliconas', 'sil', 'silic', 'silicon', 'silicone', 'silicones'], kit: ['kits', 'combo', 'combos', 'set', 'juego'], adicion: ['adi', 'adic', 'adiccion', 'adicional', 'adiciones', 'adision'] },
+    opcionales: ['de', 'por', 'para', 'p', 'x'], skus: ['21003'] },
+  // Siliconas por ADICIÓN (cualquier orden y abreviado: "sil masa adi", "masa silicona adi", "sil reg adi", "sil flu adi"…)
+  // Masa / putty
+  { requiere: ['silicona', 'masa', 'adicion'],
+    requiereAlt: { silicona: ['siliconas', 'sil', 'silic', 'silicon', 'silicone', 'silicones'], masa: ['masas', 'putty', 'puty', 'pesada', 'heavy'], adicion: ['adi', 'adic', 'adiccion', 'adicional', 'adiciones', 'adision'] },
+    opcionales: ['de', 'por', 'para', 'p', 'x'], skus: ['1094', '1095', '21091', '21090', '21030', '21028'] },
+  // Regular
+  { requiere: ['silicona', 'regular', 'adicion'],
+    requiereAlt: { silicona: ['siliconas', 'sil', 'silic', 'silicon', 'silicone', 'silicones'], regular: ['reg', 'regulares', 'medium', 'media', 'mediana'], adicion: ['adi', 'adic', 'adiccion', 'adicional', 'adiciones', 'adision'] },
+    opcionales: ['de', 'por', 'para', 'p', 'x'], skus: ['1091', '21016', '21012'] },
+  // Light / fluida
+  { requiere: ['silicona', 'light', 'adicion'],
+    requiereAlt: { silicona: ['siliconas', 'sil', 'silic', 'silicon', 'silicone', 'silicones'], light: ['lite', 'ligth', 'liviana', 'fluida', 'fluidas', 'fluido', 'flu', 'flui'], adicion: ['adi', 'adic', 'adiccion', 'adicional', 'adiciones', 'adision'] },
+    opcionales: ['de', 'por', 'para', 'p', 'x'], skus: ['1090', '21093', '21015', '21011', '21010'] },
+  // "Pulidor(es) / Puli / Pul (de/para) PM / pieza de mano" → Pulidores PM: los SKU de la lista + todo lo que
+  // empiece con "Pulidor PM" (también lo que se agregue después)
+  { requiere: ['pulidor', 'pm'],
+    requiereAlt: { pulidor: ['pulidores', 'puli', 'pul', 'pulidora', 'pulidoras'], pm: ['pieza', 'piezas'] },
+    opcionales: ['mano', 'de', 'para', 'p'],
+    get skus(){
+      const base = ['33142-BAL', '33142-TOR', '33143-BAL', '33143-TOR', '33144-BAL', '33144-TOR'];
+      const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const din = (catalogo || []).filter(it => /^pulidor(es)? pm\b/.test(nz(it.n))).map(it => String(it.s));
+      return [...base, ...din.filter(x => !base.includes(x))];
+    } },
+  // Kit / combo de siliconas por CONDENSACIÓN (cualquier orden y abreviado: "kit sil con", "silicona combo condensacion"…)
+  { requiere: ['silicona', 'kit', 'condensacion'],
+    requiereAlt: { silicona: ['siliconas', 'sil', 'silic', 'silicon', 'silicone', 'silicones'], kit: ['kits', 'combo', 'combos', 'set', 'juego'], condensacion: ['con', 'cond', 'conden', 'condensa', 'condensado', 'condensada', 'condencacion', 'condensasion'] },
+    opcionales: ['de', 'por', 'para', 'p', 'x'], skus: ['1080', '21081', '21611', '32742'] },
   // Siliconas por CONDENSACIÓN (las palabras pueden ir en cualquier orden y abreviadas: "sil masa con",
   // "masa silicona condensacion", "sil act con", "fluida silicona condensacion"…)
   // Masa / putty
