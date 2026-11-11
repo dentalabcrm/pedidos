@@ -4569,6 +4569,20 @@ function _coincideColorCera(palabra, it){
   return new RegExp('\\b' + color.raiz).test(n) || color.sufijo.test(String(it.s || ''));
 }
 const GRUPOS_ESPECIALES = [
+  // Siliconas por CONDENSACIÓN (las palabras pueden ir en cualquier orden y abreviadas: "sil masa con",
+  // "masa silicona condensacion", "sil act con", "fluida silicona condensacion"…)
+  // Masa / putty
+  { requiere: ['silicona', 'masa', 'condensacion'],
+    requiereAlt: { silicona: ['siliconas', 'sil', 'silic', 'silicon', 'silicone', 'silicones'], masa: ['masas', 'putty', 'puty', 'pesada', 'heavy'], condensacion: ['con', 'cond', 'conden', 'condensa', 'condensado', 'condensada', 'condencacion', 'condensasion'] },
+    opcionales: ['de', 'por', 'para', 'p', 'x'], skus: ['1086', '21083', '21609', '32739'] },
+  // Activador / catalizador
+  { requiere: ['silicona', 'activador', 'condensacion'],
+    requiereAlt: { silicona: ['siliconas', 'sil', 'silic', 'silicon', 'silicone', 'silicones'], activador: ['activadores', 'act', 'activ', 'catalizador', 'catalizadores', 'cat', 'catal', 'cata'], condensacion: ['con', 'cond', 'conden', 'condensa', 'condensado', 'condensada', 'condencacion', 'condensasion'] },
+    opcionales: ['de', 'por', 'para', 'p', 'x'], skus: ['1082', '21085', '32741', '21008'] },
+  // Light / fluida
+  { requiere: ['silicona', 'light', 'condensacion'],
+    requiereAlt: { silicona: ['siliconas', 'sil', 'silic', 'silicon', 'silicone', 'silicones'], light: ['lite', 'ligth', 'liviana', 'fluida', 'fluidas', 'fluido', 'flu', 'flui'], condensacion: ['con', 'cond', 'conden', 'condensa', 'condensado', 'condensada', 'condencacion', 'condensasion'] },
+    opcionales: ['de', 'por', 'para', 'p', 'x'], skus: ['1084', '21084', '21610', '32740'] },
   // "Matizador / Pigmento(s) (de/para) (caracterización / caracterizar) acrílico" → matizadores y pigmentos para
   // acrílico: los SKU de la lista + toda la subcategoría "Pigmentos" (también lo que se agregue después)
   { requiere: ['matizador', 'acrilico'],
@@ -5073,7 +5087,18 @@ function _buscarProductosBase(){
     // diga esas palabras exactas. Cualquier palabra extra filtra DENTRO de esa lista.
     // Para esto "p/barra" o "ball-attach" cuentan como dos palabras (las medidas como "1.8" quedan enteras).
     const tokensGrupo = q.split(/\s+/).flatMap(t => /[a-z]/.test(t) ? t.split(/[-\/;:()]+|(?<!\d)[.,]|[.,](?!\d)/) : [t]).filter(Boolean).map(t => _stripAccents(t));
-    const grupoActivo = _buscarGrupoEspecial(tokensGrupo);
+    let grupoActivo = _buscarGrupoEspecial(tokensGrupo);
+    // Si las palabras que sobran no encuentran NADA dentro del atajo (ej. "acrilico rosa cubeta": el atajo
+    // "acrílico rosa" es el de prótesis y no tiene los de cubetas), se ignora el atajo y se busca normal.
+    if (grupoActivo) {
+      const _tr = tokensGrupo.filter(t => !grupoActivo.conceptoTokens.has(t) && !_STOPWORDS_BUSQUEDA.has(t));
+      if (_tr.length && !grupoActivo.skus.some(sku => {
+        const it = catalogoBySku.get(sku); if (!it) return false;
+        const idx = _getSearchIdx(it);
+        return _tr.every(t => [idx[0], idx[1]].some(f => f.includes(t)) || [idx[2], idx[3]].some(f => f.includes(_stripAccents(t))) ||
+          (grupoActivo.coincide && grupoActivo.coincide(t, it)));
+      })) grupoActivo = null;
+    }
 
     if (grupoActivo) {
       const tokensRestantes = tokensGrupo.filter(t => !grupoActivo.conceptoTokens.has(t) && !_STOPWORDS_BUSQUEDA.has(t));
@@ -8881,6 +8906,9 @@ function _aplicarCatalogoEnVivo(data){
         const nToks = _tokens(it.n);
         return resto.every(q => nToks.some(n => _sim(q, n) >= 0.85) || (grupo.coincide && grupo.coincide(q, it)));
       });
+      // Si las palabras que sobran no encuentran nada dentro del atajo (ej. "acrilico rosa cubeta"), se
+      // ignora el atajo y se busca normal, igual que en el buscador.
+      if (resto.length && !skus.length) return null;
       return { skus, requiereKit: grupo.requiere.includes('kit') };
     }
     return null;
@@ -9568,26 +9596,26 @@ function _aplicarCatalogoEnVivo(data){
         if (_atajo.has(String(it.s).trim().toUpperCase()) && _stockOk(it.s) && precioDe(it) > 0 && !skus.includes(it.s)) skus.push(it.s);
       });
     }
-    // Shift + clic agrega lo que se VE en pantalla: si lo interpretado no está entre los resultados (ej. "polimero
-    // auto 66" tomaba el "66" como el SKU 66 = una bandeja), se usa lo que muestra el buscador, con las mismas reglas
-    // de stock y precio. Si se escribió un número (color/medida), se priorizan los que lo tienen en el nombre.
+    // Shift + clic agrega TODO lo que se VE en pantalla (igual que con una categoría), con las reglas de stock
+    // y precio. Si se escribió un número suelto (color/medida, ej. "polimero auto 66"), se quedan solo los que
+    // tienen ese número en el nombre. Lo interpretado (modo WhatsApp) se usa solo si la pantalla está vacía.
     try {
       const _vis = (typeof buscarProductos === 'function' ? buscarProductos() : []);
       if (_vis.length) {
-        const _visSet = new Set(_vis.map(it => it.s));
-        let _dentro = skus.filter(x => _visSet.has(x));
-        if (!_dentro.length) {
-          const _nums = texto.split(/\s+/).filter(t => /^\d+$/.test(t));
-          let _cand = _vis;
-          if (_nums.length) {
-            const _conNum = _vis.filter(it => _nums.every(n => new RegExp('(^|[^\\d])' + n + '([^\\d]|$)').test(String(it.n || ''))));
-            if (_conNum.length) _cand = _conNum;
-          }
-          _dentro = _cand.filter(it => _stockOk(it.s) && precioDe(it) > 0).map(it => it.s);
-          if (!_dentro.length) _cand.forEach(it => { if (!skus.includes(it.s)) skus.push(it.s); }); // para el aviso
-          else skus.length = 0;
-        } else skus.length = 0;
-        if (_dentro.length) _dentro.forEach(x => skus.push(x));
+        const _nums = texto.split(/\s+/).filter(t => /^\d+$/.test(t));
+        let _cand = _vis;
+        const _soloSku = texto.trim().toUpperCase();
+        const _exacto = _vis.filter(it => String(it.s).trim().toUpperCase() === _soloSku);
+        if (_exacto.length) _cand = _exacto;            // se escribió un SKU exacto (ej. "66"): solo ese
+        else if (_nums.length) {
+          const _conNum = _vis.filter(it => _nums.every(n => new RegExp('(^|[^\\d])' + n + '([^\\d]|$)').test(String(it.n || ''))));
+          if (_conNum.length) _cand = _conNum;
+        }
+        skus.length = 0;
+        _cand.forEach(it => { if (!skus.includes(it.s)) skus.push(it.s); });
+      } else {
+        skus.length = 0;                                 // nada en pantalla → no se agrega nada que no se vea
+        lineas.length = 0; _atajo.clear();
       }
     } catch (e) {}
     const nuevos = skus.filter(sku => !carrito.has(sku) && _stockOk(sku) && precioDe(catalogoBySku.get(sku) || {}) > 0);
