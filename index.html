@@ -1500,8 +1500,21 @@ const SKUS_TERMINAL_MP_EXTRA = new Set([
   '8030', '8036', '8303', '8060', '8059', '8061',
   '3040', '3053', '3055', '3041', '3047', '3054', '8746', '8150', '8149', '3044', '3043', '3045', '22201',
   '8230', '35340', '14003', '35030', '20001', '33665', '14008', '14007', '35028', '20002', '22200', '22000',
-  '22100', '8213', '35026'
+  '22100', '8213', '35026',
+  // Lámparas de fotocurado que faltaban (igual ahora entra TODA la subcategoría, ver _pwSkuTerminalMP)
+  '8806', '8823', '8824-VER', '8824-ver', '8816', '8818', '8820'
 ]);
+// ¿Este producto tiene la opción de 3 cuotas sin interés por Terminal de Mercado Pago (Visa/Mastercard)?
+// Sí si es de la categoría "Máquinas", si está en la lista de arriba (sin importar mayúsculas) o si es
+// una LÁMPARA DE FOTOCURADO (toda la subcategoría, así las que se agreguen después también la tienen).
+function _pwSkuTerminalMP(sku, categoria){
+  const it = (typeof catalogoBySku !== 'undefined') ? catalogoBySku.get(sku) : null;
+  const nz = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  if ((categoria || it?.g) === 'Máquinas') return true;
+  const k = String(sku || '').trim();
+  if (SKUS_TERMINAL_MP_EXTRA.has(k) || SKUS_TERMINAL_MP_EXTRA.has(k.toUpperCase()) || SKUS_TERMINAL_MP_EXTRA.has(k.toLowerCase())) return true;
+  return !!it && (nz(it.sg) === 'lamparas de fotocurado' || /^lampara de fotocurado\b/.test(nz(it.n)));
+}
 function _pwFinRound(v){ return Math.ceil(v / 100) * 100; } // redondeo prolijo, igual que el CRM
 // Lee el monto mínimo ("...en compras desde $50.000") ya escrito en el texto de condición
 // de cada opción de cuotas sin interés, para aplicarlo como filtro real — así no depende
@@ -1775,8 +1788,7 @@ window._pwDescargarCuotasPDF = () => {
 function _pwPermitirTerminalMPCarrito(){
   const skusCarrito = [...carrito.keys()];
   return skusCarrito.length > 0 && skusCarrito.every(sku => {
-    const it = catalogoBySku.get(sku);
-    return it?.g === 'Máquinas' || SKUS_TERMINAL_MP_EXTRA.has(sku);
+    return _pwSkuTerminalMP(sku);
   });
 }
 window.abrirCuotasModal = (precio, nombreCodificado, categoriaCodificada, skuCodificado) => {
@@ -1784,7 +1796,7 @@ window.abrirCuotasModal = (precio, nombreCodificado, categoriaCodificada, skuCod
   const nombre = decodeURIComponent(nombreCodificado);
   const categoria = categoriaCodificada ? decodeURIComponent(categoriaCodificada) : '';
   const sku = skuCodificado ? decodeURIComponent(skuCodificado) : '';
-  const permitirTerminalMP = categoria === 'Máquinas' || SKUS_TERMINAL_MP_EXTRA.has(sku);
+  const permitirTerminalMP = _pwSkuTerminalMP(sku, categoria);
   _pwFinModalReabrir = () => _pwAbrirFinModal(precio, nombre, 'Precio del producto', permitirTerminalMP, sku);
   _pwFinModalReabrir();
 };
