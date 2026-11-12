@@ -4657,6 +4657,38 @@ const GRUPOS_ESPECIALES = [
       const din = (catalogo || []).filter(it => { const n = nz(it.n); return /termoplaca/.test(n) && /flexible/.test(n) && /\.080\b/.test(n); }).map(it => String(it.s));
       return [...base, ...din.filter(x => !base.includes(x))];
     } },
+  // Placas RÍGIDAS por espesor (= Termoplacas Rígidas): "placa(s) rígida(s)/dura(s) 0.4 / 04 / 1mm", "0.6 / 06 /
+  // 1.5mm", "0.8 / 08 / 2mm" (cualquier orden). Y "placa 0.6" sin tipo → todas las termoplacas de ese espesor.
+  { requiere: ['placa', 'rigida', '040'],
+    requiereAlt: { placa: ['placas', 'termoplaca', 'termoplacas'], rigida: ['rigidas', 'rigido', 'rigidos', 'dura', 'duras'], '040': ['0.4', '0,4', '04', '.04', '.040', '040', '0.40', '0,40', '1mm', '1.0', '1,0', '1.00', '1,00'] },
+    opcionales: ['de', 'para', 'p', 'mm', 'x'],
+    get skus(){ const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      return (catalogo || []).filter(it => { const n = nz(it.n); return /termoplaca/.test(n) && /rigida/.test(n) && /\.040\b/.test(n); }).map(it => String(it.s)); } },
+  { requiere: ['placa', 'rigida', '060'],
+    requiereAlt: { placa: ['placas', 'termoplaca', 'termoplacas'], rigida: ['rigidas', 'rigido', 'rigidos', 'dura', 'duras'], '060': ['0.6', '0,6', '06', '.06', '.060', '060', '0.60', '0,60', '1.5', '1,5', '1.5mm', '1,5mm', '1.50', '1,50'] },
+    opcionales: ['de', 'para', 'p', 'mm', 'x'],
+    get skus(){ const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      return (catalogo || []).filter(it => { const n = nz(it.n); return /termoplaca/.test(n) && /rigida/.test(n) && /\.060\b/.test(n); }).map(it => String(it.s)); } },
+  { requiere: ['placa', 'rigida', '080'],
+    requiereAlt: { placa: ['placas', 'termoplaca', 'termoplacas'], rigida: ['rigidas', 'rigido', 'rigidos', 'dura', 'duras'], '080': ['0.8', '0,8', '08', '.08', '.080', '080', '0.80', '0,80', '2mm', '2.0', '2,0', '2.00', '2,00'] },
+    opcionales: ['de', 'para', 'p', 'mm', 'x'],
+    get skus(){ const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      return (catalogo || []).filter(it => { const n = nz(it.n); return /termoplaca/.test(n) && /rigida/.test(n) && /\.080\b/.test(n); }).map(it => String(it.s)); } },
+  { requiere: ['placa', '040'],
+    requiereAlt: { placa: ['placas', 'termoplaca', 'termoplacas'], '040': ['0.4', '0,4', '04', '.04', '.040', '040', '0.40', '0,40', '1mm', '1.0', '1,0', '1.00', '1,00'] },
+    opcionales: ['de', 'para', 'p', 'mm', 'x'],
+    get skus(){ const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      return (catalogo || []).filter(it => { const n = nz(it.n); return /termoplaca/.test(n) && /\.040\b/.test(n); }).map(it => String(it.s)); } },
+  { requiere: ['placa', '060'],
+    requiereAlt: { placa: ['placas', 'termoplaca', 'termoplacas'], '060': ['0.6', '0,6', '06', '.06', '.060', '060', '0.60', '0,60', '1.5', '1,5', '1.5mm', '1,5mm', '1.50', '1,50'] },
+    opcionales: ['de', 'para', 'p', 'mm', 'x'],
+    get skus(){ const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      return (catalogo || []).filter(it => { const n = nz(it.n); return /termoplaca/.test(n) && /\.060\b/.test(n); }).map(it => String(it.s)); } },
+  { requiere: ['placa', '080'],
+    requiereAlt: { placa: ['placas', 'termoplaca', 'termoplacas'], '080': ['0.8', '0,8', '08', '.08', '.080', '080', '0.80', '0,80', '2mm', '2.0', '2,0', '2.00', '2,00'] },
+    opcionales: ['de', 'para', 'p', 'mm', 'x'],
+    get skus(){ const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      return (catalogo || []).filter(it => { const n = nz(it.n); return /termoplaca/.test(n) && /\.080\b/.test(n); }).map(it => String(it.s)); } },
   // Kit / combo de silicona por ADICIÓN (cualquier orden y abreviado: "kit sil adi", "silicona combo adicion"…)
   { requiere: ['silicona', 'kit', 'adicion'],
     requiereAlt: { silicona: ['siliconas', 'sil', 'sili', 'silic', 'silico', 'silicon', 'silicone', 'silicones'], kit: ['kits', 'combo', 'combos', 'set', 'juego'], adicion: ['adi', 'adic', 'adiccion', 'adicional', 'adiciones', 'adision'] },
