@@ -4582,6 +4582,17 @@ function _coincideColorCera(palabra, it){
   return new RegExp('\\b' + color.raiz).test(n) || color.sufijo.test(String(it.s || ''));
 }
 const GRUPOS_ESPECIALES = [
+  // "Adhesivo / ad / adh (para) bracket(s)" → adhesivos para brackets: los de la lista + todo lo que diga
+  // "Adhesivo" y "Bracket" en el nombre (también lo que se agregue después)
+  { requiere: ['adhesivo', 'bracket'],
+    requiereAlt: { adhesivo: ['adhesivos', 'ad', 'adh'], bracket: ['brackets', 'braket', 'brakets', 'braquet', 'braquets'] },
+    opcionales: ['para', 'p', 'de'],
+    get skus(){
+      const base = ['1160', '1167'];
+      const nz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const din = (catalogo || []).filter(it => { const n = nz(it.n); return /adhesivo/.test(n) && /bracket/.test(n); }).map(it => String(it.s));
+      return [...base, ...din.filter(x => !base.includes(x))];
+    } },
   // "Adhesivo (para) carillas" → Cemento p/ Carillas BISCO Choice 2
   { requiere: ['adhesivo', 'carillas'], requiereAlt: { adhesivo: ['adhesivos'], carillas: ['carilla'] },
     opcionales: ['para', 'p', 'de'], skus: ['1165-A1', '1165-B1', '1165-TRA', '1165-A2', 'M-BISCO-7', 'M-BISCO-8'] },
@@ -9796,7 +9807,9 @@ function _aplicarCatalogoEnVivo(data){
               const cands = (typeof _candidatosSinonimos === 'function' ? _candidatosSinonimos(t) : [t]).map(nz);
               return cands.some(c => pr.includes(c) || pr.includes(sing(c)));
             };
-            const _princ = _cand.filter(it => { const pr = principal(it.n); return toks.every(t => okTok(t, pr)); });
+            // La 1ª palabra (lo que se busca: "turbina", "adhesivo", "cemento"…) tiene que ser el producto en sí;
+            // las demás pueden estar en cualquier parte (ej. "adhesivo bracket" → "Adhesivo p/ Brackets …").
+            const _princ = _cand.filter(it => { const pr = principal(it.n), todo = nz(it.n); return okTok(toks[0], pr) && toks.slice(1).every(t => okTok(t, todo)); });
             if (_princ.length) _cand = _princ;
           }
         }
