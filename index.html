@@ -4462,16 +4462,16 @@ const SINONIMOS_RAW = [
   ['Sistema Radiográfico Digital', 'RVG', 'radiovisiógrafo', 'radiovisiografo', 'sensor', 'sensor RVG', 'sensor digital'],
   ['Lámpara de Fotocurado', 'fotocurado', 'lámpara LED', 'luz de fotocurado', 'lámpara de luz'],
   ['Autoclave', 'esterilizador', 'esterilizadora', 'clase B', 'autoclave 21L'],
-  ['Fisiodispenser', 'motor de implantes', 'implantes', 'implant motor'],
+  ['Fisiodispenser', 'motor de implantes', 'implant motor'], // sin "implantes" suelto (traía contra ángulos "• Implantes")
   ['Micromotor Eléctrico', 'motor eléctrico', 'motor de cirugía', 'micromotor LED'],
-  ['Endo Motor', 'motor endo', 'endodoncia', 'endomotor'],
+  ['Endo Motor', 'motor endo', 'endomotor'], // sin "endodoncia" suelto (traía cementos y limas de endodoncia)
   ['Localizador de Ápice', 'apex locator', 'localizador', 'ápice', 'apice'],
   ['Sillón odontológico', 'sillón dental', 'unidad dental', 'sillón'],
   ['Horno para Porcelana', 'horno cerámica', 'horno dental'],
   ['Termoformadora', 'plastificadora', 'máquina de placas', 'vacuum former'],
   ['Contra Ángulo', 'contraangulo', 'CA', 'contra ángulo óptico'],
-  ['Turbina', 'alta', 'pieza de alta', 'alta velocidad'],
-  ['Micromotor neumático', 'baja', 'pieza de baja'],
+  ['Turbina', 'pieza de alta', 'alta velocidad'], // sin "alta" suelto: traía "Desmoldante de Alta Temperatura", "Hemosuctor de Alta Potencia"…
+  ['Micromotor neumático', 'pieza de baja'], // sin "baja" suelto (traía "Tornillo … Cabeza Baja")
   ['Compresor', 'compresora de aire'],
   ['Aspirador', 'aspiración', 'bomba de aspiración'],
 ];
@@ -5378,7 +5378,7 @@ function _buscarProductosBase(){
     const _nivel = it => {
       const n = _stripAccents(String(it.n || '').toLowerCase());
       if (_cands.some(c => n.startsWith(c) || n.startsWith(_sing(c)))) return 0;
-      const pr = n.replace(/\([^)]*\)/g, ' ').split(/\s(?:p\/|para|c\/|con)\s/)[0];
+      const pr = n.split(/\s[•·|]\s/)[0].replace(/\([^)]*\)/g, ' ').split(/\s(?:p\/|para|c\/|con)\s/)[0];
       if (_cands.some(c => pr.includes(c) || pr.includes(_sing(c)))) return 1;
       return 2;
     };
@@ -9809,12 +9809,14 @@ function _aplicarCatalogoEnVivo(data){
         }
         // Sin atajo: se quedan los productos donde lo escrito es el PRODUCTO en sí, no un "para qué" o una
         // aclaración. Ej. "turbina" → las Turbinas, no "Fresas … (Turbina)" ni "Aceite … p/ Turbina".
-        // (Se ignora lo que está entre paréntesis y lo que va después de "p/", "para" o "c/".) Si ninguno
+        // (Solo cuenta la primera parte del nombre, antes del primer "•", y se ignora lo que está entre
+        // paréntesis y lo que va después de "p/", "para" o "c/": "Fisiodispenser … • Contra Angulo …" no
+        // es un contra ángulo.) Si ninguno
         // cumple, quedan todos los de la pantalla.
         if (!_atajo.size && !_exacto.length) {
           const nz = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
           const sing = w => w.replace(/(?:es|s)$/, '');
-          const principal = n => nz(n).replace(/\([^)]*\)/g, ' ').split(/\s(?:p\/|para|c\/|con)\s/)[0];
+          const principal = n => nz(n).split(/\s[•·|]\s/)[0].replace(/\([^)]*\)/g, ' ').split(/\s(?:p\/|para|c\/|con)\s/)[0];
           const toks = nz(texto).split(/\s+/).filter(t => t && !/^\d+$/.test(t) && !(typeof _STOPWORDS_BUSQUEDA !== 'undefined' && _STOPWORDS_BUSQUEDA.has(t)));
           if (toks.length) {
             const okTok = (t, pr) => {
