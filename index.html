@@ -4522,7 +4522,9 @@ function _candidatosSinonimos(t){
     // cortas como "CA" (Contra Ángulo) se disparen porque aparecen de casualidad dentro
     // de otra palabra (ej: "bicarbonato" contiene "ca"). El match exacto sigue sin límite.
     if (grupo.some(g => g === t || (g.length >= 4 && (g.includes(t) || t.includes(g))))) {
-      grupo.forEach(g => { if (!candidatos.includes(g)) candidatos.push(g); });
+      // Los sinónimos muy cortos (ej. "CA" = Contra Ángulo) solo se usan si se escribieron tal cual:
+      // si no, "contra angulo" buscaba también "ca" y traía cualquier cosa (alicate, escáner, cofias…).
+      grupo.forEach(g => { if (!candidatos.includes(g) && (g.length >= 3 || g === t)) candidatos.push(g); });
     }
   });
   return candidatos;
@@ -5363,13 +5365,25 @@ function _buscarProductosBase(){
     ordenados = ordenados.filter(it => !_getSearchIdx(it)[3].includes('flow'));
   }
 
-  // Con una búsqueda escrita, primero van los productos cuyo nombre EMPIEZA con la primera palabra
-  // buscada ("composite" → "Composite Z350…" antes que "Pincel para Composite"). Si se eligió
-  // ordenar por precio, manda ese orden.
+  // Con una búsqueda escrita, SIEMPRE van primero los productos que SON lo buscado:
+  //   1º los que EMPIEZAN con la primera palabra ("turbina" → "Turbina NSK…"),
+  //   2º los que la tienen en el nombre principal (sin contar lo que va entre paréntesis ni después de
+  //      "p/", "para", "c/": "Fresas … (Turbina)" o "Aceite … p/ Turbina" quedan después),
+  //   3º el resto.
+  // Dentro de cada grupo se respeta el orden elegido (precio menor/mayor, nombre…): el sort es estable.
   const _primera = tokens.find(t => !_STOPWORDS_BUSQUEDA.has(t));
-  if (_primera && filtroOrdenPrecio !== 'asc' && filtroOrdenPrecio !== 'desc') {
-    const _empieza = it => _getSearchIdx(it)[3].startsWith(_primera) ? 0 : 1;
-    ordenados.sort((a, b) => _empieza(a) - _empieza(b));
+  if (_primera) {
+    const _sing = w => w.replace(/(?:es|s)$/, '');
+    const _cands = (typeof _candidatosSinonimos === 'function' ? _candidatosSinonimos(_primera) : [_primera]).map(c => _stripAccents(String(c).toLowerCase()));
+    const _nivel = it => {
+      const n = _stripAccents(String(it.n || '').toLowerCase());
+      if (_cands.some(c => n.startsWith(c) || n.startsWith(_sing(c)))) return 0;
+      const pr = n.replace(/\([^)]*\)/g, ' ').split(/\s(?:p\/|para|c\/|con)\s/)[0];
+      if (_cands.some(c => pr.includes(c) || pr.includes(_sing(c)))) return 1;
+      return 2;
+    };
+    const _niv = new Map(ordenados.map(it => [it, _nivel(it)]));
+    ordenados.sort((a, b) => _niv.get(a) - _niv.get(b));
   }
 
   // Los agotados siempre van al final, para no confundir al cliente mostrando primero
