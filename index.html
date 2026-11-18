@@ -11613,8 +11613,795 @@ document.addEventListener('keydown', (e) => {
   document.addEventListener('mousedown', e => { if (onMedio(e)) e.preventDefault(); }, true);
   document.addEventListener('auxclick', e => { if (e.button === 1 && esAdmin()) { const k = combosMouse(); if (coincide(e, k.pedido) || coincide(e, k.cliente)) e.preventDefault(); } }, true);
 
+  // Para el módulo "Pedidos en Yiqi" del catálogo
+  window._yqc = { token, yfetch, toast, esAdmin, pedirLogin };
   window.yiqiCatCargarPedido = abrirPedido;
   window.yiqiCatCargarCliente = abrirCliente;
+})();
+
+</script>
+<script>
+(function(){var st=document.createElement('style');st.textContent="\n#pyq-bd{position:fixed;inset:0;z-index:9000;background:#fff;overflow:hidden;display:flex;flex-direction:column;}\n#pyq-wrap{font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#212529;display:flex;flex-direction:column;height:100%;padding:10px 14px 8px;box-sizing:border-box;}\n#pyq-wrap .pyq-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;}\n#pyq-wrap .pyq-title{font-size:18px;font-weight:600;color:#212529;margin:0 6px;}\n#pyq-wrap .pyq-btn{background:#1a73e8;border:1px solid #1a73e8;border-radius:4px;padding:6px 12px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;}\n#pyq-wrap .pyq-btn:hover{background:#1765cc;}\n#pyq-wrap .pyq-btn.sec{background:#fff;border-color:#ced4da;color:#495057;}\n#pyq-wrap .pyq-btn.sec:hover{background:#f1f3f5;}\n#pyq-wrap select,#pyq-wrap input[type=text],#pyq-wrap input[type=password]{background:#fff;border:1px solid #ced4da;border-radius:4px;color:#212529;padding:6px 9px;font-size:13px;font-family:inherit;}\n#pyq-wrap input.pyq-q{width:240px;}\n#pyq-wrap label.pyq-chk{font-size:13px;color:#495057;display:inline-flex;gap:5px;align-items:center;cursor:pointer;}\n#pyq-wrap .pyq-info{font-size:12px;color:#6c757d;margin-left:auto;}\n#pyq-wrap .pyq-err{background:#fdecea;border:1px solid #f5c2c7;color:#842029;border-radius:4px;padding:8px 12px;font-size:13px;margin-bottom:8px;white-space:pre-wrap;}\n#pyq-wrap .pyq-scroll{flex:1;overflow:auto;border:1px solid #dee2e6;}\n#pyq-wrap table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:13px;}\n#pyq-wrap th{position:sticky;top:0;z-index:2;background:#f8f9fa;color:#212529;font-weight:500;text-align:left;padding:10px 10px;border-bottom:1px solid #dee2e6;border-right:1px solid #e9ecef;cursor:pointer;white-space:nowrap;user-select:none;}\n#pyq-wrap th .pyq-ed{color:#1a73e8;font-size:10px;margin-left:3px;}\n#pyq-wrap td{padding:10px 10px;border-bottom:1px solid #e9ecef;border-right:1px solid #f1f3f5;vertical-align:middle;max-width:240px;line-height:1.45;}\n#pyq-wrap tbody tr:nth-child(even) td{background:#fbfbfc;}\n#pyq-wrap tbody tr:hover td{background:#f1f5fb;}\n#pyq-wrap td.c-acc{white-space:nowrap;padding-right:6px;max-width:none;}\n#pyq-wrap .pyq-mini{background:#fff;border:1px solid #ced4da;color:#495057;border-radius:4px;padding:3px 7px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;margin-right:3px;}\n#pyq-wrap .pyq-mini:hover{background:#e8f0fe;border-color:#1a73e8;color:#1a73e8;}\n#pyq-wrap .pyq-mini.pyq-del:hover{background:#fdecea;border-color:#dc3545;color:#dc3545;}\n#pyq-wrap .pyq-mini.pyq-fact{border-color:#a3cfbb;color:#146c43;background:#e8f5ee;}\n#pyq-wrap .pyq-mini.pyq-res{border-color:#ffda6a;color:#7a5b00;background:#fff8e1;}\n#pyq-wrap .pyq-mini.pyq-presu{border-color:#b6d4fe;color:#0a58ca;background:#eef4ff;}\n#pyq-wrap .pyq-mini[disabled]{opacity:.35;cursor:default;}\n#pyq-pdfmenu{position:fixed;z-index:9999;background:#fff;border:1px solid #ced4da;border-radius:6px;padding:6px;box-shadow:0 8px 28px rgba(0,0,0,.18);font-family:'Segoe UI',Roboto,Arial,sans-serif;min-width:230px;}\n#pyq-pdfmenu button{display:block;width:100%;text-align:left;background:transparent;border:none;color:#212529;padding:7px 10px;border-radius:4px;font:inherit;font-size:13px;cursor:pointer;}\n#pyq-pdfmenu button:hover{background:#e8f0fe;}\n#pyq-pdfmenu .t{font-size:11px;color:#6c757d;padding:4px 10px 6px;}\n#pyq-wrap tr.pyq-nuevo td{animation:pyqNuevo 4s ease;}\n@keyframes pyqNuevo{0%,40%{background:#d1f2df;}100%{background:transparent;}}\n#pyq-wrap td.c-nro{white-space:nowrap;}\n#pyq-wrap .pyq-nro{font-weight:400;color:#212529;}\n#pyq-wrap td.c-nro small{display:block;color:#adb5bd;font-size:10.5px;}\n#pyq-wrap td.c-total{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}\n#pyq-wrap td.c-fecha{white-space:nowrap;}\n#pyq-wrap td.c-obs{min-width:200px;max-width:240px;}\n#pyq-wrap td.c-obs .pyq-txt{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line;}\n#pyq-wrap td .pyq-txt{overflow:hidden;text-overflow:ellipsis;}\n#pyq-wrap td.ed{cursor:text;}\n#pyq-wrap td.ed:hover{outline:1px dashed #1a73e8;outline-offset:-3px;}\n#pyq-wrap td.ed .pyq-empty{color:#ced4da;}\n#pyq-wrap td.saving{opacity:.5;}\n#pyq-wrap td.ok{animation:pyqOk 1.6s ease;}\n#pyq-wrap td.bad{background:#fdecea!important;}\n@keyframes pyqOk{0%{background:#c7eed8;}100%{background:transparent;}}\n#pyq-wrap td textarea,#pyq-wrap td input,#pyq-wrap td select{width:100%;min-width:140px;box-sizing:border-box;background:#fff;border:1px solid #1a73e8;border-radius:4px;color:#212529;font:inherit;padding:4px 6px;}\n#pyq-wrap td textarea{min-height:90px;min-width:240px;resize:vertical;}\n#pyq-wrap .pyq-hint{font-size:10.5px;color:#6c757d;margin-top:3px;}\n#pyq-wrap .pyq-badge{display:inline-block;padding:1px 5px;border-radius:3px;font-size:11px;font-weight:700;white-space:nowrap;background:#e9ecef;color:#495057;}\n#pyq-wrap .pyq-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}\n#pyq-wrap .pyq-chip{font-size:12px;padding:3px 10px;border-radius:4px;border:1px solid #dee2e6;cursor:pointer;color:#495057;background:#fff;font-family:inherit;}\n#pyq-wrap .pyq-chip.on{border-color:#1a73e8;color:#fff;background:#1a73e8;}\n#pyq-wrap .pyq-login{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#fff8e1;border:1px solid #ffe08a;border-radius:4px;padding:10px 12px;margin-bottom:8px;font-size:13px;color:#7a5b00;}\n#pyq-wrap .pyq-colpanel{position:absolute;top:calc(100% + 6px);left:0;z-index:30;background:#fff;border:1px solid #ced4da;border-radius:6px;padding:12px;width:360px;max-height:70vh;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.18);font-size:13px;}\n#pyq-wrap .pyq-colpanel > div:first-child{color:#212529!important;}\n#pyq-wrap .pyq-colrow{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:4px;cursor:grab;}\n#pyq-wrap .pyq-colrow:hover{background:#f1f3f5;}\n#pyq-wrap .pyq-colrow label{display:flex;align-items:center;gap:6px;cursor:pointer;color:#212529;}\n#pyq-wrap .pyq-colrow.drag-over,#pyq-wrap th.drag-over{box-shadow:inset 3px 0 0 #1a73e8;}\n#pyq-wrap .pyq-grip{color:#adb5bd;}\n#pyq-wrap th[draggable]{cursor:grab;}\n#pyq-wrap .pyq-pager{display:flex;align-items:center;justify-content:space-between;padding:8px 2px 0;}\n#pyq-wrap .pyq-pg{display:inline-flex;border:1px solid #dee2e6;border-radius:4px;overflow:hidden;}\n#pyq-wrap .pyq-pg button{min-width:32px;height:32px;border:none;border-right:1px solid #dee2e6;background:#fff;color:#1a73e8;font-size:13px;cursor:pointer;font-family:inherit;}\n#pyq-wrap .pyq-pg button:last-child{border-right:none;}\n#pyq-wrap .pyq-pg button.on{background:#1a73e8;color:#fff;}\n#pyq-wrap .pyq-pg button:disabled{color:#adb5bd;background:#f8f9fa;cursor:default;}\n#pyq-wrap .pyq-pginfo{font-size:13px;color:#495057;}\n";document.head.appendChild(st);})();
+
+(function(){
+  const API = 'https://api.yiqi.com.ar', SCHEMA = 328;
+  const Y = () => window._yqc || {};
+  const yiqiFetch = (u, o) => Y().yfetch(u, o);
+  const LS_VISTA = 'pyq_cat_vista', LS_CACHE = 'pyq_cat_cache_v1', LS_PREFS = 'pyq_cat_prefs_v1';
+  const MAP_CEDI = {155:'Deposito 1 - Local',157:'Deposito Central',159:'Deposito 7 - Jorge',161:'Deposito ML Full',156:'Exposiciones',160:'Reserva',154:'En transito'};
+  const MAP_TIFA = {1:'A',2:'B',3:'C',17:'S',12:'TFA',11:'TFB',16:'X',19:'XE'};
+  const MAP_PUVE = {2:'4',8:'5',12:'6',15:'7',16:'9',14:'98',7:'99',9:'RV - YiQi'};
+  const MAP_VEHA = {12:'Aris Samandjian',13:'Mercado Libre',4:'Juan Martin Gaffuri',8:'Federico Silva',7:'Eduardo Balassanian',5:'Jorge Campagnoli',3:'Carlos Cirigliano',1:'Local',10:'Mostrador',11:'Patricia Bazan',6:'POS Factura',9:'Showroom',2:'Gregorio Samandjian'};
+  const MAP_COVE = {3:'Contado',6:'Transferencia bancaria',5:'Mercado Pago',7:'Tarjeta de Crédito',8:'Tarjeta de Débito',9:'Cuenta Corriente',4:'Cuenta Corriente - 30 días',2:'15 Días Fecha de Factura',1:'30 Días Fecha de Factura',10:'15 + 15 días F.P.F.'};
+  const MAP_EXTE = {13:'WhatsApp',3:'Local',4:'Jorge (Dep 7)',6:'Gregorio (Dep 2)',10:'E. Balassanian',11:'Web',16:'Sólo Factura',2:'MercadoLibre'};
+  // Campos que Yiqi deja editar siempre (también en pedidos Entregados)
+  const SIEMPRE = new Set(['COVE_ID_COVE','PEDI_DIRECCION_DE_ENVIO','PEDI_OBSERVACIONES','PEDI_ESTADO_DEL_ENVIO','PEDI_ESTADO_DE_PAGO','PEDI_ESTADO','PEDI_ESTADO_ACTUAL_DEL_PE']);
+  const COLS = [
+    { k:'_acc', t:'', cls:'c-acc' },
+    { k:'PEDI_NUMERO_SOLO', t:'Nro', cls:'c-nro' },
+    { k:'AUDI_FECHA_ALTA', t:'Fecha de creación', cls:'c-fecha' },
+    { k:'CLIE_NOMBRE', t:'Cliente - Nombre' },
+    { k:'CEDI_ID_ORIG', t:'Ubicación origen', ed:'select', map:MAP_CEDI, fk:true },
+    { k:'TIFA_ID_TIFA', t:'Tipo de Factura', ed:'select', map:MAP_TIFA, fk:true },
+    { k:'PEDI_TOTAL', t:'Total con descuento', cls:'c-total' },
+    { k:'PEDI_OBSERVACIONES', t:'Observaciones', ed:'textarea', cls:'c-obs' },
+    { k:'PEDI_ESTADO_DEL_ENVIO', t:'Estado del Envío', ed:'text' },
+    { k:'PEDI_ESTADO_DE_PAGO', t:'Estado de Pago', ed:'text' },
+    { k:'PEDI_ESTADO', t:'Estado', ed:'text' },
+    { k:'PEDI_ESTADO_ACTUAL_DEL_PE', t:'Estado actual del pedido', ed:'text' },
+    { k:'PEDI_PROVINCIA_DE_ENVIO', t:'Provincia de envío', ed:'text' },
+    { k:'DESC_ESTADO', t:'Descripción de estado' },
+    // Columnas extra (se activan desde ⚙ Columnas)
+    { k:'VEHA_ID_VEHA', t:'Vendedor - Nombre', ed:'select', map:MAP_VEHA, fk:true },
+    { k:'COVE_ID_COVE', t:'Condición de venta', ed:'select', map:MAP_COVE, fk:true, extra:true },
+    { k:'EXTE_ID_EXTE', t:'Origen', map:MAP_EXTE, extra:true },
+    { k:'PUVE_ID_PUVE', t:'Punto de venta', map:MAP_PUVE, extra:true },
+    { k:'PEDI_FECHA', t:'Fecha del pedido', cls:'c-fecha', extra:true },
+    { k:'PEDI_DIRECCION_DE_ENVIO', t:'Dirección de envío', ed:'text', extra:true },
+    { k:'PEDI_LOCALIDAD_DE_ENVIO', t:'Localidad de envío', ed:'text', extra:true },
+    { k:'PEDI_TELEFONO', t:'Teléfono', ed:'text', extra:true },
+    { k:'PEDI_FACTURAS', t:'Facturas', extra:true }
+  ];
+  const COL_DEF = Object.fromEntries(COLS.map(c => [c.k, c]));
+  const ORDEN_DEFAULT = COLS.map(c => c.k); // mismo orden que la grilla de Yiqi (Vendedor al final)
+  const OCULTAS_DEFAULT = COLS.filter(c => c.extra).map(c => c.k);
+  function ordenCols() {
+    const o = (Array.isArray(prefs.orden) ? prefs.orden : ORDEN_DEFAULT).filter(k => COL_DEF[k]);
+    ORDEN_DEFAULT.forEach(k => { if (!o.includes(k)) o.splice(Math.min(ORDEN_DEFAULT.indexOf(k), o.length), 0, k); });
+    return o;
+  }
+  const ocultas = () => new Set(Array.isArray(prefs.ocultas) ? prefs.ocultas : OCULTAS_DEFAULT);
+  function visibles() { const h = ocultas(); return ordenCols().filter(k => !h.has(k)).map(k => COL_DEF[k]); }
+  const QCOLS = ['ID','PEDI_NUMERO','PEDI_NUMERO_SOLO','AUDI_FECHA_ALTA','PEDI_FECHA','CLIE_NOMBRE','PEDI_RAZON_SOCIAL','CEDI_ID_ORIG','TIFA_ID_TIFA',
+    'PEDI_TOTAL','PEDI_OBSERVACIONES','PEDI_ESTADO_DEL_ENVIO','PEDI_ESTADO_DE_PAGO','PEDI_ESTADO','PEDI_ESTADO_ACTUAL_DEL_PE',
+    'PEDI_PROVINCIA_DE_ENVIO','DESC_ESTADO','EXTE_ID_EXTE','PUVE_ID_PUVE','VEHA_ID_VEHA','COVE_ID_COVE','PEDI_DIRECCION_DE_ENVIO',
+    'PEDI_LOCALIDAD_DE_ENVIO','PEDI_TELEFONO','PEDI_FACTURAS','PEDI_TIPOS_FACT_GENERADOS'];
+  const ESTADO_COLOR = {
+    'en espera de pago':['#1a73e8','#fff'], 'entregado':['#f6c445','#3b2f00'],
+    'staging out':['#16a34a','#fff'], 'quiebre 2':['#dc3545','#fff'],
+    'anulado':['#6b7280','#fff'], 'a anular':['#9ca3af','#fff'],
+    'con devolución':['#9333ea','#fff'], 'a reservar':['#f59e0b','#3b2f00'],
+    'esperando 2da validación':['#0ea5e9','#fff'], 'en espera de picking list':['#14b8a6','#fff'], 'asociado a picking list':['#0d9488','#fff']
+  };
+  let prefs = { dias: 7, ml: false, q: '', estado: '', sort: 'PEDI_NUMERO_SOLO', dir: -1 };
+  try { Object.assign(prefs, JSON.parse(localStorage.getItem(LS_PREFS) || '{}')); } catch(e) {}
+  const copiando = {}; let resaltar = null;
+  const NO_ELIMINABLE = /^(entregado|con devoluci[oó]n|staging out)$/i;
+  let rows = [], lastTs = 0, loading = false, editing = null, savingN = 0, lastErr = '', needLogin = false;
+  try { const c = JSON.parse(localStorage.getItem(LS_CACHE) || 'null'); if (c && Array.isArray(c.rows)) { rows = c.rows; lastTs = c.ts || 0; } } catch(e) {}
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const savePrefs = () => { try { localStorage.setItem(LS_PREFS, JSON.stringify(prefs)); } catch(e) {} };
+  const saveCache = () => { try { localStorage.setItem(LS_CACHE, JSON.stringify({ ts: lastTs, rows })); } catch(e) {} };
+  const toast = (m, t) => { try { Y().toast(m, t === 'success' ? 'ok' : t); } catch(e) { console.log(m); } };
+  const rowId = r => r.ID || r.id;
+  const nro = r => r.PEDI_NUMERO_SOLO || String(r.PEDI_NUMERO || '').replace(/\D/g, '');
+  const vista = () => localStorage.getItem(LS_VISTA) || 'yiqi';
+
+  function fmtFecha(s) {
+    if (!s) return '';
+    const d = new Date(s); if (isNaN(d)) return esc(s);
+    const p = n => String(n).padStart(2, '0');
+    return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  const fmtMoney = v => (v == null || v === '') ? '' : '$ ' + Number(v).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const isoDia = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+  async function token() {
+    let t = null;
+    try { t = await Y().token(); } catch(e) { if (e.login) { needLogin = true; throw new Error('SIN_LOGIN'); } throw e; }
+    needLogin = false; return t;
+  }
+
+  // ── Lectura: POST /PEDIDO/query paginado ──
+  let _modoQuery = null; try { _modoQuery = JSON.parse(localStorage.getItem('pyq_modo_query') || 'null'); } catch(e) {}
+  async function queryPage(H, page, cols, filters) {
+    const res = await yiqiFetch(`${API}/api/public/PEDIDO/query?schemaId=${SCHEMA}`, {
+      method: 'POST', headers: H,
+      body: JSON.stringify({ page, pageSize: 200,
+        columns: cols.map((f, i) => f === 'PEDI_NUMERO_SOLO' ? { field: f, title: f, order: i + 1, sortDirection: 'DESC', sortOrder: 1 } : { field: f, title: f, order: i + 1 }),
+        filters: filters.map(f => ({ columnName: f.c, operator: f.op, value: f.v })) })
+    });
+    if (!res.ok) { const tx = await res.text().catch(() => ''); const e = new Error(`HTTP ${res.status} ${tx.slice(0, 300)}`); e.status = res.status; throw e; }
+    const j = await res.json();
+    return { data: j.data || j.items || j.rows || (Array.isArray(j) ? j : []), total: j.total || j.totalCount || j.count || 0 };
+  }
+  async function traerTodo(H, cols, filters, maxPag) {
+    const out = []; let page = 1, total = Infinity;
+    while (out.length < total && page <= maxPag) {
+      const r = await queryPage(H, page, cols, filters);
+      out.push(...r.data); total = r.total || Infinity;
+      if (r.data.length < 200) break; page++;
+    }
+    return out;
+  }
+  // Sin filtros: Yiqi devuelve todo paginado; se leen las páginas del final (las más nuevas)
+  async function traerUltimas(H, cols, desde) {
+    const p1 = await queryPage(H, 1, cols, []);
+    if (!p1.data.length) return [];
+    const idOf = r => Number(r.ID || r.id || r.PEDI_NUMERO_SOLO || 0);
+    const desc = p1.data.length > 1 && idOf(p1.data[0]) > idOf(p1.data[p1.data.length - 1]);
+    const viejo = r => { const f = new Date(r.PEDI_FECHA || r.AUDI_FECHA_ALTA); return !isNaN(f) && f < desde; };
+    const out = [];
+    if (desc) {
+      out.push(...p1.data);
+      for (let pg = 2; pg <= 25 && !viejo(out[out.length - 1]); pg++) { const r = await queryPage(H, pg, cols, []); if (!r.data.length) break; out.push(...r.data); }
+    } else {
+      const ult = Math.max(1, Math.ceil((p1.total || p1.data.length) / 200));
+      for (let pg = ult; pg >= 1 && pg > ult - 25; pg--) {
+        const r = pg === 1 ? p1 : await queryPage(H, pg, cols, []);
+        out.push(...r.data); if (r.data.length && viejo(r.data[0])) break;
+      }
+    }
+    return out;
+  }
+  async function fetchRows() {
+    const H = { 'Authorization': 'Bearer ' + await token(), 'Content-Type': 'application/json' };
+    if (prefs.dias > 31) return fetchLargo(H);
+    const PEND = prefs.dias === 0; // "Pendientes": cualquier fecha, sin Entregados/Anulados/Con devolución
+    const ESTADOS_CERRADOS = /^(entregado|anulado|a anular|con devoluci[oó]n)$/i;
+    const desde = new Date(); desde.setHours(0,0,0,0); desde.setDate(desde.getDate() - (PEND ? 60 : Math.max(0, prefs.dias - 1)));
+    let dia = isoDia(desde);
+    if (PEND) {
+      try {
+        const fs = [{ c: 'ESTA_CODIGO', op: 'NOT IN', v: [176, 442, 853, 933] }, { c: 'PEDI_FECHA', op: '>=', v: dia }];
+        if (!prefs.ml) fs.push({ c: 'EXTE_ID_EXTE', op: '!=', v: 2 });
+        const out = await traerTodo(H, QCOLS, fs, 20);
+        return finalizar(out, desde).filter(r => !ESTADOS_CERRADOS.test(r.DESC_ESTADO || ''));
+      } catch(e) { console.warn('[pedidosYiqi] filtro por estado no soportado, uso fecha y filtro acá:', e.message); }
+    }
+    const colsMin = QCOLS.filter(c => !['CLIE_NOMBRE','DESC_ESTADO','ID','AUDI_FECHA_ALTA'].includes(c));
+    // Variantes de filtro (Yiqi no documenta el formato): se recuerda la primera que funciona
+    const variantes = [];
+    for (const op of ['>=', 'GreaterThanOrEqual', 'gte', 'ge'])
+      for (const v of [dia, dia + 'T00:00:00'])
+        variantes.push({ cols: QCOLS, f: [{ c: 'PEDI_FECHA', op, v }] });
+    variantes.push({ cols: colsMin, f: [{ c: 'PEDI_FECHA', op: '>=', v: dia }] });
+    if (_modoQuery && Array.isArray(_modoQuery.cols) && _modoQuery.cols.length) _modoQuery.cols = _modoQuery.cols.includes('CLIE_NOMBRE') ? QCOLS : colsMin;
+    if (_modoQuery) variantes.unshift(_modoQuery.ultimas ? { cols: _modoQuery.cols, ultimas: true } : { cols: _modoQuery.cols, f: [{ c: 'PEDI_FECHA', op: _modoQuery.op, v: _modoQuery.conHora ? dia + 'T00:00:00' : dia }] });
+    variantes.push({ cols: QCOLS, ultimas: true }, { cols: colsMin, ultimas: true }, { cols: [], ultimas: true });
+    let ultimoErr, out = null;
+    for (const va of variantes) {
+      try {
+        out = va.ultimas ? await traerUltimas(H, va.cols, desde) : await traerTodo(H, va.cols, va.f, 20);
+        // Si el filtro "funcionó" pero trajo pedidos viejos, Yiqi lo ignoró: igual sirve (se filtra acá) salvo que sea gigante
+        _modoQuery = va.ultimas ? { cols: va.cols, ultimas: true } : { cols: va.cols, op: va.f[0].op, conHora: String(va.f[0].v).includes('T') };
+        try { localStorage.setItem('pyq_modo_query', JSON.stringify(_modoQuery)); } catch(e) {}
+        console.log('[pedidosYiqi] modo de consulta OK:', _modoQuery, out.length, 'filas');
+        break;
+      } catch(e) { ultimoErr = e; console.warn('[pedidosYiqi] variante falló:', va, e.message); if (e.status === 401 || e.status === 403) break; }
+    }
+    if (!out) { try { localStorage.removeItem('pyq_modo_query'); } catch(e) {} _modoQuery = null; throw ultimoErr || new Error('Sin respuesta de Yiqi'); }
+    const res = finalizar(out, desde);
+    return PEND ? res.filter(r => !ESTADOS_CERRADOS.test(r.DESC_ESTADO || '')) : res;
+  }
+  // ── Períodos largos (3 meses a 2 años): son miles de pedidos, así que se busca EN YIQI ──
+  // Con texto: busca por N°, cliente, observaciones y vendedor. Sin texto: trae los más recientes (hasta 2000).
+  let truncadoLargo = false;
+  async function fetchLargo(H) {
+    const desde = new Date(); desde.setHours(0,0,0,0); desde.setDate(desde.getDate() - prefs.dias);
+    const dia = isoDia(desde);
+    const base = [{ c: 'PEDI_FECHA', op: '>=', v: dia }];
+    if (!prefs.ml) base.push({ c: 'EXTE_ID_EXTE', op: '!=', v: 2 });
+    const q = String(prefs.q || '').trim();
+    truncadoLargo = false;
+    const consultas = [];
+    if (q) {
+      if (/^\d{3,}$/.test(q)) consultas.push([{ c: 'PEDI_NUMERO_SOLO', op: '=', v: Number(q) }]);
+      if (q.length >= 3) {
+        consultas.push([{ c: 'CLIE_NOMBRE', op: 'LIKE', v: q }], [{ c: 'PEDI_RAZON_SOCIAL', op: 'LIKE', v: q }], [{ c: 'PEDI_OBSERVACIONES', op: 'LIKE', v: q }]);
+        const vids = Object.entries(MAP_VEHA).filter(([, n]) => String(n).toLowerCase().includes(q.toLowerCase())).map(([k]) => Number(k));
+        if (vids.length) consultas.push([{ c: 'VEHA_ID_VEHA', op: 'IN', v: vids }]);
+      }
+      if (!consultas.length) return [];
+    } else if (prefs.vend) {
+      consultas.push([{ c: 'VEHA_ID_VEHA', op: '=', v: Number(prefs.vend) }]);
+    } else {
+      consultas.push([]);
+    }
+    let out = [], okAlguna = false, ultimoErr;
+    for (const extra of consultas) {
+      try {
+        const lote = await traerTodo(H, QCOLS, base.concat(extra), q || prefs.vend ? 5 : 10);
+        okAlguna = true; out = out.concat(lote);
+        if (!q && !prefs.vend && lote.length >= 2000) truncadoLargo = true;
+      } catch(e) { ultimoErr = e; console.warn('[pedidosYiqi] búsqueda larga falló:', extra, e.message); }
+    }
+    if (!okAlguna) throw ultimoErr || new Error('Sin respuesta de Yiqi');
+    return finalizar(out, desde);
+  }
+  function finalizar(out, desde) {
+    let res = out;
+    if (!prefs.ml) res = res.filter(r => Number(r.EXTE_ID_EXTE) !== 2);
+    res = res.filter(r => { const f = new Date(r.PEDI_FECHA || r.AUDI_FECHA_ALTA); const fa = new Date(r.AUDI_FECHA_ALTA || 0); return isNaN(f) || f >= desde || fa >= desde; });
+    const vistos = new Set(); res = res.filter(r => { const k = r.ID || r.id; if (vistos.has(k)) return false; vistos.add(k); return true; });
+    res.forEach(r => { if (!r.CLIE_NOMBRE) r.CLIE_NOMBRE = r.PEDI_RAZON_SOCIAL || ''; if (!r.DESC_ESTADO) r.DESC_ESTADO = r.ESTA_NOMBRE || ''; if (!r.ID) r.ID = r.id; if (!r.AUDI_FECHA_ALTA) r.AUDI_FECHA_ALTA = r.PEDI_FECHA; });
+    return res;
+  }
+
+  async function refrescar(manual) {
+    if (loading || editing || savingN) return;
+    loading = true; lastErr = ''; render();
+    try {
+      const nuevos = await fetchRows();
+      rows = nuevos; lastTs = Date.now(); saveCache();
+      if (manual) toast(`✓ ${rows.length} pedidos actualizados desde Yiqi`, 'success');
+    } catch(e) {
+      if (e.message !== 'SIN_LOGIN') { lastErr = 'No se pudo leer Yiqi: ' + e.message; if (manual) toast('⚠ Error leyendo Yiqi', 'warn'); }
+    } finally { loading = false; render(); }
+  }
+
+  // ── Escritura: PUT /PEDIDO/{id} solo con el campo cambiado, con verificación ──
+  const ANCLAS = ['CLIE_ID_CLIE','EXTE_ID_EXTE','COVE_ID_COVE','PUVE_ID_PUVE','CEDI_ID_ORIG','VEHA_ID_VEHA','LIDP_ID_LIDP','TIFA_ID_TIFA',
+    'PEDI_OBSERVACIONES','PEDI_ESTADO_DEL_ENVIO','PEDI_ESTADO_DE_PAGO','PEDI_ESTADO','PEDI_ESTADO_ACTUAL_DEL_PE','PEDI_PROVINCIA_DE_ENVIO',
+    'PEDI_DIRECCION_DE_ENVIO','PEDI_TELEFONO','PEDI_LOCALIDAD_DE_ENVIO','PEDI_CODIGO_POSTAL_DE_ENV'];
+  const vacio = v => v == null || String(v).trim() === '';
+  const norm = v => vacio(v) ? '' : String(v).replace(/\r\n/g, '\n').trim();
+  async function getPedido(H, id) {
+    const r = await yiqiFetch(`${API}/api/public/PEDIDO/${id}?schemaId=${SCHEMA}`, { headers: H });
+    if (!r.ok) throw new Error('No se pudo leer el pedido (' + r.status + ')');
+    return r.json();
+  }
+  async function put(H, id, data) {
+    const r = await yiqiFetch(`${API}/api/public/PEDIDO/${id}?schemaId=${SCHEMA}`, { method: 'PUT', headers: H, body: JSON.stringify({ schemaId: SCHEMA, data }) });
+    const tx = await r.text().catch(() => '');
+    return { ok: r.ok, status: r.status, tx };
+  }
+  function msgYiqi(tx) {
+    try { const j = JSON.parse(tx); return j.message || j.Message || j.error || j.errors && JSON.stringify(j.errors) || tx; } catch(e) { return tx; }
+  }
+  async function guardar(id, campo, valor) {
+    const H = { 'Authorization': 'Bearer ' + await token(), 'Content-Type': 'application/json' };
+    const antes = await getPedido(H, id);
+    let r = await put(H, id, { [campo]: valor });
+    if (!r.ok && /requerid|required|obligatori/i.test(r.tx)) {
+      // Algunas versiones piden los campos obligatorios: los mando con su valor actual
+      const data = { [campo]: valor }; ['CLIE_ID_CLIE','EXTE_ID_EXTE'].forEach(k => { if (!vacio(antes[k])) data[k] = antes[k]; });
+      r = await put(H, id, data);
+    }
+    if (!r.ok) {
+      let m = msgYiqi(r.tx);
+      if (/no es editable|solo lectura|read ?only|estado actual/i.test(m)) m = 'Yiqi no deja modificar este campo en el estado actual del pedido. ' + m;
+      throw new Error(m.slice(0, 300) || ('HTTP ' + r.status));
+    }
+    const despues = await getPedido(H, id);
+    // Red de seguridad: si el PUT vació otros campos, se restauran
+    const borrados = {};
+    ANCLAS.forEach(k => { if (k !== campo && !vacio(antes[k]) && vacio(despues[k])) borrados[k] = antes[k]; });
+    if (Object.keys(borrados).length) {
+      console.warn('[pedidosYiqi] restaurando campos vaciados:', borrados);
+      const rr = await put(H, id, borrados);
+      if (!rr.ok) toast('⚠ Yiqi vació otros campos y no se pudieron restaurar: ' + Object.keys(borrados).join(', '), 'warn');
+      Object.assign(despues, borrados);
+    }
+    const aplicado = campo.endsWith('_ID_ORIG') || campo.startsWith('TIFA') ? String(despues[campo] ?? '') === String(valor ?? '') : norm(despues[campo]) === norm(valor);
+    return { despues, aplicado };
+  }
+
+  // ── Copiar pedido: misma acción del workflow de Yiqi ("Copiar Pedido" → estado "Copiando Pedido") ──
+  async function copiarPedido(id) {
+    const r = rows.find(x => String(rowId(x)) === String(id)); if (!r) return;
+    if (!confirm(`¿Copiar el pedido N° ${nro(r)} de ${r.CLIE_NOMBRE || 'cliente'}?\n\nYiqi crea un pedido nuevo igual (mismos productos y datos), en estado En espera de pago.`)) return;
+    const H = { 'Authorization': 'Bearer ' + await token(), 'Content-Type': 'application/json' };
+    const maxNro = rows.reduce((m, x) => Math.max(m, Number(nro(x)) || 0), 0);
+    const t0 = Date.now() - 60000;
+    copiando[id] = true; render();
+    try {
+      const res = await yiqiFetch(`${API}/api/public/PEDIDO/changestate?id=${encodeURIComponent(id)}&schemaId=${SCHEMA}&state=${encodeURIComponent('Copiando Pedido')}`, { method: 'POST', headers: H });
+      const tx = await res.text().catch(() => '');
+      if (!res.ok) throw new Error(msgYiqi(tx).slice(0, 250) || ('HTTP ' + res.status));
+      toast(`⏳ Yiqi está copiando el pedido ${nro(r)}…`, 'info');
+      // Buscar la copia (Yiqi la crea en segundo plano)
+      let copia = null;
+      const hoy = isoDia(new Date());
+      for (let i = 0; i < 16 && !copia; i++) {
+        await new Promise(ok => setTimeout(ok, i ? 2500 : 1500));
+        try {
+          const q = await queryPage(H, 1, QCOLS, [{ c: 'PEDI_FECHA', op: '>=', v: hoy }]);
+          copia = q.data.filter(x => Number(nro(x)) > maxNro && (x.CLIE_NOMBRE || x.PEDI_RAZON_SOCIAL || '').trim() === (r.CLIE_NOMBRE || '').trim()
+                    && (!x.AUDI_FECHA_ALTA || new Date(x.AUDI_FECHA_ALTA).getTime() >= t0 - 3 * 3600e3))
+                    .sort((a, b) => Number(nro(b)) - Number(nro(a)))[0] || null;
+        } catch(e) { console.warn('[pedidosYiqi] buscando copia:', e.message); }
+      }
+      delete copiando[id];
+      if (copia) {
+        if (!copia.CLIE_NOMBRE) copia.CLIE_NOMBRE = copia.PEDI_RAZON_SOCIAL || '';
+        if (!copia.DESC_ESTADO) copia.DESC_ESTADO = copia.ESTA_NOMBRE || '';
+        if (!copia.ID) copia.ID = copia.id;
+        resaltar = rowId(copia);
+        toast(`✓ Copia creada: pedido N° ${nro(copia)}`, 'success');
+      } else {
+        toast('✓ Yiqi aceptó la copia. Todavía no aparece el pedido nuevo: tocá 🔄 Actualizar en unos segundos.', 'info');
+      }
+      lastTs = 0; await refrescar(false);
+      setTimeout(() => { resaltar = null; }, 5000);
+    } catch(e) {
+      delete copiando[id]; render();
+      toast('⚠ Yiqi no pudo copiar el pedido: ' + e.message, 'warn');
+    }
+  }
+  // ── Eliminar: un solo pedido, verificado por id interno + número + cliente antes de borrar ──
+  async function eliminarPedido(id) {
+    const r = rows.find(x => String(rowId(x)) === String(id)); if (!r) return;
+    const numero = String(nro(r));
+    const escrito = prompt(`⚠ ELIMINAR PEDIDO EN YIQI\n\nPedido N° ${numero}\nCliente: ${r.CLIE_NOMBRE || '—'}\nTotal: ${fmtMoney(r.PEDI_TOTAL)}\nEstado: ${r.DESC_ESTADO || '—'}\n\nNo se puede deshacer. Para confirmar escribí el número del pedido (${numero}):`);
+    if (escrito == null) return;
+    if (escrito.trim() !== numero) { toast('No se eliminó: el número escrito no coincide.', 'warn'); return; }
+    const H = { 'Authorization': 'Bearer ' + await token(), 'Content-Type': 'application/json' };
+    copiando[id] = true; render();
+    try {
+      // 1) Releer el pedido por su ID interno y verificar que es exactamente el de la fila
+      const p = await getPedido(H, id);
+      const nroYiqi = String(p.PEDI_NUMERO_SOLO || String(p.PEDI_NUMERO || '').replace(/\D/g, ''));
+      const idYiqi = String(p.id || p.ID || '');
+      const cliYiqi = String(p.PEDI_RAZON_SOCIAL || '').trim().toUpperCase(), cliFila = String(r.CLIE_NOMBRE || '').trim().toUpperCase();
+      if (idYiqi !== String(id) || nroYiqi !== numero) throw new Error(`verificación fallida (Yiqi devolvió ID ${idYiqi} / N° ${nroYiqi}, se esperaba ID ${id} / N° ${numero}). No se borró nada.`);
+      if (cliYiqi && cliFila && cliYiqi !== cliFila && !cliYiqi.includes(cliFila) && !cliFila.includes(cliYiqi)) throw new Error(`el cliente no coincide (${p.PEDI_RAZON_SOCIAL}). No se borró nada.`);
+      if (p.access && p.access.canDelete === false) throw new Error(p.access.reason || 'Yiqi no permite eliminar este pedido en su estado actual.');
+      // 2) DELETE de ese único ID
+      const res = await yiqiFetch(`${API}/api/public/PEDIDO/${encodeURIComponent(id)}?schemaId=${SCHEMA}`, { method: 'DELETE', headers: H });
+      const tx = await res.text().catch(() => '');
+      if (!res.ok) throw new Error(res.status === 403 ? 'tu usuario de Yiqi no tiene permiso para eliminar pedidos.' : (msgYiqi(tx).slice(0, 250) || ('HTTP ' + res.status)));
+      // 3) Confirmar que ya no existe
+      let sigue = false;
+      try { const chk = await yiqiFetch(`${API}/api/public/PEDIDO/${encodeURIComponent(id)}?schemaId=${SCHEMA}`, { headers: H }); if (chk.ok) { const j = await chk.json().catch(() => null); sigue = !!(j && (j.id || j.PEDI_NUMERO)); } } catch(e) {}
+      delete copiando[id];
+      rows = rows.filter(x => String(rowId(x)) !== String(id)); saveCache();
+      if (sigue) toast(`⚠ Yiqi respondió OK pero el pedido ${numero} sigue apareciendo. Revisalo en Yiqi.`, 'warn');
+      else toast(`🗑 Pedido N° ${numero} eliminado de Yiqi`, 'success');
+      render();
+    } catch(e) {
+      delete copiando[id]; render();
+      toast('⚠ No se eliminó: ' + e.message, 'warn');
+    }
+  }
+  // ── PDF original del pedido: GET /PEDIDO/report (formatos de impresión de Yiqi) ──
+  const FORMATOS_PDF = [
+    { c: 'PEDIDO_v1.3', n: 'Generar PDF (pedido con precios)' },
+    { c: 'PEDIDO_SINP_PDF', n: 'Pedido s/Precio' },
+    { c: 'PRESUPUESTO_v1', n: 'Presupuesto' },
+    { c: 'PEDIDO_DETALLADO_PDF', n: 'Notificación de Pedido' },
+    { c: 'MULT_TRANSPORTE', n: 'Transporte' }
+  ];
+  function menuPdf(btn, id) {
+    let m = document.getElementById('pyq-pdfmenu'); if (m) m.remove();
+    const ult = localStorage.getItem('pyq_pdf_fmt') || 'PEDIDO_v1.3';
+    m = document.createElement('div'); m.id = 'pyq-pdfmenu';
+    m.innerHTML = '<div class="t">Formato del PDF (Yiqi)</div>' + FORMATOS_PDF.map(f => `<button data-fmt="${f.c}">${f.c === ult ? '✓ ' : '&nbsp;&nbsp;&nbsp;'}${esc(f.n)}</button>`).join('');
+    document.body.appendChild(m);
+    const r = btn.getBoundingClientRect();
+    m.style.top = Math.min(window.innerHeight - m.offsetHeight - 8, r.bottom + 4) + 'px';
+    m.style.left = Math.min(window.innerWidth - m.offsetWidth - 8, r.left) + 'px';
+    m.onclick = e => { const b = e.target.closest('[data-fmt]'); if (!b) return; m.remove(); localStorage.setItem('pyq_pdf_fmt', b.dataset.fmt); descargarPdf(id, b.dataset.fmt, btn); };
+    setTimeout(() => document.addEventListener('click', function cerrar(ev) { if (!m.contains(ev.target)) { m.remove(); document.removeEventListener('click', cerrar); } }), 0);
+  }
+  async function descargarPdf(id, fmt, btn) {
+    const r = rows.find(x => String(rowId(x)) === String(id));
+    const numero = r ? nro(r) : id;
+    const orig = btn ? btn.innerHTML : ''; if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
+    try {
+      const H = { 'Authorization': 'Bearer ' + await token() };
+      const res = await yiqiFetch(`${API}/api/public/PEDIDO/report?reportName=${encodeURIComponent(fmt)}&instanceId=${encodeURIComponent(id)}&schemaId=${SCHEMA}`, { headers: H });
+      if (!res.ok) { const tx = await res.text().catch(() => ''); throw new Error(res.status === 403 ? 'tu usuario no tiene permiso para imprimir pedidos' : (msgYiqi(tx).slice(0, 200) || 'HTTP ' + res.status)); }
+      const blob = await res.blob();
+      if (!blob.size) throw new Error('Yiqi devolvió un archivo vacío');
+      let nombre = '';
+      const cd = res.headers.get('Content-Disposition') || '';
+      const mm = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i); if (mm) { try { nombre = decodeURIComponent(mm[1]); } catch(_) { nombre = mm[1]; } }
+      if (!nombre) nombre = `Pedido_${numero}${fmt === 'PEDIDO_v1.3' ? '' : '_' + (FORMATOS_PDF.find(f => f.c === fmt) || { n: fmt }).n.replace(/[^\w]+/g, '_')}.pdf`;
+      if (!/\.pdf$/i.test(nombre)) nombre += '.pdf';
+      const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      const a = document.createElement('a'); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      toast(`📄 PDF del pedido ${numero} descargado`, 'success');
+    } catch(e) { toast('⚠ No se pudo descargar el PDF: ' + e.message, 'warn'); }
+    finally { if (btn) { btn.innerHTML = orig; btn.disabled = false; } }
+  }
+  // ── Factura del pedido: FACTURA (por PEDI_ID_PEDI) → GET /FACTURA/report?reportName=FACTURA ──
+  const tieneFactura = r => { const f = String(r.PEDI_FACTURAS || '').trim(); return !!f && !/sin documentos/i.test(f); };
+  async function facturaPdf(btn, id) {
+    const r = rows.find(x => String(rowId(x)) === String(id)); const numero = r ? nro(r) : id;
+    const orig = btn.innerHTML; btn.innerHTML = '⏳'; btn.disabled = true;
+    try {
+      const H = { 'Authorization': 'Bearer ' + await token(), 'Content-Type': 'application/json' };
+      const res = await yiqiFetch(`${API}/api/public/FACTURA/query?schemaId=${SCHEMA}`, { method: 'POST', headers: H,
+        body: JSON.stringify({ page: 1, pageSize: 20, columns: ['ID','PEDI_ID_PEDI','FACT_NUMERO','TIFA_ID_TIFA','PUVE_ID_PUVE','FACT_TOTAL','DESC_ESTADO','AUDI_FECHA_ALTA'].map((f, i) => ({ field: f, title: f, order: i + 1 })),
+          filters: [{ columnName: 'PEDI_ID_PEDI', operator: '=', value: Number(id) }] }) });
+      if (!res.ok) throw new Error(res.status === 403 ? 'tu usuario no tiene permiso para ver facturas' : 'HTTP ' + res.status + ' ' + msgYiqi(await res.text().catch(() => '')).slice(0, 150));
+      const j = await res.json();
+      const facts = (j.data || j.items || (Array.isArray(j) ? j : [])).filter(f => String(f.PEDI_ID_PEDI ?? id) === String(id));
+      btn.innerHTML = orig; btn.disabled = false;
+      if (!facts.length) { toast('Este pedido no tiene facturas en Yiqi', 'info'); return; }
+      const etiqueta = f => `${MAP_TIFA[f.TIFA_ID_TIFA] || ''} ${MAP_PUVE[f.PUVE_ID_PUVE] ? String(MAP_PUVE[f.PUVE_ID_PUVE]).padStart(4, '0') + '-' : ''}${String(f.FACT_NUMERO || '').padStart(8, '0')}`.trim();
+      const bajar = f => descargarReporte('FACTURA', f.ID || f.id, 'FACTURA', `Factura_${etiqueta(f).replace(/\s+/g, '_')}_Pedido_${numero}.pdf`, btn, `🧾 Factura ${etiqueta(f)} descargada`);
+      const vigentes = facts.filter(f => !/anulad/i.test(f.DESC_ESTADO || ''));
+      if (facts.length === 1 || vigentes.length === 1) return bajar(vigentes[0] || facts[0]);
+      // Varias facturas: elegir
+      let m = document.getElementById('pyq-pdfmenu'); if (m) m.remove();
+      m = document.createElement('div'); m.id = 'pyq-pdfmenu';
+      m.innerHTML = '<div class="t">Facturas del pedido ' + esc(numero) + '</div>' + facts.map((f, i) => `<button data-i="${i}">${esc(etiqueta(f))} · ${fmtMoney(f.FACT_TOTAL)} · ${esc(f.DESC_ESTADO || '')}</button>`).join('');
+      document.body.appendChild(m);
+      const rc = btn.getBoundingClientRect();
+      m.style.top = Math.min(window.innerHeight - m.offsetHeight - 8, rc.bottom + 4) + 'px'; m.style.left = Math.min(window.innerWidth - m.offsetWidth - 8, rc.left) + 'px';
+      m.onclick = e => { const b = e.target.closest('[data-i]'); if (!b) return; m.remove(); bajar(facts[Number(b.dataset.i)]); };
+      setTimeout(() => document.addEventListener('click', function cerrar(ev) { if (!m.contains(ev.target)) { m.remove(); document.removeEventListener('click', cerrar); } }), 0);
+    } catch(e) { btn.innerHTML = orig; btn.disabled = false; toast('⚠ No se pudo abrir la factura: ' + e.message, 'warn'); }
+  }
+  async function descargarReporte(entidad, instId, reportName, nombreDefault, btn, okMsg) {
+    const orig = btn ? btn.innerHTML : ''; if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
+    try {
+      const H = { 'Authorization': 'Bearer ' + await token() };
+      const res = await yiqiFetch(`${API}/api/public/${entidad}/report?reportName=${encodeURIComponent(reportName)}&instanceId=${encodeURIComponent(instId)}&schemaId=${SCHEMA}`, { headers: H });
+      if (!res.ok) { const tx = await res.text().catch(() => ''); throw new Error(res.status === 403 ? 'tu usuario no tiene permiso para imprimir' : (msgYiqi(tx).slice(0, 200) || 'HTTP ' + res.status)); }
+      const blob = await res.blob(); if (!blob.size) throw new Error('Yiqi devolvió un archivo vacío');
+      let nombre = '';
+      const cd = (res.headers && res.headers.get && res.headers.get('Content-Disposition')) || '';
+      const mm = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i); if (mm) { try { nombre = decodeURIComponent(mm[1]); } catch(_) { nombre = mm[1]; } }
+      if (!nombre) nombre = nombreDefault; if (!/\.pdf$/i.test(nombre)) nombre += '.pdf';
+      const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      window.open(url, '_blank'); // abrir para ver
+      const a = document.createElement('a'); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
+      toast(okMsg || '📄 PDF descargado', 'success');
+    } catch(e) { toast('⚠ No se pudo descargar el PDF: ' + e.message, 'warn'); }
+    finally { if (btn) { btn.innerHTML = orig; btn.disabled = false; } }
+  }
+  // ── Solicitar reserva: acción "Solicitar reserva" del workflow (En espera de pago → A reservar, requiere Condición de venta) ──
+  async function solicitarReserva(id) {
+    const r = rows.find(x => String(rowId(x)) === String(id)); if (!r) return;
+    const numero = nro(r);
+    if (!r.COVE_ID_COVE) { toast('⚠ El pedido ' + numero + ' no tiene Condición de venta: completala primero (columna Condición de venta en ⚙ Columnas).', 'warn'); return; }
+    if (!confirm(`¿Solicitar reserva del pedido N° ${numero}?\n\nCliente: ${r.CLIE_NOMBRE || '—'}\nTotal: ${fmtMoney(r.PEDI_TOTAL)}\n\nYiqi lo pasa a "A reservar" y reserva el stock.`)) return;
+    copiando[id] = true; render();
+    try {
+      const H = { 'Authorization': 'Bearer ' + await token(), 'Content-Type': 'application/json' };
+      // Verificar que sigue En espera de pago y es el mismo pedido
+      const antes = await getPedido(H, id);
+      if (String(antes.PEDI_NUMERO_SOLO || '') !== String(numero)) throw new Error('el ID interno no corresponde al pedido ' + numero);
+      if (antes.ESTA_NOMBRE && !/en espera de pago/i.test(antes.ESTA_NOMBRE)) throw new Error('el pedido ya está "' + antes.ESTA_NOMBRE + '"');
+      const url = `${API}/api/public/PEDIDO/changestate?id=${encodeURIComponent(id)}&schemaId=${SCHEMA}&state=${encodeURIComponent('A reservar')}`;
+      let res = await yiqiFetch(url, { method: 'POST', headers: H, body: JSON.stringify({ COVE_ID_COVE: Number(antes.COVE_ID_COVE || r.COVE_ID_COVE) }) });
+      let tx = await res.text().catch(() => '');
+      if (!res.ok && res.status === 400 && /COVE|no.*requer|not.*required|rechaz/i.test(tx)) { res = await yiqiFetch(url, { method: 'POST', headers: H }); tx = await res.text().catch(() => ''); }
+      if (!res.ok) throw new Error(res.status === 403 ? 'tu usuario no tiene permiso para esta acción' : (msgYiqi(tx).slice(0, 220) || 'HTTP ' + res.status));
+      toast(`📦 Reserva solicitada: pedido N° ${numero}`, 'success');
+      delete copiando[id]; r.DESC_ESTADO = 'A reservar'; render();
+      setTimeout(() => { lastTs = 0; refrescar(false); }, 2500);
+    } catch(e) { delete copiando[id]; render(); toast('⚠ No se pudo solicitar la reserva: ' + e.message, 'warn'); }
+  }
+  async function alCarrito(id) {
+    const r = rows.find(x => String(rowId(x)) === String(id)); if (!r) return;
+    const numero = nro(r);
+    if (typeof carrito === 'undefined' || typeof catalogoBySku === 'undefined') { toast('No encontré el carrito del catálogo', 'warn'); return; }
+    if (carrito.size && !confirm(`Tu pedido actual tiene ${carrito.size} producto(s).\n¿Reemplazarlo por los productos del pedido N° ${numero}?`)) return;
+    copiando[id] = true; render();
+    try {
+      const H = { 'Authorization': 'Bearer ' + await token(), 'Content-Type': 'application/json' };
+      const res = await yiqiFetch(`${API}/api/public/DETALLE_DE_PEDIDO/query?schemaId=${SCHEMA}`, { method: 'POST', headers: H,
+        body: JSON.stringify({ page: 1, pageSize: 500, columns: ['PEDI_ID_PEDI','DEDP_SKU','DEDP_CANTIDAD','DEDP_PRECIO_UNITARIO_FINA','DEDP_BONIFICACION'].map((f, i) => ({ field: f, title: f, order: i + 1 })),
+          filters: [{ columnName: 'PEDI_ID_PEDI', operator: '=', value: Number(id) }] }) });
+      if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + msgYiqi(await res.text().catch(() => '')).slice(0, 150));
+      const j = await res.json();
+      const lineas = (j.data || j.items || []).filter(x => String(x.PEDI_ID_PEDI ?? id) === String(id));
+      if (!lineas.length) throw new Error('el pedido no tiene productos');
+      const idx = new Map(); catalogoBySku.forEach((it, sku) => idx.set(String(sku).trim().toUpperCase(), sku));
+      carrito.clear(); if (typeof _preciosManualesCarrito !== 'undefined') _preciosManualesCarrito.clear();
+      const faltan = [];
+      lineas.forEach(l => {
+        const sku = idx.get(String(l.DEDP_SKU || '').trim().toUpperCase());
+        if (!sku) { faltan.push(l.DEDP_SKU); return; }
+        const qty = Number(l.DEDP_CANTIDAD) || 1;
+        carrito.set(sku, (carrito.get(sku) || 0) + qty);
+        const pu = Math.round((Number(l.DEDP_PRECIO_UNITARIO_FINA) || 0) * (1 - (Number(l.DEDP_BONIFICACION) || 0) / 100) * 100) / 100;
+        const it = catalogoBySku.get(sku);
+        const actual = it && typeof precioDe === 'function' ? precioDe(it) : 0;
+        if (pu > 0 && Math.abs(pu - actual) > 1 && typeof _preciosManualesCarrito !== 'undefined') _preciosManualesCarrito.set(sku, pu);
+      });
+      try { _presuClienteNombre = r.CLIE_NOMBRE || ''; } catch(e) {}
+      try { _guardarPreciosManualesLS(); } catch(e) {}
+      try { renderCarrito(); } catch(e) {}
+      delete copiando[id];
+      cerrarPanel();
+      toast(`🛒 Pedido N° ${numero}: ${lineas.length - faltan.length} producto(s) en tu pedido, con sus precios${faltan.length ? ` · sin encontrar en el catálogo: ${faltan.join(', ')}` : ''}`, faltan.length ? 'warn' : 'ok');
+    } catch(e) { delete copiando[id]; render(); toast('⚠ No se pudieron traer los productos: ' + e.message, 'warn'); }
+  }
+
+  // ── UI: pestaña de pantalla completa con el aspecto de la grilla de Yiqi ──
+  let pag = 1; const POR_PAG = 50;
+  function ensureWrap() {
+    let bd = document.getElementById('pyq-bd');
+    if (!bd) { bd = document.createElement('div'); bd.id = 'pyq-bd'; bd.style.display = 'none'; bd.innerHTML = '<div id="pyq-wrap"></div>'; document.body.appendChild(bd); }
+    return document.getElementById('pyq-wrap');
+  }
+  const abierto = () => { const bd = document.getElementById('pyq-bd'); return !!bd && bd.style.display !== 'none'; };
+  async function abrirPanel() {
+    if (!Y().esAdmin || !Y().esAdmin()) return;
+    ensureWrap(); document.getElementById('pyq-bd').style.display = ''; document.documentElement.style.overflow = 'hidden';
+    render(); refrescarSiViejo();
+  }
+  function cerrarPanel() {
+    const bd = document.getElementById('pyq-bd'); if (bd) bd.style.display = 'none';
+    document.documentElement.style.overflow = '';
+    const m = document.getElementById('pyq-pdfmenu'); if (m) m.remove();
+  }
+  function aplicarVista() { render(); }
+  function filtradas() {
+    const q = prefs.q.trim().toLowerCase();
+    let out = rows.filter(r => {
+      if (prefs.estado && (r.DESC_ESTADO || '') !== prefs.estado) return false;
+      if (prefs.vend && String(r.VEHA_ID_VEHA ?? '') !== String(prefs.vend)) return false;
+      if (!q) return true;
+      return [nro(r), r.CLIE_NOMBRE, MAP_VEHA[r.VEHA_ID_VEHA], MAP_EXTE[r.EXTE_ID_EXTE], MAP_CEDI[r.CEDI_ID_ORIG], MAP_COVE[r.COVE_ID_COVE], r.PEDI_OBSERVACIONES, r.PEDI_ESTADO_DEL_ENVIO, r.PEDI_ESTADO_DE_PAGO, r.PEDI_ESTADO, r.PEDI_ESTADO_ACTUAL_DEL_PE, r.PEDI_PROVINCIA_DE_ENVIO]
+        .some(v => String(v || '').toLowerCase().includes(q));
+    });
+    const k = prefs.sort, d = prefs.dir, col = COL_DEF[k];
+    const val = r => col && col.map ? (col.map[r[k]] || '') : (k === 'PEDI_NUMERO_SOLO' ? Number(nro(r)) : r[k]);
+    out.sort((a, b) => { const x = val(a), y = val(b);
+      if (typeof x === 'number' || typeof y === 'number') return ((Number(x)||0) - (Number(y)||0)) * d;
+      return String(x || '').localeCompare(String(y || ''), 'es') * d; });
+    return out;
+  }
+  function puedeEditar(c, r) {
+    if (!c.ed) return false;
+    if (SIEMPRE.has(c.k)) return true;
+    return /en espera de pago/i.test(r.DESC_ESTADO || '');
+  }
+  function celda(c, r) {
+    const v = r[c.k];
+    if (c.k === '_acc') {
+      const id = esc(rowId(r));
+      if (copiando[rowId(r)]) return '<span class="pyq-mini" style="opacity:.7">⏳ procesando…</span>';
+      const btnReserva = /en espera de pago/i.test(r.DESC_ESTADO || '') ? `<button class="pyq-mini pyq-res" data-reservar="${id}" title="Solicitar reserva (igual que en Yiqi): pasa el pedido a 'A reservar'">📦 Reservar</button>` : '';
+      return btnReserva + `<button class="pyq-mini" data-copiar="${id}" title="Copiar pedido (igual que 'Copiar Pedido' de Yiqi)">⧉ Copiar</button><button class="pyq-mini pyq-presu" data-carrito="${id}" title="Traer los productos de este pedido (con sus precios) a Tu pedido del catálogo">🛒 Al carrito</button><button class="pyq-mini" data-pdf="${id}" title="Descargar el PDF del pedido desde Yiqi">📄 PDF</button>${tieneFactura(r) ? `<button class="pyq-mini pyq-fact" data-fact="${id}" title="Abrir el PDF de la factura (${esc(r.PEDI_TIPOS_FACT_GENERADOS || '')})">🧾 Factura${r.PEDI_TIPOS_FACT_GENERADOS && r.PEDI_TIPOS_FACT_GENERADOS !== 'Sin documentos' ? ' ' + esc(r.PEDI_TIPOS_FACT_GENERADOS) : ''}</button>` : ''}${NO_ELIMINABLE.test(r.DESC_ESTADO || '') ? '' : `<button class="pyq-mini pyq-del" data-eliminar="${id}" title="Eliminar este pedido en Yiqi">🗑</button>`}`;
+    }
+    if (c.k === 'PEDI_NUMERO_SOLO') {
+      const o = MAP_EXTE[r.EXTE_ID_EXTE] || (r.EXTE_ID_EXTE ? 'Origen ' + r.EXTE_ID_EXTE : '');
+      const pv = MAP_PUVE[r.PUVE_ID_PUVE]; return `<span class="pyq-nro">${esc(nro(r))}</span><small>${esc(o)}${pv ? ' · PV ' + esc(pv) : ''}</small>`;
+    }
+    if (c.k === 'AUDI_FECHA_ALTA' || c.k === 'PEDI_FECHA') return fmtFecha(v);
+    if (c.k === 'PEDI_TOTAL') return fmtMoney(v);
+    if (c.k === 'DESC_ESTADO') { const [bg, fg] = ESTADO_COLOR[String(v||'').toLowerCase()] || []; return v ? `<span class="pyq-badge" style="${bg ? `background:${bg};color:${fg}` : ''}">${esc(v)}</span>` : ''; }
+    const txt = c.map ? (c.map[v] || (v ? '#' + v : '')) : (v || '');
+    if (c.ed && vacio(txt)) return puedeEditar(c, r) ? '<span class="pyq-empty">—</span>' : '';
+    return `<div class="pyq-txt">${esc(txt)}</div>`;
+  }
+  function sugerencias(k) {
+    const cnt = {}; rows.forEach(r => { const v = norm(r[k]); if (v && v.length < 60) cnt[v] = (cnt[v] || 0) + 1; });
+    return Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 30).map(e => e[0]);
+  }
+
+  let colsAbierto = false;
+  function panelCols() {
+    const h = ocultas();
+    return `<div class="pyq-colpanel">
+      <div style="font-weight:800;color:#e2e8f0;margin-bottom:6px;">Columnas <span style="font-weight:500;color:#64748b;font-size:11px;">· tildá para mostrar · ▲▼ o arrastrá para ordenar</span></div>
+      ${ordenCols().map((k, i, arr) => { const c = COL_DEF[k]; return `<div class="pyq-colrow" draggable="true" data-colrow="${k}">
+        <span class="pyq-grip">⠿</span>
+        <label><input type="checkbox" data-colvis="${k}" ${h.has(k) ? '' : 'checked'}> ${esc(c.t || 'Botones (Copiar / Editar / Eliminar)')}${c.ed ? ' <span style="color:#a78bfa">✎</span>' : ''}</label>
+        <span style="margin-left:auto;white-space:nowrap;"><button class="pyq-mini" data-colmove="${k}" data-d="-1" ${i ? '' : 'disabled'}>▲</button><button class="pyq-mini" data-colmove="${k}" data-d="1" ${i < arr.length - 1 ? '' : 'disabled'}>▼</button></span></div>`; }).join('')}
+      <div style="display:flex;gap:8px;margin-top:8px;"><button class="pyq-btn sec" data-a="colsreset">Restablecer</button><button class="pyq-btn" data-a="cols">Listo</button></div>
+    </div>`;
+  }
+  function moverCol(k, destino) {
+    const o = ordenCols(); const i = o.indexOf(k); if (i < 0) return;
+    o.splice(i, 1); o.splice(Math.max(0, Math.min(destino, o.length)), 0, k);
+    prefs.orden = o; savePrefs(); render();
+  }
+
+  function render() {
+    const w = document.getElementById('pyq-wrap'); if (!w || !abierto()) return;
+    if (editing) return; // no pisar una edición en curso
+    const lista = filtradas();
+    const paginas = Math.max(1, Math.ceil(lista.length / POR_PAG)); if (pag > paginas) pag = paginas; if (pag < 1) pag = 1;
+    const pagina = lista.slice((pag - 1) * POR_PAG, pag * POR_PAG);
+    const VC = visibles();
+    const estados = {}; rows.forEach(r => { const e = r.DESC_ESTADO || '(sin estado)'; estados[e] = (estados[e] || 0) + 1; });
+    const hace = lastTs ? Math.round((Date.now() - lastTs) / 60000) : null;
+    const scrollEl = w.querySelector('.pyq-scroll'); const sTop = scrollEl ? scrollEl.scrollTop : 0, sLeft = scrollEl ? scrollEl.scrollLeft : 0;
+    w.innerHTML = `
+      <div class="pyq-bar">
+        <button class="pyq-btn sec" data-a="crm" title="Volver al catálogo (Esc)">← Catálogo</button>
+        <span class="pyq-title">Pedidos</span>
+        <button class="pyq-btn" data-a="refresh">${loading ? '⏳ Actualizando…' : '🔄 Actualizar'}</button>
+        <select data-a="dias" title="Período">
+          ${[[1,'Hoy'],[2,'Hoy y ayer'],[3,'Últimos 3 días'],[7,'Últimos 7 días'],[15,'Últimos 15 días'],[30,'Últimos 30 días'],[90,'Últimos 3 meses'],[180,'Últimos 6 meses'],[365,'Último año'],[730,'Últimos 2 años'],[0,'Pendientes (sin entregar, 60 días)']].map(([d,t]) => `<option value="${d}" ${prefs.dias==d?'selected':''}>${t}</option>`).join('')}
+        </select>
+        <select data-a="vend" title="Vendedor"><option value="">Todos los vendedores</option>${Object.entries(rows.reduce((m, r) => { const k = r.VEHA_ID_VEHA; if (k != null) m[k] = (m[k] || 0) + 1; return m; }, {})).sort((a, b) => String(MAP_VEHA[a[0]] || '#' + a[0]).localeCompare(String(MAP_VEHA[b[0]] || '#' + b[0]))).map(([k, n]) => `<option value="${esc(k)}" ${String(prefs.vend) === String(k) ? 'selected' : ''}>${esc(MAP_VEHA[k] || 'Vendedor #' + k)} (${n})</option>`).join('')}</select>
+        <input type="text" class="pyq-q" data-a="q" placeholder="Buscar nro, cliente, observaciones…" value="${esc(prefs.q)}">
+        <label class="pyq-chk"><input type="checkbox" data-a="ml" ${prefs.ml ? 'checked' : ''}> Incluir MercadoLibre</label>
+        <span style="position:relative;display:inline-block;"><button class="pyq-btn sec" data-a="cols">⚙ Columnas</button>${colsAbierto ? panelCols() : ''}</span>
+        <span class="pyq-info">${prefs.dias > 31 ? `<span style="color:#fcd34d">${prefs.q ? 'Búsqueda en Yiqi · ' : (prefs.vend ? '' : (truncadoLargo ? 'Mostrando los 2000 más recientes — escribí en el buscador para buscar en todo el período · ' : 'Escribí en el buscador para buscar en todo el período · '))}</span>` : ''}${lista.length} de ${rows.length} pedidos${hace != null ? ` · actualizado ${hace < 1 ? 'recién' : 'hace ' + hace + ' min'}` : ''} · <span style="color:#a78bfa">✎</span> = editable (clic en la celda)</span>
+      </div>
+      ${needLogin ? `<div class="pyq-login">🔑 Ingresá tu usuario de Yiqi para ver los pedidos:
+          <input type="text" id="pyq-u" placeholder="Usuario" autocomplete="username"><input type="password" id="pyq-p" placeholder="Contraseña" autocomplete="current-password">
+          <button class="pyq-btn" data-a="login">Entrar</button></div>` : ''}
+      ${lastErr ? `<div class="pyq-err">${esc(lastErr)}</div>` : ''}
+      <div class="pyq-chips">
+        <button class="pyq-chip ${!prefs.estado ? 'on' : ''}" data-estado="">Todos (${rows.length})</button>
+        ${Object.entries(estados).sort((a,b)=>b[1]-a[1]).map(([e,n]) => `<button class="pyq-chip ${prefs.estado===e?'on':''}" data-estado="${esc(e)}">${esc(e)} (${n})</button>`).join('')}
+      </div>
+      <div class="pyq-scroll"><table>
+        <thead><tr>${VC.map(c => `<th draggable="true" data-col="${c.k}" ${c.k==='_acc'?'':`data-sort="${c.k}"`} title="Arrastrá para mover la columna">${esc(c.t)}${c.ed ? '<span class="pyq-ed">✎</span>' : ''}${prefs.sort===c.k ? (prefs.dir<0?' ▼':' ▲') : ''}</th>`).join('')}</tr></thead>
+        <tbody>${pagina.length ? pagina.map(r => `<tr data-id="${esc(rowId(r))}" class="${String(rowId(r))===String(resaltar)?'pyq-nuevo':''}">${VC.map(c => `<td class="${c.cls||''} ${puedeEditar(c, r) ? 'ed' : ''}" data-k="${c.k}"${c.k==='PEDI_OBSERVACIONES'||c.k==='CLIE_NOMBRE' ? ` title="${esc(r[c.k])}"` : ''}>${celda(c, r)}</td>`).join('')}</tr>`).join('')
+          : `<tr><td colspan="${VC.length}" style="text-align:center;color:#64748b;padding:30px;">${loading ? 'Cargando pedidos desde Yiqi…' : 'No hay pedidos para mostrar.'}</td></tr>`}</tbody>
+      </table></div>
+      <div class="pyq-pager">
+        <span class="pyq-pg">
+          <button data-pg="1" ${pag <= 1 ? 'disabled' : ''} title="Primera">⏮</button><button data-pg="${pag - 1}" ${pag <= 1 ? 'disabled' : ''} title="Anterior">◀</button>
+          ${(() => { const a = Math.max(1, Math.min(pag - 4, paginas - 9)), b = Math.min(paginas, a + 9); let h = ''; for (let i = a; i <= b; i++) h += `<button data-pg="${i}" class="${i === pag ? 'on' : ''}">${i}</button>`; if (b < paginas) h += `<button data-pg="${Math.min(paginas, b + 1)}">…</button>`; return h; })()}
+          <button data-pg="${pag + 1}" ${pag >= paginas ? 'disabled' : ''} title="Siguiente">▶</button><button data-pg="${paginas}" ${pag >= paginas ? 'disabled' : ''} title="Última">⏭</button>
+        </span>
+        <span class="pyq-pginfo">${lista.length ? `${(pag - 1) * POR_PAG + 1} - ${Math.min(pag * POR_PAG, lista.length)} of ${lista.length} items` : '0 items'}</span>
+      </div>`;
+    const sc = w.querySelector('.pyq-scroll'); if (sc) { sc.scrollTop = sTop; sc.scrollLeft = sLeft; }
+  }
+
+  function abrirEditor(td) {
+    const tr = td.closest('tr'), id = tr.dataset.id, k = td.dataset.k;
+    const r = rows.find(x => String(rowId(x)) === id), c = COL_DEF[k];
+    if (!r || !c || editing) return;
+    editing = { td, id, k };
+    const actual = r[k];
+    let html;
+    if (c.ed === 'select') {
+      html = `<select><option value="">—</option>${Object.entries(c.map).map(([vid, t]) => `<option value="${vid}" ${String(actual)===vid?'selected':''}>${esc(t)}</option>`).join('')}</select>`;
+    } else if (c.ed === 'textarea') {
+      html = `<textarea>${esc(norm(actual))}</textarea><div class="pyq-hint">Ctrl+Enter guarda · Esc cancela</div>`;
+    } else {
+      const dl = 'pyq-dl-' + k;
+      html = `<input type="text" list="${dl}" value="${esc(norm(actual))}"><datalist id="${dl}">${sugerencias(k).map(s => `<option value="${esc(s)}">`).join('')}</datalist><div class="pyq-hint">Enter guarda · Esc cancela</div>`;
+    }
+    td.innerHTML = html;
+    const inp = td.querySelector('select,textarea,input');
+    inp.focus(); if (inp.select && c.ed !== 'select') inp.select();
+    let cerrado = false;
+    const cerrar = async (guardarlo) => {
+      if (cerrado) return; cerrado = true;
+      const nuevo = c.ed === 'select' ? (inp.value ? Number(inp.value) : null) : inp.value.replace(/\r\n/g, '\n');
+      const cambia = c.ed === 'select' ? String(nuevo ?? '') !== String(actual ?? '') : norm(nuevo) !== norm(actual);
+      editing = null;
+      if (!guardarlo || !cambia) { td.innerHTML = celda(c, r); return; }
+      td.innerHTML = celda(c, Object.assign({}, r, { [k]: nuevo })); td.classList.add('saving'); savingN++;
+      try {
+        const { despues, aplicado } = await guardar(r.ID || r.id, k, nuevo);
+        COLS.forEach(cc => { if (cc.k in despues && !['AUDI_FECHA_ALTA','CLIE_NOMBRE','DESC_ESTADO','PEDI_NUMERO_SOLO'].includes(cc.k)) r[cc.k] = despues[cc.k]; });
+        if (despues.ESTA_NOMBRE) r.DESC_ESTADO = despues.ESTA_NOMBRE;
+        saveCache();
+        td.classList.remove('saving'); td.innerHTML = celda(c, r);
+        if (aplicado) { td.classList.add('ok'); setTimeout(() => td.classList.remove('ok'), 1700); toast(`✓ Pedido ${nro(r)}: ${c.t} guardado en Yiqi`, 'success'); }
+        else { td.classList.add('bad'); toast(`⚠ Yiqi respondió OK pero el ${c.t} quedó distinto. Revisalo en Yiqi.`, 'warn'); }
+      } catch(e) {
+        td.classList.remove('saving'); td.classList.add('bad'); td.innerHTML = celda(c, r); td.title = e.message;
+        toast('⚠ No se guardó en Yiqi: ' + e.message.slice(0, 160), 'warn');
+        setTimeout(() => td.classList.remove('bad'), 6000);
+      } finally { savingN--; }
+    };
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { e.preventDefault(); cerrar(false); }
+      else if (e.key === 'Enter' && (c.ed !== 'textarea' || e.ctrlKey || e.metaKey)) { e.preventDefault(); cerrar(true); }
+    });
+    if (c.ed === 'select') inp.addEventListener('change', () => cerrar(true));
+    inp.addEventListener('blur', () => setTimeout(() => cerrar(true), 120));
+  }
+
+  document.addEventListener('click', async e => {
+    const w = document.getElementById('pyq-wrap'); if (!w || !w.contains(e.target)) return;
+    const a = e.target.closest('[data-a]'), chip = e.target.closest('[data-estado]'), th = e.target.closest('th[data-sort]'), td = e.target.closest('td.ed');
+    const cp = e.target.closest('[data-copiar]'), edb = e.target.closest('[data-editar]');
+    const rb = e.target.closest('[data-reservar]');
+    if (rb) return solicitarReserva(rb.dataset.reservar);
+    const fb = e.target.closest('[data-fact]');
+    if (fb) return facturaPdf(fb, fb.dataset.fact);
+    const pdfb = e.target.closest('[data-pdf]');
+    if (pdfb) return menuPdf(pdfb, pdfb.dataset.pdf);
+    const cb = e.target.closest('[data-carrito]');
+    if (cb) return alCarrito(cb.dataset.carrito);
+    const pg = e.target.closest('[data-pg]');
+    if (pg) { if (!pg.disabled) { pag = Number(pg.dataset.pg) || 1; render(); const sc = w.querySelector('.pyq-scroll'); if (sc) sc.scrollTop = 0; } return; }
+    const del = e.target.closest('[data-eliminar]');
+    if (del) return eliminarPedido(del.dataset.eliminar);
+    if (cp) return copiarPedido(cp.dataset.copiar);
+    if (a && a.dataset.a === 'cols') { colsAbierto = !colsAbierto; return render(); }
+    if (a && a.dataset.a === 'colsreset') { delete prefs.orden; delete prefs.ocultas; savePrefs(); return render(); }
+    const mv = e.target.closest('[data-colmove]');
+    if (mv) { const o = ordenCols(); return moverCol(mv.dataset.colmove, o.indexOf(mv.dataset.colmove) + Number(mv.dataset.d)); }
+    if (e.target.closest('.pyq-colpanel')) return;
+    if (a && a.dataset.a === 'refresh') return refrescar(true);
+    if (a && a.dataset.a === 'crm') return cerrarPanel();
+    if (a && a.dataset.a === 'login') {
+      const u = document.getElementById('pyq-u').value.trim(), p = document.getElementById('pyq-p').value;
+      if (!u || !p) return;
+      localStorage.setItem('yiqi_api_user', u); localStorage.setItem('yiqi_api_pass', p);
+      localStorage.removeItem('yiqi_api_token'); localStorage.removeItem('yiqi_api_token_exp');
+      needLogin = false; return refrescar(true);
+    }
+    if (chip) { prefs.estado = chip.dataset.estado; pag = 1; savePrefs(); return render(); }
+    if (th) { if (prefs.sort === th.dataset.sort) prefs.dir *= -1; else { prefs.sort = th.dataset.sort; prefs.dir = th.dataset.sort === 'PEDI_NUMERO_SOLO' || th.dataset.sort === 'AUDI_FECHA_ALTA' || th.dataset.sort === 'PEDI_TOTAL' ? -1 : 1; } savePrefs(); return render(); }
+    if (td && !td.querySelector('select,textarea,input')) abrirEditor(td);
+  });
+  document.addEventListener('change', e => {
+    const w = document.getElementById('pyq-wrap'); if (!w || !w.contains(e.target)) return;
+    const a = e.target.dataset.a;
+    if (e.target.dataset.colvis) {
+      const h = ocultas(), k = e.target.dataset.colvis;
+      if (e.target.checked) h.delete(k); else h.add(k);
+      if (ordenCols().filter(x => !h.has(x)).length === 0) { e.target.checked = true; return; }
+      prefs.ocultas = [...h]; savePrefs(); return render();
+    }
+    if (a === 'vend') { prefs.vend = e.target.value; pag = 1; savePrefs(); if (prefs.dias > 31) return refrescar(true); return render(); }
+    if (a === 'dias') { prefs.dias = Number(e.target.value); savePrefs(); refrescar(true); }
+    if (a === 'ml') { prefs.ml = e.target.checked; savePrefs(); refrescar(true); }
+  });
+  let qT, qLargoT;
+  // Arrastrar columnas (encabezado de la tabla o filas del panel ⚙ Columnas)
+  let dragCol = null;
+  document.addEventListener('dragstart', e => {
+    const el = e.target.closest && e.target.closest('#pyq-wrap th[data-col], #pyq-wrap [data-colrow]'); if (!el) return;
+    dragCol = el.dataset.col || el.dataset.colrow; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragCol); } catch(_) {}
+  });
+  document.addEventListener('dragover', e => {
+    if (!dragCol) return; const el = e.target.closest && e.target.closest('#pyq-wrap th[data-col], #pyq-wrap [data-colrow]'); if (!el) return;
+    e.preventDefault(); document.querySelectorAll('#pyq-wrap .drag-over').forEach(x => x.classList.remove('drag-over')); el.classList.add('drag-over');
+  });
+  document.addEventListener('drop', e => {
+    if (!dragCol) return; const el = e.target.closest && e.target.closest('#pyq-wrap th[data-col], #pyq-wrap [data-colrow]'); if (!el) return;
+    e.preventDefault(); const destKey = el.dataset.col || el.dataset.colrow; const k = dragCol; dragCol = null;
+    if (destKey === k) return render();
+    const o = ordenCols(); const from = o.indexOf(k), to = o.indexOf(destKey); o.splice(from, 1); const t = o.indexOf(destKey); o.splice(from < to ? t + 1 : t, 0, k);
+    prefs.orden = o; savePrefs(); render();
+  });
+  document.addEventListener('dragend', () => { dragCol = null; document.querySelectorAll('#pyq-wrap .drag-over').forEach(x => x.classList.remove('drag-over')); });
+  document.addEventListener('input', e => {
+    if (e.target.dataset && e.target.dataset.a === 'q' && e.target.closest('#pyq-wrap')) {
+      prefs.q = e.target.value; pag = 1; savePrefs(); clearTimeout(qT);
+      qT = setTimeout(() => { const pos = e.target.selectionStart;
+        if (prefs.dias > 31) { clearTimeout(qLargoT); qLargoT = setTimeout(() => { lastTs = 0; refrescar(false).then(() => { const n = document.querySelector('#pyq-wrap [data-a="q"]'); if (n) { n.focus(); const L = n.value.length; n.setSelectionRange(L, L); } }); }, 600); }
+        render(); const n = document.querySelector('#pyq-wrap [data-a="q"]'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } }, 200);
+    }
+  });
+
+  const visible = () => abierto() && !document.hidden;
+  function refrescarSiViejo() { if (visible() && Date.now() - lastTs > 45000) refrescar(false); }
+  // Botón de la pestaña (sólo admin), al lado de "Mis pedidos"
+  function botonPestana() {
+    const ancla = document.getElementById('btn-historial-pedidos');
+    let b = document.getElementById('btn-pedidos-yiqi');
+    const admin = !!(Y().esAdmin && Y().esAdmin());
+    if (!admin || !ancla) { if (b) b.remove(); if (!admin && abierto()) cerrarPanel(); return; }
+    if (!b) {
+      b = document.createElement('button'); b.id = 'btn-pedidos-yiqi'; b.className = ancla.className;
+      b.textContent = '📋 Pedidos Yiqi'; b.title = 'Ver y modificar los pedidos de Yiqi (solo admin)';
+      b.onclick = abrirPanel; ancla.insertAdjacentElement('afterend', b);
+    }
+  }
+  function init() {
+    botonPestana(); setInterval(botonPestana, 1500);
+    setInterval(() => { if (visible()) refrescar(false); }, 120000);
+    document.addEventListener('visibilitychange', refrescarSiViejo);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && abierto() && !editing && !document.querySelector('.yqc-bd')) cerrarPanel(); });
+  }
+  window._pyq = { refrescar, guardar, render, copiarPedido, eliminarPedido, abrir: abrirPanel, cerrar: cerrarPanel, get rows() { return rows; } };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
 
 </script>
