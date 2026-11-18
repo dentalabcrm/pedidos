@@ -10656,5 +10656,623 @@ document.addEventListener('keydown', (e) => {
 })();
 </script>
 
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// Yiqi directo desde el Catálogo (solo admin): "Cargar pedido en Yiqi" y "Cargar cliente
+// en Yiqi" a partir del carrito/presupuesto armado acá — mismo criterio que el CRM
+// (POST /PEDIDO con PRODUCTOS, servicio de envío en DET_PED_SERV, POST /CLIENTE).
+// Los IDs de producto se resuelven EN VIVO contra Yiqi (MATERIAL por SKU), con el mapa
+// compartido de Firebase como respaldo, así un producto nuevo de Yiqi ya entra sin
+// reimportar nada.
+// ══════════════════════════════════════════════════════════════════════════════
+(function(){
+  'use strict';
+  const API = 'https://api.yiqi.com.ar', SCHEMA = 328;
+  const LS_TOKEN = 'yiqi_api_token', LS_TOKEN_EXP = 'yiqi_api_token_exp';
+  const LS_USER = 'yiqi_api_user', LS_PASS = 'yiqi_api_pass';
+  const LS_PREFS = 'dentalab_cat_yiqi_prefs_v1';
+  const LS_ULTIMO = 'dentalab_cat_yiqi_ultimo_v1';
+
+  const EXTE = [['WhatsApp',13],['Local',3],['Web',11],['Sólo Factura',16]];
+  const VEHA = [['Juan Martin Gaffuri',4],['Federico Silva',8],['Jorge Campagnoli',5],['Carlos Cirigliano',3],['Gregorio Samandjian',2],['Aris Samandjian',12],['Eduardo Balassanian',7],['Patricia Bazan',11],['Showroom',9],['Local',1],['Mostrador',10]];
+  const COVE = [['Contado',3],['Transferencia bancaria',6],['Mercado Pago',5],['Tarjeta de Crédito',7],['Tarjeta de Débito',8],['Cuenta Corriente',9],['Cuenta Corriente - 30 días',4],['15 Días Fecha de Factura',2],['30 Días Fecha de Factura',1],['15 + 15 días F.P.F.',10]];
+  const LIDP = [['Lista 1 - Contado',4],['Lista 2 - General',5],['Lista Reventa',2],['Lista Mayorista',31],['Lista 3 - Vendedores',3],['Lista Web',168]];
+  const PUVE = [['98',14],['4',2],['5',8],['6',12],['7',15],['9',16],['99',7]];
+  const CEDI = [['Depósito 1 - Local',155],['Depósito Central',157],['Depósito 7 - Jorge',159]];
+  const SEYI = [['Estándar a domicilio',7],['Normal a domicilio',2],['Envío rápido a domicilio (CABA)',4],['Retiro en una sucursal',5],['Estándar a sucursal de correo',8],['Express a domicilio',9],['Prioritario a domicilio',11],['Retiro en Correo Argentino',3],['Retiro en Andreani',6],['Express a sucursal de correo',12],['Prioritario a sucursal de correo',13],['Retiro en sucursal OCA Prioritario',10]];
+  const PAGO = ['', 'EN ESPERA', 'TRANSFERENCIA', 'EFECTIVO', 'EFECTIVO/DÉBITO/TRANSFERENCIA (MOSTRADOR)', 'LINK DE PAGO (TARJETA)', 'CUENTA CORRIENTE', 'ACREDITADO'];
+  const COIV = [['Consumidor Final',7],['Monotributista',5],['Responsable Inscripto',2],['Exento',1]];
+  const TIDD = [['DNI',3],['CUIT',1],['CUIL',5],['Pasaporte',4]];
+  const PROV = {'CABA':1,'Capital Federal':1,'Buenos Aires':2,'Catamarca':3,'Córdoba':4,'Corrientes':5,'Chaco':6,'Chubut':7,'Entre Ríos':8,'Formosa':9,'Jujuy':10,'La Pampa':11,'La Rioja':12,'Mendoza':13,'Misiones':14,'Neuquén':15,'Río Negro':16,'Salta':17,'San Juan':18,'San Luis':19,'Santa Cruz':20,'Santa Fe':21,'Santiago del Estero':22,'Tierra del Fuego':23,'Tucumán':24};
+  const ENVIO_TIPO_A_SEYI = {'Envío a domicilio':7,'Retiro en sucursal':5,'Envío por transporte':2,'Envío rápido (CABA)':4};
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const $ = id => document.getElementById(id);
+  const val = id => ($(id)?.value || '').trim();
+  const money = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-AR');
+  const norm = s => String(s || '').trim().toUpperCase().replace(/\s+/g, '');
+  const opts = (arr, sel) => arr.map(([t, v]) => `<option value="${esc(v)}"${String(v) === String(sel) ? ' selected' : ''}>${esc(t)}</option>`).join('');
+  const esAdmin = () => { try { return typeof esAdminCatalogo === 'function' && esAdminCatalogo(); } catch (e) { return false; } };
+  const prefs = () => { try { return JSON.parse(localStorage.getItem(LS_PREFS) || '{}') || {}; } catch (e) { return {}; } };
+  const guardarPrefs = p => { try { localStorage.setItem(LS_PREFS, JSON.stringify(Object.assign(prefs(), p))); } catch (e) {} };
+
+  function toast(msg, tipo){
+    if (typeof window.showToast === 'function') { try { return window.showToast(msg, tipo); } catch (e) {} }
+    let t = $('yqc-toast');
+    if (!t) { t = document.createElement('div'); t.id = 'yqc-toast'; document.body.appendChild(t); }
+    t.textContent = msg; t.className = 'yqc-toast yqc-' + (tipo || 'ok');
+    t.style.opacity = '1'; clearTimeout(t._h); t._h = setTimeout(() => { t.style.opacity = '0'; }, 4500);
+  }
+
+  // ── Fetch con reintento por 429 (igual que el CRM) ──
+  async function yfetch(url, o, n){
+    n = n || 1;
+    const r = await fetch(url, o);
+    if (r.status === 429 && n < 5) {
+      const ra = parseInt(r.headers.get('Retry-After') || '', 10);
+      await new Promise(res => setTimeout(res, (isNaN(ra) ? 2 * n : ra) * 1000));
+      return yfetch(url, o, n + 1);
+    }
+    return r;
+  }
+
+  // ── Token (mismas claves de localStorage que el CRM) ──
+  async function token(){
+    const exp = parseInt(localStorage.getItem(LS_TOKEN_EXP) || '0', 10);
+    const tok = localStorage.getItem(LS_TOKEN);
+    if (tok && Date.now() < exp) return tok;
+    const u = localStorage.getItem(LS_USER), p = localStorage.getItem(LS_PASS);
+    if (!u || !p) { const e = new Error('Falta iniciar sesión en Yiqi'); e.login = true; throw e; }
+    const r = await yfetch(API + '/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'grant_type=password&username=' + encodeURIComponent(u) + '&password=' + encodeURIComponent(p) });
+    if (!r.ok) { const e = new Error('Yiqi rechazó el usuario o la contraseña'); e.login = true; throw e; }
+    const d = await r.json();
+    if (!d.access_token) throw new Error('Yiqi no devolvió token');
+    localStorage.setItem(LS_TOKEN, d.access_token);
+    localStorage.setItem(LS_TOKEN_EXP, String(Date.now() + (d.expires_in || 86400) * 1000 - 60000));
+    return d.access_token;
+  }
+  async function H(){ return { 'Authorization': 'Bearer ' + await token(), 'Content-Type': 'application/json' }; }
+  async function api(path, method, body){
+    const r = await yfetch(API + '/api/public/' + path, { method: method || 'GET', headers: await H(), body: body ? JSON.stringify(body) : undefined });
+    const tx = await r.text();
+    let j = null; try { j = tx ? JSON.parse(tx) : null; } catch (e) {}
+    if (r.status === 401) { localStorage.removeItem(LS_TOKEN); localStorage.removeItem(LS_TOKEN_EXP); }
+    if (!r.ok) { const e = new Error('Yiqi ' + r.status + ': ' + String(tx).slice(0, 300)); e.status = r.status; throw e; }
+    return j;
+  }
+  const query = (ent, body) => api(ent + '/query?schemaId=' + SCHEMA, 'POST', body);
+
+  // ── SKU → ID interno de Yiqi ──
+  let _fbMap = null;
+  async function mapaFirebase(){
+    if (_fbMap) return _fbMap;
+    const out = {};
+    const dec = k => { try { return decodeURIComponent(k); } catch (e) { return k; } };
+    try {
+      const [a, b] = await Promise.all([db.ref('dentalab/yiqi_sku_map/map').once('value'), db.ref('dentalab/yiqi_sku_map_extra').once('value')]);
+      [a.val() || {}, b.val() || {}].forEach(m => Object.keys(m).forEach(k => { out[norm(dec(k))] = m[k]; }));
+    } catch (e) { console.warn('[yiqi-cat] mapa Firebase no disponible', e); }
+    return (_fbMap = out);
+  }
+  async function resolverIds(skus){
+    const res = {}, fuente = {};
+    const pend = Array.from(new Set(skus.map(String)));
+    for (let i = 0; i < pend.length; i += 150) {
+      const lote = pend.slice(i, i + 150);
+      try {
+        const j = await query('MATERIAL', { page: 1, pageSize: 400,
+          columns: [{ field: 'MATE_CODIGO', title: 'SKU' }, { field: 'MATE_NOMBRE', title: 'Nombre' }],
+          filters: [{ columnName: 'MATE_CODIGO', operator: 'IN', value: lote.map(norm) }] });
+        (j?.data || []).forEach(m => {
+          const k = norm(m.MATE_CODIGO), id = m.id || m.ID;
+          const sku = lote.find(s => norm(s) === k);
+          if (sku && id && !res[sku]) { res[sku] = Number(id); fuente[sku] = 'yiqi'; }
+        });
+      } catch (e) { console.warn('[yiqi-cat] MATERIAL/query falló, se usa el mapa compartido', e); }
+    }
+    const faltan = pend.filter(s => !res[s]);
+    if (faltan.length) {
+      const fb = await mapaFirebase();
+      faltan.forEach(s => { const id = fb[norm(s)]; if (id) { res[s] = Number(id); fuente[s] = 'mapa'; } });
+    }
+    return { ids: res, fuente };
+  }
+  function guardarIdExtra(sku, id){
+    try { db.ref('dentalab/yiqi_sku_map_extra/' + encodeURIComponent(sku).replace(/\./g, '%2E')).set(id); } catch (e) {}
+    if (_fbMap) _fbMap[norm(sku)] = id;
+  }
+
+  // ── Datos del carrito actual ──
+  function itemsCarrito(){
+    const out = [];
+    try {
+      carrito.forEach((qty, sku) => {
+        const it = catalogoBySku.get(sku);
+        const precio = Number(typeof precioCarritoDe === 'function' ? precioCarritoDe(sku) : (it ? precioDe(it) : 0)) || 0;
+        out.push({ sku, nombre: it ? it.n : sku, qty: Number(qty) || 1, precio });
+      });
+    } catch (e) {}
+    return out;
+  }
+  function listaActualId(){
+    try {
+      if (typeof _adminVistaPrecio !== 'undefined' && _adminVistaPrecio === 'reventa') return 2;
+      if (typeof _adminVistaPrecio !== 'undefined' && _adminVistaPrecio === 'mayorista') return 31;
+      return (typeof listaActiva !== 'undefined' && listaActiva === 'p1') ? 4 : 5; // mismo criterio que precioDe(): si no es p1, usa p2
+    } catch (e) { return 4; }
+  }
+  function envioSugerido(){
+    try {
+      if (typeof _pedidoEnvioAdmin !== 'undefined' && _pedidoEnvioAdmin.activo && parseFloat(_pedidoEnvioAdmin.costo) > 0)
+        return { activo: true, seyi: ENVIO_TIPO_A_SEYI[_pedidoEnvioAdmin.tipo] || 7, monto: parseFloat(_pedidoEnvioAdmin.costo) };
+      const fila = $('fila-envio-caba');
+      if (fila && fila.style.display !== 'none') {
+        const m = parseInt(($('envio-caba-monto')?.textContent || '').replace(/\D/g, ''), 10);
+        if (m > 0) return { activo: true, seyi: 4, monto: m };
+      }
+    } catch (e) {}
+    return { activo: false, seyi: 7, monto: 0 };
+  }
+  function nombreClienteSugerido(){
+    try { if (typeof _presuDatosCliente === 'function') { const d = _presuDatosCliente(); if (d.nombre) return d.nombre; } } catch (e) {}
+    return val('cf-nombre');
+  }
+  const firma = (cli, items) => JSON.stringify([cli, items.map(i => [i.sku, i.qty, Math.round(i.precio)])]);
+
+  // ── Estilos ──
+  const css = document.createElement('style');
+  css.textContent = `
+  .yqc-bar{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .yqc-bar button{flex:1;min-width:140px;border-radius:10px;padding:10px;font-size:13px;font-weight:800;cursor:pointer;border:1px solid #c7d2fe;background:#eef2ff;color:#3730a3}
+  .yqc-bar button.yqc-cli{background:#f0fdf4;border-color:#bbf7d0;color:#166534}
+  .yqc-bar .yqc-ult{flex-basis:100%;font-size:11.5px;font-weight:700;color:#475569}
+  .yqc-bd{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:100000;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 10px}
+  .yqc-m{background:#fff;color:#0f172a;border-radius:14px;width:min(880px,100%);box-shadow:0 20px 60px rgba(0,0,0,.35);font-size:13px}
+  .yqc-h{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #e2e8f0;font-size:16px;font-weight:800}
+  .yqc-h button{background:none;border:none;font-size:20px;cursor:pointer;color:#64748b}
+  .yqc-b{padding:14px 18px}
+  .yqc-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 12px;margin-bottom:12px}
+  .yqc-f label{display:block;font-size:11px;font-weight:800;color:#475569;margin-bottom:3px;text-transform:uppercase;letter-spacing:.02em}
+  .yqc-f input,.yqc-f select,.yqc-f textarea{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:8px;padding:7px 9px;font-size:13px;background:#fff;color:#0f172a;font-family:inherit}
+  .yqc-f textarea{min-height:54px;resize:vertical}
+  .yqc-sec{font-size:12px;font-weight:800;color:#334155;margin:14px 0 6px;text-transform:uppercase;letter-spacing:.03em}
+  .yqc-res{border:1px solid #e2e8f0;border-radius:8px;max-height:190px;overflow:auto;margin-top:4px}
+  .yqc-res div{padding:7px 9px;cursor:pointer;border-bottom:1px solid #f1f5f9}
+  .yqc-res div:hover{background:#eef2ff}
+  .yqc-res small{color:#64748b}
+  .yqc-sel{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:8px 10px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .yqc-t{width:100%;border-collapse:collapse;font-size:12.5px}
+  .yqc-t th{background:#f8fafc;text-align:left;padding:6px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569}
+  .yqc-t td{padding:5px 6px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+  .yqc-t td.n{text-align:right;white-space:nowrap}
+  .yqc-t tr.falta td{background:#fef2f2}
+  .yqc-t input{width:80px;border:1px solid #fca5a5;border-radius:6px;padding:3px 5px}
+  .yqc-ok{color:#059669;font-weight:800}.yqc-bad{color:#dc2626;font-weight:800}
+  .yqc-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 18px;border-top:1px solid #e2e8f0;flex-wrap:wrap}
+  .yqc-btn{border:none;border-radius:9px;padding:10px 16px;font-weight:800;font-size:13.5px;cursor:pointer;background:#4f46e5;color:#fff}
+  .yqc-btn.sec{background:#f1f5f9;color:#334155;border:1px solid #cbd5e1}
+  .yqc-btn.ok{background:#059669}
+  .yqc-btn:disabled{opacity:.55;cursor:default}
+  .yqc-log{font-size:12px;color:#334155;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;margin-top:10px;white-space:pre-wrap;display:none}
+  .yqc-warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:8px 10px;font-weight:700;margin:8px 0}
+  .yqc-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;z-index:100001;transition:opacity .3s;max-width:90vw}
+  .yqc-toast.yqc-warn,.yqc-toast.yqc-error{background:#b91c1c}
+  `;
+  document.head.appendChild(css);
+
+  function modal(id, titulo, cuerpo, pie){
+    cerrar(id);
+    const bd = document.createElement('div');
+    bd.className = 'yqc-bd'; bd.id = id;
+    bd.innerHTML = `<div class="yqc-m"><div class="yqc-h"><span>${titulo}</span><button data-x>✕</button></div><div class="yqc-b">${cuerpo}</div><div class="yqc-foot">${pie || ''}</div></div>`;
+    bd.querySelector('[data-x]').onclick = () => cerrar(id);
+    bd.addEventListener('mousedown', e => { if (e.target === bd) bd._down = true; });
+    bd.addEventListener('click', e => { if (e.target === bd && bd._down) cerrar(id); bd._down = false; });
+    document.body.appendChild(bd);
+    return bd;
+  }
+  function cerrar(id){ const el = $(id); if (el) el.remove(); }
+
+  // ── Login de Yiqi (queda guardado sólo en este navegador, como en el CRM) ──
+  function pedirLogin(){
+    return new Promise(resolve => {
+      const bd = modal('yqc-login', '🔑 Iniciar sesión en Yiqi', `
+        <div style="color:#475569;margin-bottom:10px;">Es el mismo usuario de Yiqi que usás en el CRM. Se guarda sólo en este navegador.</div>
+        <div class="yqc-g"><div class="yqc-f"><label>Usuario</label><input id="yqc-u" autocomplete="username"></div>
+        <div class="yqc-f"><label>Contraseña</label><input id="yqc-p" type="password" autocomplete="current-password"></div></div>
+        <div id="yqc-login-err" class="yqc-bad"></div>`,
+        `<span></span><button class="yqc-btn" id="yqc-login-ok">Entrar</button>`);
+      $('yqc-u').value = localStorage.getItem(LS_USER) || '';
+      const go = async () => {
+        const u = val('yqc-u'), p = $('yqc-p').value;
+        if (!u || !p) return;
+        localStorage.setItem(LS_USER, u); localStorage.setItem(LS_PASS, p);
+        localStorage.removeItem(LS_TOKEN); localStorage.removeItem(LS_TOKEN_EXP);
+        $('yqc-login-ok').disabled = true;
+        try { await token(); cerrar('yqc-login'); resolve(true); }
+        catch (e) { $('yqc-login-err').textContent = e.message; $('yqc-login-ok').disabled = false; }
+      };
+      $('yqc-login-ok').onclick = go;
+      $('yqc-p').onkeydown = e => { if (e.key === 'Enter') go(); };
+      bd.querySelector('[data-x]').onclick = () => { cerrar('yqc-login'); resolve(false); };
+      setTimeout(() => ($('yqc-u').value ? $('yqc-p') : $('yqc-u')).focus(), 50);
+    });
+  }
+  async function asegurarSesion(){
+    try { await token(); return true; }
+    catch (e) { if (e.login) return pedirLogin(); toast('⚠ ' + e.message, 'warn'); return false; }
+  }
+
+  // ── Buscador de clientes (en vivo contra Yiqi) ──
+  async function buscarClientes(txt){
+    const cols = [{ field: 'CLIE_NOMBRE', title: 'Nombre' }, { field: 'CLIE_RAZON_SOCIAL', title: 'Razón' }, { field: 'CLIE_CUIT', title: 'CUIT' },
+      { field: 'CLIE_LOCALIDAD', title: 'Localidad' }, { field: 'COVE_ID_COVE', title: 'COVE' }, { field: 'LIDP_ID_LIDP', title: 'LIDP' }, { field: 'VEHA_ID_VEHA', title: 'VEHA' }];
+    const soloNum = txt.replace(/\D/g, '');
+    if (soloNum.length >= 7 && soloNum.length === txt.replace(/[\s.\-]/g, '').length) {
+      const j = await query('CLIENTE', { page: 1, pageSize: 20, columns: cols, filters: [{ columnName: 'CLIE_CUIT', operator: 'LIKE', value: soloNum }] });
+      return j?.data || [];
+    }
+    const j = await query('CLIENTE', { page: 1, pageSize: 20, search: txt, columns: cols, filters: [] });
+    return j?.data || [];
+  }
+  function montarBuscador(prefijo, onSelect){
+    const inp = $(prefijo + '-q'), res = $(prefijo + '-res');
+    let h = null, seq = 0;
+    const run = async () => {
+      const q = inp.value.trim();
+      if (q.length < 2) { res.innerHTML = ''; res.style.display = 'none'; return; }
+      const my = ++seq;
+      res.style.display = 'block'; res.innerHTML = '<div style="cursor:default;color:#64748b">Buscando en Yiqi…</div>';
+      try {
+        const arr = await buscarClientes(q);
+        if (my !== seq) return;
+        res.innerHTML = arr.length ? arr.map((c, i) => `<div data-i="${i}"><b>${esc(c.CLIE_NOMBRE || c.CLIE_RAZON_SOCIAL)}</b>${c.CLIE_RAZON_SOCIAL && c.CLIE_RAZON_SOCIAL !== c.CLIE_NOMBRE ? ` <small>· ${esc(c.CLIE_RAZON_SOCIAL)}</small>` : ''}<br><small>${esc(c.CLIE_CUIT || 'sin CUIT')}${c.CLIE_LOCALIDAD ? ' · ' + esc(c.CLIE_LOCALIDAD) : ''} · ID ${esc(c.id)}</small></div>`).join('')
+          : '<div style="cursor:default;color:#64748b">No hay clientes con ese nombre en Yiqi. Podés crearlo con “➕ Nuevo cliente”.</div>';
+        res.querySelectorAll('[data-i]').forEach(d => d.onclick = () => { res.style.display = 'none'; onSelect(arr[+d.dataset.i]); });
+      } catch (e) { if (my === seq) res.innerHTML = `<div class="yqc-bad" style="cursor:default">${esc(e.message)}</div>`; }
+    };
+    inp.addEventListener('input', () => { clearTimeout(h); h = setTimeout(run, 350); });
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(h); run(); } });
+    return run;
+  }
+
+  // ══════════════════ CARGAR PEDIDO ══════════════════
+  let _cli = null, _ids = {}, _fuente = {};
+  async function abrirPedido(){
+    if (!esAdmin()) return;
+    const items = itemsCarrito();
+    if (!items.length) { toast('⚠ El pedido está vacío', 'warn'); return; }
+    if (!(await asegurarSesion())) return;
+    const p = prefs();
+    const env = envioSugerido();
+    const modalidad = (typeof modalidadEntrega !== 'undefined') ? modalidadEntrega : '';
+    const dir = [val('cf-direccion'), val('cf-ciudad'), val('cf-provincia'), val('cf-cp') ? 'CP ' + val('cf-cp') : ''].filter(Boolean).join(', ');
+    _cli = null; _ids = {}; _fuente = {};
+    const total = items.reduce((s, i) => s + i.qty * i.precio, 0);
+    const ult = (() => { try { return JSON.parse(localStorage.getItem(LS_ULTIMO) || 'null'); } catch (e) { return null; } })();
+
+    modal('yqc-ped', '📤 Cargar pedido en Yiqi', `
+      <div id="yqc-dup"></div>
+      <div class="yqc-sec">Cliente</div>
+      <div id="yqc-cli-box">
+        <div style="display:flex;gap:8px;"><div class="yqc-f" style="flex:1"><input id="yqc-cq-q" placeholder="Buscar cliente en Yiqi por nombre, razón social o CUIT…"></div>
+        <button class="yqc-btn sec" id="yqc-nuevo-cli" type="button">➕ Nuevo cliente</button></div>
+        <div id="yqc-cq-res" class="yqc-res" style="display:none"></div>
+      </div>
+      <div class="yqc-sec">Datos del pedido</div>
+      <div class="yqc-g">
+        <div class="yqc-f"><label>Origen</label><select id="yqc-exte">${opts(EXTE, p.exte || 13)}</select></div>
+        <div class="yqc-f"><label>Vendedor</label><select id="yqc-veha">${opts(VEHA, p.veha || 4)}</select></div>
+        <div class="yqc-f"><label>Condición de venta</label><select id="yqc-cove">${opts(COVE, 3)}</select></div>
+        <div class="yqc-f"><label>Lista de precios</label><select id="yqc-lidp">${opts(LIDP, listaActualId())}</select></div>
+        <div class="yqc-f"><label>Punto de venta</label><select id="yqc-puve">${opts(PUVE, p.puve || 14)}</select></div>
+        <div class="yqc-f"><label>Depósito</label><select id="yqc-cedi">${opts(CEDI, p.cedi || 155)}</select></div>
+        <div class="yqc-f"><label>Estado del envío</label><input id="yqc-estenv" value="${esc(modalidad === 'retiro' ? 'RETIRA' : modalidad === 'envio' ? 'ENVIAR' : '')}" placeholder="RETIRA / ENVIAR - transporte"></div>
+        <div class="yqc-f"><label>Estado de pago</label><select id="yqc-pago">${PAGO.map(x => `<option value="${esc(x)}">${esc(x || '— Sin especificar —')}</option>`).join('')}</select></div>
+      </div>
+      <div class="yqc-g">
+        <div class="yqc-f"><label>Dirección de envío</label><input id="yqc-dir" value="${esc(val('cf-direccion'))}"></div>
+        <div class="yqc-f"><label>Localidad</label><input id="yqc-loc" value="${esc(val('cf-ciudad'))}"></div>
+        <div class="yqc-f"><label>Provincia</label><input id="yqc-prov" value="${esc(val('cf-provincia'))}"></div>
+      </div>
+      <div class="yqc-f"><label>Observaciones</label><textarea id="yqc-obs">${esc([val('cf-obs'), val('cf-tel') ? 'Tel: ' + val('cf-tel') : ''].filter(Boolean).join('\n'))}</textarea></div>
+      <div class="yqc-sec">Envío (se carga como servicio del pedido)</div>
+      <div class="yqc-g" style="align-items:end">
+        <div class="yqc-f"><label><input type="checkbox" id="yqc-env-on" ${env.activo ? 'checked' : ''} style="width:auto;margin-right:6px">Cobrar envío</label></div>
+        <div class="yqc-f"><label>Servicio</label><select id="yqc-env-seyi">${opts(SEYI, env.seyi)}</select></div>
+        <div class="yqc-f"><label>Monto (final)</label><input id="yqc-env-monto" inputmode="numeric" value="${env.monto || ''}"></div>
+      </div>
+      <div class="yqc-sec">Productos (${items.length}) · Total ${money(total)}</div>
+      <div style="max-height:300px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px">
+      <table class="yqc-t"><thead><tr><th>SKU</th><th>Producto</th><th class="n">Cant.</th><th class="n">P. unit.</th><th class="n">Subtotal</th><th>Yiqi</th></tr></thead>
+      <tbody id="yqc-items">${items.map((i, k) => `<tr data-k="${k}"><td>${esc(i.sku)}</td><td>${esc(i.nombre)}</td><td class="n">${i.qty}</td><td class="n">${money(i.precio)}</td><td class="n">${money(i.qty * i.precio)}</td><td data-id>⏳</td></tr>`).join('')}</tbody></table></div>
+      <div id="yqc-falta-msg"></div>
+      <div id="yqc-log" class="yqc-log"></div>`,
+      `<span style="font-size:11.5px;color:#64748b">Precios = precio final por unidad (IVA incluido), igual que en el CRM.</span>
+       <span style="display:flex;gap:8px"><button class="yqc-btn sec" id="yqc-cancel">Cancelar</button><button class="yqc-btn" id="yqc-go" disabled>📤 Cargar pedido en Yiqi</button></span>`);
+    $('yqc-cancel').onclick = () => cerrar('yqc-ped');
+    $('yqc-nuevo-cli').onclick = () => abrirCliente(c => elegirCliente(c));
+
+    if (ult && ult.firma === firma(nombreClienteSugerido(), items)) {
+      $('yqc-dup').innerHTML = `<div class="yqc-warn">⚠ Este mismo pedido ya se cargó en Yiqi hace un rato (N° ${esc(ult.numero || ult.id)}, ${esc(new Date(ult.ts).toLocaleString('es-AR'))}). Si lo cargás de nuevo queda duplicado.</div>`;
+    }
+
+    const elegirCliente = c => {
+      _cli = c;
+      $('yqc-cli-box').innerHTML = `<div class="yqc-sel"><span>👤 ${esc(c.CLIE_NOMBRE || c.CLIE_RAZON_SOCIAL)} <small style="color:#475569;font-weight:600">· ${esc(c.CLIE_CUIT || 'sin CUIT')} · ID ${esc(c.id)}</small></span><button class="yqc-btn sec" id="yqc-cambiar" type="button" style="padding:5px 10px">Cambiar</button></div>`;
+      $('yqc-cambiar').onclick = () => { _cli = null; $('yqc-cli-box').innerHTML = `<div style="display:flex;gap:8px;"><div class="yqc-f" style="flex:1"><input id="yqc-cq-q" placeholder="Buscar cliente en Yiqi…"></div><button class="yqc-btn sec" id="yqc-nuevo-cli" type="button">➕ Nuevo cliente</button></div><div id="yqc-cq-res" class="yqc-res" style="display:none"></div>`; $('yqc-nuevo-cli').onclick = () => abrirCliente(x => elegirCliente(x)); montarBuscador('yqc-cq', elegirCliente); $('yqc-cq-q').focus(); habilitar(); };
+      if (c.COVE_ID_COVE && COVE.some(x => x[1] == c.COVE_ID_COVE)) $('yqc-cove').value = c.COVE_ID_COVE;
+      habilitar();
+    };
+    const run = montarBuscador('yqc-cq', elegirCliente);
+    const sug = nombreClienteSugerido();
+    if (sug) { $('yqc-cq-q').value = sug; run(); }
+    setTimeout(() => $('yqc-cq-q')?.focus(), 50);
+
+    // Resolver productos en Yiqi
+    try {
+      const r = await resolverIds(items.map(i => i.sku));
+      _ids = r.ids; _fuente = r.fuente;
+    } catch (e) { toast('⚠ ' + e.message, 'warn'); }
+    pintarIds(items);
+    $('yqc-go').onclick = () => confirmarYCargar(items);
+    habilitar();
+  }
+  function pintarIds(items){
+    let faltan = 0;
+    items.forEach((i, k) => {
+      const tr = document.querySelector(`#yqc-items tr[data-k="${k}"]`); if (!tr) return;
+      const td = tr.querySelector('[data-id]');
+      if (_ids[i.sku]) { tr.classList.remove('falta'); td.innerHTML = `<span class="yqc-ok" title="${_fuente[i.sku] === 'yiqi' ? 'Encontrado en Yiqi' : 'Del mapa compartido'}">✓ ${_ids[i.sku]}</span>`; }
+      else {
+        faltan++; tr.classList.add('falta');
+        td.innerHTML = `<input placeholder="ID Yiqi" title="No está en Yiqi con ese SKU. Escribí el ID interno del producto en Yiqi (queda guardado para todos) o dejalo vacío para no incluirlo.">`;
+        td.querySelector('input').onchange = ev => {
+          const id = parseInt(ev.target.value.replace(/\D/g, ''), 10);
+          if (id && _ids[i.sku] !== id) { _ids[i.sku] = id; _fuente[i.sku] = 'manual'; guardarIdExtra(i.sku, id); setTimeout(() => pintarIds(items), 0); }
+        };
+      }
+    });
+    $('yqc-falta-msg').innerHTML = faltan ? `<div class="yqc-warn">⚠ ${faltan} producto${faltan > 1 ? 's' : ''} sin ID de Yiqi (en rojo): escribí el ID o se carga el pedido SIN ${faltan > 1 ? 'esos productos' : 'ese producto'}.</div>` : '';
+    habilitar();
+  }
+  function habilitar(){ const b = $('yqc-go'); if (b) b.disabled = !_cli || !document.querySelector('#yqc-items [data-id]') || /⏳/.test($('yqc-items')?.textContent || ''); }
+  function log(msg){ const l = $('yqc-log'); if (!l) return; l.style.display = 'block'; l.textContent += (l.textContent ? '\n' : '') + msg; }
+
+  async function confirmarYCargar(items){
+    if (!_cli) return;
+    const incl = items.filter(i => _ids[i.sku]);
+    const excl = items.filter(i => !_ids[i.sku]);
+    const envOn = $('yqc-env-on').checked;
+    const envMonto = parseFloat(String(val('yqc-env-monto')).replace(/\./g, '').replace(',', '.')) || 0;
+    const tot = incl.reduce((s, i) => s + i.qty * i.precio, 0) + (envOn ? envMonto : 0);
+    const txt = `Se va a CREAR un pedido nuevo en Yiqi:\n\n` +
+      `Cliente: ${_cli.CLIE_NOMBRE || _cli.CLIE_RAZON_SOCIAL} (ID ${_cli.id})\n` +
+      `Vendedor: ${$('yqc-veha').selectedOptions[0].text} · Origen: ${$('yqc-exte').selectedOptions[0].text}\n` +
+      `Productos: ${incl.length}${excl.length ? ` (${excl.length} SIN incluir: ${excl.map(i => i.sku).join(', ')})` : ''}\n` +
+      (envOn && envMonto > 0 ? `Envío: ${$('yqc-env-seyi').selectedOptions[0].text} ${money(envMonto)}\n` : '') +
+      `Total aprox.: ${money(tot)}\n\n¿Confirmás?`;
+    if (!incl.length) { toast('⚠ Ningún producto tiene ID de Yiqi', 'warn'); return; }
+    if (!confirm(txt)) return;
+
+    const btn = $('yqc-go'); btn.disabled = true; btn.textContent = '⏳ Cargando…';
+    guardarPrefs({ exte: val('yqc-exte'), veha: val('yqc-veha'), puve: val('yqc-puve'), cedi: val('yqc-cedi') });
+    try {
+      const data = {
+        CLIE_ID_CLIE: Number(_cli.id),
+        EXTE_ID_EXTE: Number(val('yqc-exte')), VEHA_ID_VEHA: Number(val('yqc-veha')),
+        COVE_ID_COVE: Number(val('yqc-cove')), LIDP_ID_LIDP: Number(val('yqc-lidp')),
+        PUVE_ID_PUVE: Number(val('yqc-puve')), CEDI_ID_ORIG: Number(val('yqc-cedi')),
+        PRODUCTOS: incl.map(i => ({ MATE_ID_MATE: _ids[i.sku], DEDP_CANTIDAD: i.qty, DEDP_PRECIO_UNITARIO_FINA: Math.round(i.precio * 100) / 100, DEDP_BONIFICACION: 0 }))
+      };
+      if (val('yqc-obs')) data.PEDI_OBSERVACIONES = val('yqc-obs');
+      if (val('yqc-dir')) data.PEDI_DIRECCION_DE_ENVIO = val('yqc-dir');
+      if (val('yqc-loc')) data.PEDI_LOCALIDAD_DE_ENVIO = val('yqc-loc');
+      if (val('yqc-prov')) data.PEDI_PROVINCIA_DE_ENVIO = val('yqc-prov');
+      if (val('yqc-estenv')) data.PEDI_ESTADO_DEL_ENVIO = val('yqc-estenv');
+      if (val('yqc-pago')) data.PEDI_ESTADO_DE_PAGO = val('yqc-pago');
+      log('Creando pedido con ' + incl.length + ' productos…');
+      const j = await api('PEDIDO', 'POST', { schemaId: SCHEMA, data });
+      const newId = j && (j.newId || j.id);
+      if (!newId) throw new Error('Yiqi no devolvió el ID del pedido: ' + JSON.stringify(j).slice(0, 200));
+      log('✓ Pedido creado (ID interno ' + newId + ')');
+
+      let envMsg = '';
+      if (envOn && envMonto > 0) {
+        log('Cargando envío…');
+        try {
+          const d = { PEDI_ID_PEDI: Number(newId), SEYI_ID_SEYI: Number(val('yqc-env-seyi')), DEPE_CANTIDAD: 1, DEPE_PRECIO_UNITARIO_FINA: envMonto };
+          try { await api('DET_PED_SERV?schemaId=' + SCHEMA, 'POST', { schemaId: SCHEMA, data: d }); }
+          catch (e) { if (!/PRECIO_UNITARIO_FINA/i.test(e.message)) throw e; const d2 = Object.assign({}, d); delete d2.DEPE_PRECIO_UNITARIO_FINA; d2.DEPE_PRECIO_UNITARIO = envMonto; await api('DET_PED_SERV?schemaId=' + SCHEMA, 'POST', { schemaId: SCHEMA, data: d2 }); }
+          log('✓ Envío cargado'); envMsg = ' + envío';
+        } catch (e) { log('⚠ No se pudo cargar el envío: ' + e.message); envMsg = ' (⚠ el envío no se cargó)'; }
+      }
+
+      let numero = '', totalYiqi = null;
+      try {
+        const g = await api('PEDIDO/' + newId + '?schemaId=' + SCHEMA);
+        const o = (g && (g.data || g)) || {};
+        numero = o.PEDI_NUMERO_SOLO || o.PEDI_NUMERO || '';
+        totalYiqi = o.PEDI_TOTAL_MD != null ? Number(o.PEDI_TOTAL_MD) : null;
+      } catch (e) {}
+      try { localStorage.setItem(LS_ULTIMO, JSON.stringify({ id: newId, numero, ts: Date.now(), firma: firma(nombreClienteSugerido(), items) })); } catch (e) {}
+      mostrarExito(newId, numero, totalYiqi, tot, envMsg, excl);
+      actualizarBarra();
+    } catch (e) {
+      log('❌ ' + e.message);
+      toast('❌ No se pudo cargar el pedido: ' + e.message.slice(0, 140), 'error');
+      btn.disabled = false; btn.textContent = '📤 Reintentar';
+    }
+  }
+  function mostrarExito(id, numero, totalYiqi, totalEsperado, envMsg, excl){
+    const dif = totalYiqi != null && Math.abs(totalYiqi - totalEsperado) > 2;
+    const m = $('yqc-ped'); if (!m) return;
+    m.querySelector('.yqc-b').innerHTML = `
+      <div style="text-align:center;padding:14px 0">
+        <div style="font-size:40px">✅</div>
+        <div style="font-size:18px;font-weight:800;margin-top:6px">Pedido ${numero ? 'N° ' + esc(numero) : ''} cargado en Yiqi${esc(envMsg)}</div>
+        <div style="color:#475569;margin-top:4px">ID interno ${esc(id)} · Cliente ${esc(_cli.CLIE_NOMBRE || _cli.CLIE_RAZON_SOCIAL)}</div>
+        ${totalYiqi != null ? `<div style="margin-top:8px;font-weight:700">Total en Yiqi: ${money(totalYiqi)}</div>` : ''}
+        ${dif ? `<div class="yqc-warn" style="text-align:left">⚠ El total de Yiqi (${money(totalYiqi)}) no coincide con el del catálogo (${money(totalEsperado)}). Revisalo en Yiqi.</div>` : ''}
+        ${excl.length ? `<div class="yqc-warn" style="text-align:left">⚠ Quedaron afuera (sin ID de Yiqi): ${excl.map(i => esc(i.sku + ' ' + i.nombre)).join(', ')}</div>` : ''}
+        <div style="color:#64748b;font-size:12px;margin-top:8px">Ya aparece en la pestaña Pedidos del CRM (lee Yiqi en vivo).</div>
+      </div>`;
+    m.querySelector('.yqc-foot').innerHTML = `<span style="display:flex;gap:8px;flex-wrap:wrap">
+      ${numero ? `<button class="yqc-btn sec" id="yqc-copy">📋 Copiar N°</button>` : ''}
+      <button class="yqc-btn sec" id="yqc-pdf">📄 PDF del pedido</button></span>
+      <button class="yqc-btn ok" id="yqc-fin">Listo</button>`;
+    if (numero) $('yqc-copy').onclick = () => { try { navigator.clipboard.writeText(String(numero)); toast('📋 N° ' + numero + ' copiado', 'ok'); } catch (e) {} };
+    $('yqc-pdf').onclick = () => pdfPedido(id, $('yqc-pdf'));
+    $('yqc-fin').onclick = () => cerrar('yqc-ped');
+    toast('✅ Pedido ' + (numero ? 'N° ' + numero + ' ' : '') + 'cargado en Yiqi', 'ok');
+  }
+  async function pdfPedido(id, btn){
+    const w = window.open('', '_blank');
+    const orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Generando…';
+    try {
+      const r = await yfetch(`${API}/api/public/PEDIDO/report?reportName=PEDIDO_v1.3&instanceId=${encodeURIComponent(id)}&schemaId=${SCHEMA}`, { headers: await H() });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const url = URL.createObjectURL(await r.blob());
+      if (w) w.location.href = url; else window.open(url, '_blank');
+    } catch (e) { if (w) w.close(); toast('⚠ No se pudo bajar el PDF: ' + e.message, 'warn'); }
+    btn.disabled = false; btn.textContent = orig;
+  }
+
+  // ══════════════════ CARGAR CLIENTE ══════════════════
+  function abrirCliente(onCreado){
+    if (!esAdmin()) return;
+    (async () => {
+      if (!(await asegurarSesion())) return;
+      const dni = val('cf-dni').replace(/\D/g, '');
+      const provCat = val('cf-provincia');
+      const nom = nombreClienteSugerido();
+      modal('yqc-cli', '👤 Cargar cliente en Yiqi', `
+        <div class="yqc-g">
+          <div class="yqc-f"><label>Nombre *</label><input id="yqc-c-nombre" value="${esc(nom.toUpperCase())}"></div>
+          <div class="yqc-f"><label>Razón social</label><input id="yqc-c-razon" placeholder="(igual al nombre)"></div>
+          <div class="yqc-f"><label>Tipo doc.</label><select id="yqc-c-tidd">${opts(TIDD, dni.length === 11 ? 1 : 3)}</select></div>
+          <div class="yqc-f"><label>CUIT / DNI *</label><input id="yqc-c-cuit" inputmode="numeric" value="${esc(dni)}"></div>
+          <div class="yqc-f"><label>Condición IVA</label><select id="yqc-c-coiv">${opts(COIV, dni.length === 11 ? 5 : 7)}</select></div>
+          <div class="yqc-f"><label>Provincia *</label><select id="yqc-c-prov"><option value="">Seleccioná…</option>${Object.keys(PROV).filter(k => k !== 'Capital Federal').map(k => `<option${k === provCat ? ' selected' : ''}>${esc(k)}</option>`).join('')}</select></div>
+          <div class="yqc-f"><label>Localidad</label><input id="yqc-c-loc" value="${esc(val('cf-ciudad'))}"></div>
+          <div class="yqc-f"><label>Domicilio</label><input id="yqc-c-dom" value="${esc(val('cf-direccion'))}"></div>
+          <div class="yqc-f"><label>Código postal</label><input id="yqc-c-cp" value="${esc(val('cf-cp'))}"></div>
+          <div class="yqc-f"><label>Teléfono</label><input id="yqc-c-tel" value="${esc(val('cf-tel'))}"></div>
+          <div class="yqc-f"><label>E-mail</label><input id="yqc-c-mail" type="email" value="${esc(val('cf-email'))}"></div>
+          <div class="yqc-f"><label>Condición de venta</label><select id="yqc-c-cove">${opts(COVE, 3)}</select></div>
+          <div class="yqc-f"><label>Lista de precios</label><select id="yqc-c-lidp">${opts(LIDP, listaActualId())}</select></div>
+          <div class="yqc-f"><label>Vendedor</label><select id="yqc-c-veha">${opts(VEHA, prefs().veha || 4)}</select></div>
+        </div>
+        <div class="yqc-f"><label>Observaciones</label><textarea id="yqc-c-obs"></textarea></div>
+        <div id="yqc-c-dup"></div>`,
+        `<span></span><span style="display:flex;gap:8px"><button class="yqc-btn sec" id="yqc-c-cancel">Cancelar</button><button class="yqc-btn ok" id="yqc-c-go">👤 Crear cliente en Yiqi</button></span>`);
+      $('yqc-c-cancel').onclick = () => cerrar('yqc-cli');
+      $('yqc-c-go').onclick = () => crearCliente(onCreado);
+    })();
+  }
+  async function crearCliente(onCreado){
+    const nombre = val('yqc-c-nombre').toUpperCase();
+    const cuit = val('yqc-c-cuit').replace(/[^\dA-Za-z]/g, '');
+    const prov = val('yqc-c-prov');
+    if (!nombre) { toast('⚠ El nombre es obligatorio', 'warn'); $('yqc-c-nombre').focus(); return; }
+    if (!cuit) { toast('⚠ El CUIT / DNI es obligatorio', 'warn'); $('yqc-c-cuit').focus(); return; }
+    if (!prov) { toast('⚠ La provincia es obligatoria', 'warn'); $('yqc-c-prov').focus(); return; }
+    const btn = $('yqc-c-go'); btn.disabled = true; btn.textContent = '🔍 Revisando duplicados…';
+    try {
+      // Duplicados: mismo CUIT/DNI o mismo nombre exacto
+      const cols = [{ field: 'CLIE_NOMBRE', title: 'Nombre' }, { field: 'CLIE_CUIT', title: 'CUIT' }];
+      const [porCuit, porNom] = await Promise.all([
+        query('CLIENTE', { page: 1, pageSize: 10, columns: cols, filters: [{ columnName: 'CLIE_CUIT', operator: '=', value: cuit }] }).catch(() => null),
+        query('CLIENTE', { page: 1, pageSize: 10, search: nombre, columns: cols, filters: [] }).catch(() => null)
+      ]);
+      const dups = [...(porCuit?.data || []), ...((porNom?.data || []).filter(c => norm(c.CLIE_NOMBRE) === norm(nombre)))];
+      const vistos = new Set(), lista = dups.filter(c => !vistos.has(c.id) && vistos.add(c.id));
+      if (lista.length && !confirm(`⚠ Ya existe en Yiqi:\n\n${lista.map(c => `• ${c.CLIE_NOMBRE} · ${c.CLIE_CUIT || 'sin CUIT'} (ID ${c.id})`).join('\n')}\n\n¿Crear el cliente igual?`)) {
+        btn.disabled = false; btn.textContent = '👤 Crear cliente en Yiqi'; return;
+      }
+      btn.textContent = '👤 Creando…';
+      const d = {
+        CLIE_NOMBRE: nombre, CLIE_RAZON_SOCIAL: val('yqc-c-razon').toUpperCase() || nombre, CLIE_CUIT: cuit,
+        CLIE_ACTIVO: 1, CUCO_ID_CUCO: 35, PAIS_ID_PAIS: 1, PROV_ID_PROV: PROV[prov],
+        TIDD_ID_TIDD: Number(val('yqc-c-tidd')), COIV_ID_COIV: Number(val('yqc-c-coiv')),
+        COVE_ID_COVE: Number(val('yqc-c-cove')), LIDP_ID_LIDP: Number(val('yqc-c-lidp')), VEHA_ID_VEHA: Number(val('yqc-c-veha'))
+      };
+      if (val('yqc-c-mail')) d.CLIE_MAIL = val('yqc-c-mail');
+      if (val('yqc-c-dom')) d.CLIE_DOMICILIO = val('yqc-c-dom');
+      if (val('yqc-c-cp')) d.CLIE_CP = val('yqc-c-cp');
+      if (val('yqc-c-loc')) d.CLIE_LOCALIDAD = val('yqc-c-loc');
+      if (val('yqc-c-tel')) d.CLIE_TE1 = val('yqc-c-tel');
+      if (val('yqc-c-obs')) d.CLIE_OBSERVACIONES = val('yqc-c-obs');
+      const j = await api('CLIENTE', 'POST', { schemaId: SCHEMA, data: d });
+      const id = j && (j.newId || j.id);
+      if (!id) throw new Error('Yiqi no devolvió ID: ' + JSON.stringify(j).slice(0, 200));
+      cerrar('yqc-cli');
+      toast(`✅ Cliente "${nombre}" creado en Yiqi (ID ${id})`, 'ok');
+      const cli = { id, CLIE_NOMBRE: nombre, CLIE_RAZON_SOCIAL: d.CLIE_RAZON_SOCIAL, CLIE_CUIT: cuit, COVE_ID_COVE: d.COVE_ID_COVE, LIDP_ID_LIDP: d.LIDP_ID_LIDP, VEHA_ID_VEHA: d.VEHA_ID_VEHA };
+      if (typeof onCreado === 'function') onCreado(cli);
+    } catch (e) {
+      toast('❌ No se pudo crear el cliente: ' + e.message.slice(0, 160), 'error');
+      btn.disabled = false; btn.textContent = '👤 Crear cliente en Yiqi';
+    }
+  }
+
+  // ── Botones en "Tu pedido" (sólo admin) ──
+  function actualizarBarra(){
+    const ancla = $('btn-ver-presupuesto');
+    let bar = $('yqc-bar');
+    if (!esAdmin() || !ancla) { if (bar) bar.remove(); return; }
+    if (!bar) {
+      bar = document.createElement('div'); bar.id = 'yqc-bar'; bar.className = 'yqc-bar';
+      bar.innerHTML = `<button type="button" id="yqc-b-ped" title="Crea el pedido en Yiqi con los productos, cantidades y precios de este carrito (atajo: Shift + clic del medio)">📤 Cargar pedido en Yiqi</button>
+        <button type="button" class="yqc-cli" id="yqc-b-cli" title="Da de alta un cliente nuevo en Yiqi (atajo: Ctrl + clic del medio)">👤 Cargar cliente en Yiqi</button><div class="yqc-ult" id="yqc-ult"></div>`;
+      ancla.insertAdjacentElement('afterend', bar);
+      $('yqc-b-ped').onclick = abrirPedido;
+      $('yqc-b-cli').onclick = () => abrirCliente();
+    }
+    const hay = (typeof carrito !== 'undefined') && carrito.size > 0;
+    $('yqc-b-ped').style.display = hay ? '' : 'none';
+    let ult = null; try { ult = JSON.parse(localStorage.getItem(LS_ULTIMO) || 'null'); } catch (e) {}
+    $('yqc-ult').textContent = (ult && Date.now() - ult.ts < 12 * 3600e3) ? `Último cargado en Yiqi: pedido ${ult.numero ? 'N° ' + ult.numero : 'ID ' + ult.id} · ${new Date(ult.ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}` : '';
+  }
+  try {
+    const orig = window.renderCarrito;
+    if (typeof orig === 'function') window.renderCarrito = function(){ const r = orig.apply(this, arguments); try { actualizarBarra(); } catch (e) {} return r; };
+  } catch (e) {}
+  try { auth.onAuthStateChanged(() => setTimeout(actualizarBarra, 300)); } catch (e) {}
+  setInterval(() => { try { if (!!$('yqc-bar') !== (esAdmin() && !!$('btn-ver-presupuesto'))) actualizarBarra(); } catch (e) {} }, 1500);
+
+  // ── Atajos de mouse, iguales al CRM: Shift + clic del medio = Cargar pedido,
+  // Ctrl + clic del medio = Cargar cliente. Si en este navegador están configurados distinto
+  // en el CRM (misma clave dentalab_shortcuts_v2), se respeta esa configuración. ──
+  function combosMouse(){
+    const def = { pedido: { ctrl: false, shift: true, btn: 1 }, cliente: { ctrl: true, shift: false, btn: 1 } };
+    try {
+      const s = JSON.parse(localStorage.getItem('dentalab_shortcuts_v2') || '{}') || {};
+      const toCombo = x => (x && x.mouse) ? { ctrl: !!x.ctrl, shift: !!x.shift, btn: x.mouseButton ?? 0 } : null;
+      const p = toCombo(s.cargarpedidoxls), c = toCombo(s.cargarcliexls);
+      if (p && p.btn === 1) def.pedido = p;
+      if (c && c.btn === 1) def.cliente = c;
+    } catch (e) {}
+    return def;
+  }
+  const coincide = (e, k) => e.button === k.btn && !!(e.ctrlKey || e.metaKey) === k.ctrl && e.shiftKey === k.shift;
+  function onMedio(e){
+    if (e.button !== 1 || !esAdmin()) return false;
+    if (e.target.closest && e.target.closest('.yqc-bd')) return false;
+    const k = combosMouse();
+    if (coincide(e, k.pedido)) { if (e.type === 'mousedown') abrirPedido(); return true; }
+    if (coincide(e, k.cliente)) { if (e.type === 'mousedown') abrirCliente(); return true; }
+    return false;
+  }
+  // mousedown dispara la acción; auxclick/mouseup sólo se cancelan (evita autoscroll / abrir links en otra pestaña)
+  document.addEventListener('mousedown', e => { if (onMedio(e)) e.preventDefault(); }, true);
+  document.addEventListener('auxclick', e => { if (e.button === 1 && esAdmin()) { const k = combosMouse(); if (coincide(e, k.pedido) || coincide(e, k.cliente)) e.preventDefault(); } }, true);
+
+  window.yiqiCatCargarPedido = abrirPedido;
+  window.yiqiCatCargarCliente = abrirCliente;
+})();
+
+</script>
 </body>
 </html>
