@@ -10913,6 +10913,10 @@ document.addEventListener('keydown', (e) => {
   .yqc-hl{font-size:11.5px;font-weight:800;padding:5px 10px;border-radius:7px;color:#fff!important;text-decoration:none}
   .yqc-hl.azul{background:#0284c7}.yqc-hl.violeta{background:#7c3aed}
   .yqc-crm .yqc-bad{color:#f87171}
+  #yqc-add-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 20px 0;padding:9px 12px;border:1px solid #c7d2fe;background:#eef2ff;border-radius:10px;font-family:inherit}
+  #yqc-add-bar .t{font-size:12.5px;font-weight:800;color:#3730a3}
+  #yqc-add-bar input{width:210px;border:1px solid #a5b4fc;border-radius:7px;padding:6px 9px;font-size:13px;background:#fff;color:#0f172a}
+  #yqc-add-bar .o{font-size:12px;color:#64748b}
   .yqc-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;z-index:100001;transition:opacity .3s;max-width:90vw}
   .yqc-toast.yqc-warn,.yqc-toast.yqc-error{background:#b91c1c}
   `;
@@ -11560,6 +11564,141 @@ document.addEventListener('keydown', (e) => {
       btn.disabled = false; btn.textContent = '💾 Actualizar en Yiqi';
     }
   }
+
+  // ══════════════════ AGREGAR ARTÍCULOS A UN PEDIDO EXISTENTE (como "Agregar a pedido YIQI" del CRM) ══════════════════
+  // En "Pantalla completa" (admin): se escribe el N° de pedido (ej. 49376) o el N° interno (ej. 107134) y se cargan
+  // los productos del carrito en ese pedido. Primero se busca por N° de pedido y recién después como N° interno;
+  // nunca se "adivina": si no aparece, no se toca nada.
+  let _agregarNro = '';
+  async function resolverPedido(valor){
+    const n = parseInt(String(valor || '').replace(/\D/g, ''), 10);
+    if (!n) return null;
+    const cols = ['ID', 'PEDI_NUMERO', 'PEDI_NUMERO_SOLO', 'CLIE_NOMBRE', 'PEDI_RAZON_SOCIAL', 'DESC_ESTADO', 'PEDI_TOTAL_MD'].map((f, i) => ({ field: f, title: f, order: i + 1 }));
+    const nroDe = p => String(p.PEDI_NUMERO_SOLO || String(p.PEDI_NUMERO || '').replace(/\D/g, ''));
+    const info = (p, via) => ({ id: String(p.id || p.ID), nro: nroDe(p), cliente: String(p.CLIE_NOMBRE || p.PEDI_RAZON_SOCIAL || '').trim(), estado: p.DESC_ESTADO || p.ESTA_NOMBRE || '', total: p.PEDI_TOTAL_MD, via });
+    try {
+      const j = await query('PEDIDO', { page: 1, pageSize: 5, columns: cols, filters: [{ columnName: 'PEDI_NUMERO_SOLO', operator: '=', value: n }] });
+      const p = (j?.data || []).find(x => nroDe(x) === String(n));
+      if (p && (p.id || p.ID)) return info(p, 'nro');
+    } catch (e) {}
+    try {
+      const p = await api('PEDIDO/' + n + '?schemaId=' + SCHEMA);
+      if (p && (p.id || p.PEDI_NUMERO)) { if (!p.id) p.id = n; return info(p, 'id'); }
+    } catch (e) {}
+    return null;
+  }
+
+  async function agregarAPedido(btn){
+    if (!esAdmin()) return;
+    const valor = (_agregarNro || '').trim();
+    if (!valor) { toast('⚠ Escribí el N° de pedido o el N° interno', 'warn'); $('yqc-add-n')?.focus(); return; }
+    const items = itemsCarrito();
+    const env = envioSugerido();
+    if (!items.length && !(env.activo && env.monto > 0)) { toast('⚠ El pedido está vacío', 'warn'); return; }
+    if (!(await asegurarSesion())) return;
+    const orig = btn ? btn.textContent : '';
+    const setB = t => { if (btn) { btn.textContent = t; btn.disabled = t !== orig; } };
+    try {
+      setB('🔍 Buscando pedido…');
+      const ped = await resolverPedido(valor);
+      if (!ped) { toast(`⚠ No se encontró el pedido ${valor} en Yiqi (ni como N° de pedido ni como N° interno). No se cargó nada.`, 'warn'); setB(orig); return; }
+      setB('🔍 Buscando productos…');
+      const { ids } = await resolverIds(items.map(i => i.sku));
+      // Productos que Yiqi no tiene con ese SKU: se pide el ID (queda guardado para todos) o se omiten
+      for (const i of items) {
+        if (ids[i.sku]) continue;
+        const r = window.prompt(`El SKU ${i.sku} — ${i.nombre} no aparece en Yiqi.\n\nEscribí su ID interno de Yiqi para incluirlo (queda guardado para todos), o dejalo vacío para NO incluirlo.`, '');
+        const id = parseInt(String(r || '').replace(/\D/g, ''), 10);
+        if (id) { ids[i.sku] = id; guardarIdExtra(i.sku, id); }
+      }
+      const incl = items.filter(i => ids[i.sku]), excl = items.filter(i => !ids[i.sku]);
+      // Líneas que ya tiene el pedido (para avisar repetidos)
+      let yaEsta = [];
+      try {
+        const j = await query('DETALLE_DE_PEDIDO', { page: 1, pageSize: 500, columns: ['PEDI_ID_PEDI', 'MATE_ID_MATE', 'DEDP_SKU', 'DEDP_CANTIDAD'].map((f, i) => ({ field: f, title: f, order: i + 1 })), filters: [{ columnName: 'PEDI_ID_PEDI', operator: '=', value: Number(ped.id) }] });
+        const lin = (j?.data || []).filter(x => String(x.PEDI_ID_PEDI ?? ped.id) === String(ped.id));
+        yaEsta = incl.filter(i => lin.some(l => Number(l.MATE_ID_MATE) === Number(ids[i.sku]) || norm(l.DEDP_SKU) === norm(i.sku)));
+      } catch (e) {}
+      const conEnvio = env.activo && env.monto > 0;
+      const tot = incl.reduce((s, i) => s + i.qty * i.precio, 0) + (conEnvio ? env.monto : 0);
+      if (!incl.length && !conEnvio) { toast('⚠ Ningún producto tiene ID de Yiqi: no se cargó nada', 'warn'); setB(orig); return; }
+      const txt = `Se van a AGREGAR al pedido de Yiqi:\n\n` +
+        `Pedido N° ${ped.nro} (N° interno ${ped.id})${ped.via === 'id' ? ' — encontrado por N° interno' : ''}\n` +
+        `Cliente: ${ped.cliente || '—'}\nEstado: ${ped.estado || '—'}\n\n` +
+        `Productos: ${incl.length} (${money(incl.reduce((s, i) => s + i.qty * i.precio, 0))})\n` +
+        (conEnvio ? `Envío: ${(SEYI.find(x => x[1] === env.seyi) || ['Envío'])[0]} ${money(env.monto)}\n` : '') +
+        (excl.length ? `\nSIN incluir (no están en Yiqi): ${excl.map(i => i.sku).join(', ')}\n` : '') +
+        (yaEsta.length ? `\n⚠ Ya están en el pedido (se agregan como otra línea): ${yaEsta.map(i => i.sku).join(', ')}\n` : '') +
+        (ped.estado && !/en espera de pago/i.test(ped.estado) ? `\n⚠ El pedido está "${ped.estado}": Yiqi puede no dejar agregar productos en ese estado.\n` : '') +
+        `\nTotal a agregar: ${money(tot)}\n\n¿Es este el pedido?`;
+      if (!confirm(txt)) { setB(orig); return; }
+
+      let ok = 0; const errores = [];
+      for (let k = 0; k < incl.length; k++) {
+        const i = incl[k];
+        setB(`📦 Cargando ${k + 1}/${incl.length}…`);
+        try {
+          await api('DETALLE_DE_PEDIDO?schemaId=' + SCHEMA, 'POST', { schemaId: SCHEMA, data: { PEDI_ID_PEDI: Number(ped.id), MATE_ID_MATE: ids[i.sku], DEDP_CANTIDAD: i.qty, DEDP_PRECIO_UNITARIO_FINA: Math.round(i.precio * 100) / 100, DEDP_BONIFICACION: 0 } });
+          ok++;
+        } catch (e) { errores.push(`${i.sku}: ${e.message.slice(0, 140)}`); }
+        await new Promise(r => setTimeout(r, 100));
+      }
+      let envMsg = '';
+      if (conEnvio) {
+        setB('🚚 Cargando envío…');
+        try {
+          let dup = false;
+          try {
+            const j = await query('DET_PED_SERV', { page: 1, pageSize: 50, columns: [{ field: 'SEYI_ID_SEYI' }, { field: 'DEPE_PRECIO_UNITARIO_FINA' }, { field: 'PEDI_ID_PEDI' }], filters: [{ columnName: 'PEDI_ID_PEDI', operator: '=', value: Number(ped.id) }] });
+            dup = (j?.data || []).some(x => String(x.PEDI_ID_PEDI ?? ped.id) === String(ped.id) && Number(x.SEYI_ID_SEYI) === Number(env.seyi) && Math.abs(Number(x.DEPE_PRECIO_UNITARIO_FINA) - env.monto) < 1);
+          } catch (e) {}
+          if (dup) envMsg = ' (el envío ya estaba cargado)';
+          else { await api('DET_PED_SERV?schemaId=' + SCHEMA, 'POST', { schemaId: SCHEMA, data: { PEDI_ID_PEDI: Number(ped.id), SEYI_ID_SEYI: env.seyi, DEPE_CANTIDAD: 1, DEPE_PRECIO_UNITARIO_FINA: env.monto } }); envMsg = ' + envío'; }
+        } catch (e) { errores.push('Envío: ' + e.message.slice(0, 140)); }
+      }
+      let totalYiqi = null;
+      try { const g = await api('PEDIDO/' + ped.id + '?schemaId=' + SCHEMA); totalYiqi = g && g.PEDI_TOTAL_MD != null ? Number(g.PEDI_TOTAL_MD) : null; } catch (e) {}
+      setB(orig);
+      const m = modal('yqc-add-res', errores.length ? '⚠ Carga con errores' : '✅ Artículos cargados', `
+        <div style="font-size:15px;font-weight:800;margin-bottom:6px">Pedido N° ${esc(ped.nro)} · ${esc(ped.cliente)}</div>
+        <div>${ok} de ${incl.length} producto${incl.length === 1 ? '' : 's'} agregado${incl.length === 1 ? '' : 's'}${esc(envMsg)}.</div>
+        ${totalYiqi != null ? `<div style="margin-top:6px;font-weight:700">Total del pedido en Yiqi ahora: ${money(totalYiqi)}</div>` : ''}
+        ${excl.length ? `<div class="yqc-warn">Quedaron afuera (no están en Yiqi): ${excl.map(i => esc(i.sku + ' ' + i.nombre)).join(', ')}</div>` : ''}
+        ${errores.length ? `<div class="yqc-warn" style="white-space:pre-wrap">${errores.map(esc).join('\n')}</div>` : ''}`,
+        `<button class="yqc-btn sec" id="yqc-add-pdf">📄 PDF del pedido</button><button class="yqc-btn ok" id="yqc-add-ok">Listo</button>`);
+      m.style.zIndex = 100002;
+      $('yqc-add-pdf').onclick = () => pdfPedido(ped.id, $('yqc-add-pdf'));
+      $('yqc-add-ok').onclick = () => cerrar('yqc-add-res');
+      toast(errores.length ? `⚠ Pedido ${ped.nro}: ${ok}/${incl.length} cargados, con errores` : `✅ ${ok} producto(s) agregados al pedido ${ped.nro}${envMsg}`, errores.length ? 'warn' : 'ok');
+    } catch (e) {
+      setB(orig);
+      toast('❌ No se pudo cargar: ' + e.message.slice(0, 160), 'error');
+    }
+  }
+
+  // Barra en "Pantalla completa" (sólo admin)
+  function barraPantallaCompleta(){
+    const body = $('pedido-full-body');
+    if (!body || !esAdmin() || $('yqc-add-bar')) return;
+    const bar = document.createElement('div');
+    bar.id = 'yqc-add-bar';
+    bar.innerHTML = `<span class="t">📥 Cargar en pedido Yiqi</span>
+      <input id="yqc-add-n" inputmode="numeric" placeholder="N° de pedido o N° interno" value="${esc(_agregarNro)}" title="Ej: 49376 (N° de pedido) o 107134 (N° interno)">
+      <button type="button" class="yqc-btn azul" id="yqc-add-go" title="Agrega los productos (y el envío, si tiene) a ese pedido">Cargar artículos</button>
+      <span class="o">o</span>
+      <button type="button" class="yqc-btn sec chico" id="yqc-add-nuevo" title="Crear un pedido nuevo en Yiqi con estos productos">📤 Pedido nuevo</button>`;
+    body.parentNode.insertBefore(bar, body);
+    $('yqc-add-n').addEventListener('input', e => { _agregarNro = e.target.value; });
+    $('yqc-add-n').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); agregarAPedido($('yqc-add-go')); } });
+    $('yqc-add-go').onclick = () => agregarAPedido($('yqc-add-go'));
+    $('yqc-add-nuevo').onclick = () => abrirPedido();
+  }
+  try {
+    const origFull = window.abrirVistaCompletaPedido;
+    if (typeof origFull === 'function') window.abrirVistaCompletaPedido = function(){ const r = origFull.apply(this, arguments); try { barraPantallaCompleta(); } catch (e) {} return r; };
+  } catch (e) {}
+  setInterval(() => { try { barraPantallaCompleta(); } catch (e) {} }, 1000);
+  window.yiqiCatAgregarAPedido = agregarAPedido;
 
   // ── Botones en "Tu pedido" (sólo admin) ──
   function actualizarBarra(){
