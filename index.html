@@ -10860,59 +10860,61 @@ document.addEventListener('keydown', (e) => {
   .yqc-mute{color:#64748b;cursor:default!important}
   .yqc-okc{color:#059669;font-weight:800}
   .yqc-hint{font-size:11px;color:#64748b;margin-top:3px}
-  .yqc-crm .yqc-m{background:#16213a;color:#e2e8f0;width:min(640px,100%);border:1px solid #2b3a57;font-family:'DM Sans',system-ui,sans-serif}
-  .yqc-crm .yqc-h{border-bottom:none;color:#f1f5f9;padding:18px 20px 10px}
-  .yqc-crm .yqc-h button{color:#cbd5e1}
+  .yqc-crm .yqc-m{background:#fff;color:#0f172a;width:min(640px,100%);border:1px solid #e2e8f0;font-family:'DM Sans',system-ui,sans-serif}
+  .yqc-crm .yqc-h{border-bottom:1px solid #eef2f7;color:#0f172a;padding:18px 20px 10px}
+  .yqc-crm .yqc-h button{color:#64748b}
   .yqc-crm .yqc-b{padding:6px 20px 10px}
-  .yqc-crm .yqc-foot{border-top:1px solid #2b3a57}
-  .yqc-crm input,.yqc-crm select,.yqc-crm textarea{width:100%;box-sizing:border-box;background:#1e2b45;color:#e2e8f0;border:1px solid #33456a;border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit}
-  .yqc-crm input::placeholder,.yqc-crm textarea::placeholder{color:#6b7c99}
-  .yqc-crm input[readonly],.yqc-crm select:disabled{opacity:.85}
+  .yqc-crm .yqc-foot{border-top:1px solid #e2e8f0}
+  .yqc-crm input,.yqc-crm select,.yqc-crm textarea{width:100%;box-sizing:border-box;background:#fff;color:#0f172a;border:1px solid #cbd5e1;border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit}
+  .yqc-crm input::placeholder,.yqc-crm textarea::placeholder{color:#94a3b8}
+  .yqc-crm input:focus,.yqc-crm select:focus,.yqc-crm textarea:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+  .yqc-crm input[readonly],.yqc-crm select:disabled{background:#f8fafc;color:#475569}
   .yqc-crm textarea{min-height:64px;resize:vertical;margin-top:6px}
-  .yqc-crm .yqc-row{display:grid;grid-template-columns:170px 1fr;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid #22304d}
-  .yqc-crm .yqc-row>label{font-weight:700;font-size:13px;color:#e2e8f0}
-  .yqc-crm .yqc-box{display:flex;align-items:center;gap:8px;background:#0f1a2e;border:1px solid #2b3a57;border-radius:10px;padding:10px 12px;margin-bottom:8px}
-  .yqc-crm .yqc-box span{font-size:10.5px;font-weight:800;color:#7b8bab;letter-spacing:.05em;white-space:nowrap}
+  .yqc-crm .yqc-row{display:grid;grid-template-columns:170px 1fr;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid #eef2f7}
+  .yqc-crm .yqc-row>label{font-weight:700;font-size:13px;color:#334155}
+  .yqc-crm .yqc-box{display:flex;align-items:center;gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;margin-bottom:8px}
+  .yqc-crm .yqc-box span{font-size:10.5px;font-weight:800;color:#64748b;letter-spacing:.05em;white-space:nowrap}
   .yqc-crm .yqc-box input{flex:1;font-family:ui-monospace,monospace;font-size:12px}
-  .yqc-crm .yqc-sec{color:#f59e0b;font-size:11.5px;font-weight:800;letter-spacing:.06em;margin:16px 0 4px;text-transform:uppercase}
+  .yqc-crm .yqc-sec{color:#d97706;font-size:11.5px;font-weight:800;letter-spacing:.06em;margin:16px 0 4px;text-transform:uppercase}
   .yqc-crm .yqc-lbl{font-weight:700;font-size:13px;margin:4px 0 6px}
   .yqc-crm .yqc-chips{display:flex;flex-wrap:wrap;gap:6px}
-  .yqc-crm .yqc-chips button{padding:4px 10px;border-radius:7px;border:1px solid #33456a;background:#1e2b45;color:#e2e8f0;font-size:11px;font-weight:700;cursor:pointer}
-  .yqc-crm .yqc-chips button.azul{color:#60a5fa}
-  .yqc-crm .yqc-chips button.nar{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,.1)}
-  .yqc-crm .yqc-chips button.on{background:#4f46e5;border-color:#6366f1;color:#fff}
+  .yqc-crm .yqc-chips button{padding:4px 10px;border-radius:7px;border:1px solid #cbd5e1;background:#f8fafc;color:#334155;font-size:11px;font-weight:700;cursor:pointer}
+  .yqc-crm .yqc-chips button:hover{border-color:#6366f1;color:#4338ca;background:#eef2ff}
+  .yqc-crm .yqc-chips button.azul{color:#1d4ed8}
+  .yqc-crm .yqc-chips button.nar{border-color:#f59e0b;color:#b45309;background:#fffbeb}
+  .yqc-crm .yqc-chips button.on{background:#4f46e5;border-color:#4f46e5;color:#fff}
   .yqc-crm .yqc-obs-extra{grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:8px}
-  .yqc-crm .yqc-obs-extra label{display:block;font-size:10.5px;font-weight:800;color:#7b8bab;margin-bottom:3px;text-transform:uppercase}
+  .yqc-crm .yqc-obs-extra label{display:block;font-size:10.5px;font-weight:800;color:#64748b;margin-bottom:3px;text-transform:uppercase}
   .yqc-crm .yqc-dos{grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
   .yqc-crm .yqc-dos3{display:grid;grid-template-columns:auto 1fr 130px;gap:8px;align-items:center}
   .yqc-crm .yqc-chk{display:flex;align-items:center;gap:6px;font-weight:700;white-space:nowrap}
   .yqc-crm .yqc-chk input{width:auto}
-  .yqc-crm .yqc-hint{color:#8b9bb8}
-  .yqc-crm .yqc-res{background:#1e2b45;border-color:#33456a}
-  .yqc-crm .yqc-res div{border-bottom-color:#2b3a57}
-  .yqc-crm .yqc-res div:hover{background:#2a3b5e}
-  .yqc-crm .yqc-res small,.yqc-crm .yqc-mute{color:#8b9bb8}
-  .yqc-crm .yqc-tw{max-height:280px;overflow:auto;border:1px solid #2b3a57;border-radius:8px}
-  .yqc-crm .yqc-t th{background:#0f1a2e;color:#8b9bb8;border-bottom-color:#2b3a57}
-  .yqc-crm .yqc-t td{border-bottom-color:#22304d}
-  .yqc-crm .yqc-t tr.falta td{background:rgba(220,38,38,.15)}
+  .yqc-crm .yqc-hint{color:#64748b}
+  .yqc-crm .yqc-res{background:#fff;border-color:#cbd5e1}
+  .yqc-crm .yqc-res div{border-bottom-color:#f1f5f9}
+  .yqc-crm .yqc-res div:hover{background:#eef2ff}
+  .yqc-crm .yqc-res small,.yqc-crm .yqc-mute{color:#64748b}
+  .yqc-crm .yqc-tw{max-height:280px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px}
+  .yqc-crm .yqc-t th{background:#f8fafc;color:#475569;border-bottom-color:#e2e8f0}
+  .yqc-crm .yqc-t td{border-bottom-color:#f1f5f9}
+  .yqc-crm .yqc-t tr.falta td{background:#fef2f2}
   .yqc-crm .yqc-t input{width:80px;padding:3px 5px;border-color:#f87171}
-  .yqc-crm .yqc-okc{color:#34d399}
-  .yqc-crm .yqc-warn{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#fbbf24}
-  .yqc-crm .yqc-log{background:#0f1a2e;border-color:#2b3a57;color:#cbd5e1}
-  .yqc-crm .yqc-btn.sec{background:#1e2b45;color:#e2e8f0;border:1px solid #33456a}
+  .yqc-crm .yqc-okc{color:#059669}
+  .yqc-crm .yqc-warn{background:#fffbeb;border-color:#fde68a;color:#92400e}
+  .yqc-crm .yqc-log{background:#f8fafc;border-color:#e2e8f0;color:#334155}
+  .yqc-crm .yqc-btn.sec{background:#f1f5f9;color:#334155;border:1px solid #cbd5e1}
   .yqc-btn.azul{background:#2563eb;white-space:nowrap;padding:8px 12px;font-size:12.5px}
   .yqc-btn.violeta{background:linear-gradient(135deg,#7c3aed,#9333ea)}
   .yqc-btn.chico{padding:6px 10px;font-size:12px;white-space:nowrap}
-  .yqc-crm .yqc-f label{color:#8b9bb8}
-  .yqc-crm .yqc-ok{color:#34d399}
+  .yqc-crm .yqc-f label{color:#475569}
+  .yqc-crm .yqc-ok{color:#059669}
   @media (max-width:560px){.yqc-crm .yqc-row{grid-template-columns:1fr;gap:4px}}
   .yqc-crm .yqc-box.col{flex-direction:column;align-items:stretch;gap:6px}
   .yqc-crm .yqc-box.col input{font-family:inherit;font-size:13px}
   .yqc-hlinks{display:inline-flex;gap:6px;margin-left:10px;vertical-align:middle}
   .yqc-hl{font-size:11.5px;font-weight:800;padding:5px 10px;border-radius:7px;color:#fff!important;text-decoration:none}
   .yqc-hl.azul{background:#0284c7}.yqc-hl.violeta{background:#7c3aed}
-  .yqc-crm .yqc-bad{color:#f87171}
+  .yqc-crm .yqc-bad{color:#dc2626}
   #yqc-add-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 20px 0;padding:9px 12px;border:1px solid #c7d2fe;background:#eef2ff;border-radius:10px;font-family:inherit}
   #yqc-add-bar .t{font-size:12.5px;font-weight:800;color:#3730a3}
   #yqc-add-bar input{width:210px;border:1px solid #a5b4fc;border-radius:7px;padding:6px 9px;font-size:13px;background:#fff;color:#0f172a}
@@ -10925,11 +10927,11 @@ document.addEventListener('keydown', (e) => {
   .yqc-marca{outline:3px solid #f59e0b!important;outline-offset:1px}
   /* Botones de las ventanas: más grandes y siempre a la vista (pie fijo abajo) */
   .yqc-m .yqc-foot{position:sticky;bottom:0;z-index:3;background:inherit;border-radius:0 0 14px 14px}
-  .yqc-crm .yqc-m .yqc-foot{background:#16213a}
+  .yqc-crm .yqc-m .yqc-foot{background:#fff}
   .yqc-m .yqc-foot .yqc-btn{min-height:46px;padding:12px 24px;font-size:14.5px;border-radius:10px}
   .yqc-m .yqc-foot #yqc-go,.yqc-m .yqc-foot #yqc-c-go{min-width:220px}
   .yqc-m .yqc-foot > span{display:flex;gap:10px;align-items:center}
-  .yqc-toast{pointer-events:none;position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;z-index:100001;transition:opacity .3s;max-width:90vw}
+  .yqc-toast{pointer-events:none;position:fixed;left:50%;top:18px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;z-index:100001;transition:opacity .3s;max-width:90vw}
   .yqc-toast.yqc-warn,.yqc-toast.yqc-error{background:#b91c1c}
   `;
   document.head.appendChild(css);
@@ -11003,7 +11005,7 @@ document.addEventListener('keydown', (e) => {
   // Busca palabra por palabra ("Juan Gaffuri" encuentra "GAFFURI SOENGAS JUAN MARTIN"),
   // en nombre y en razón social; si se escribe un número largo, busca por CUIT/DNI.
   const CLI_COLS = [{ field: 'CLIE_NOMBRE', title: 'Nombre' }, { field: 'CLIE_RAZON_SOCIAL', title: 'Razón' }, { field: 'CLIE_CUIT', title: 'CUIT' },
-    { field: 'CLIE_LOCALIDAD', title: 'Localidad' }, { field: 'CLIE_DOMICILIO', title: 'Domicilio' }, { field: 'PROV_ID_PROV', title: 'Prov' },
+    { field: 'CLIE_LOCALIDAD', title: 'Localidad' }, { field: 'CLIE_DOMICILIO', title: 'Domicilio' }, { field: 'CLIE_CP', title: 'CP' }, { field: 'PROV_ID_PROV', title: 'Prov' },
     { field: 'COVE_ID_COVE', title: 'COVE' }, { field: 'LIDP_ID_LIDP', title: 'LIDP' }, { field: 'VEHA_ID_VEHA', title: 'VEHA' }];
   async function buscarClientes(txt){
     const limpio = txt.replace(/[\s.\-]/g, '');
@@ -11123,6 +11125,7 @@ document.addEventListener('keydown', (e) => {
       <div class="yqc-sec">🚚 Datos de envío</div>
       ${fila('Dirección de envío', `<input id="yqc-dir" placeholder="Calle 1234" value="${esc(val('cf-direccion'))}">`)}
       ${fila('Ciudad de envío', `<input id="yqc-ciu" placeholder="Buenos Aires" value="${esc(val('cf-ciudad'))}">`)}
+      ${fila('Código postal (CP)', `<input id="yqc-cp" placeholder="1425" inputmode="numeric" value="${esc(val('cf-cp'))}">`)}
       ${fila('Provincia de envío', `<input id="yqc-prov" placeholder="Buenos Aires" value="${esc(val('cf-provincia'))}">`)}
       ${fila('País de envío', `<input id="yqc-pais" value="Argentina">`)}
       ${fila('Localidad de envío', `<input id="yqc-loc" placeholder="San Martín">`)}
@@ -11145,7 +11148,7 @@ document.addEventListener('keydown', (e) => {
     $('yqc-nuevo-cli').onclick = () => abrirCliente(c => elegirCliente(c));
     // Lo que el admin toca a mano no se pisa con el autocompletado
     bd.querySelectorAll('.yqc-b input, .yqc-b select, .yqc-b textarea').forEach(el => el.addEventListener('input', () => { if (el.id) _tocados.add(el.id); }));
-    ['yqc-dir', 'yqc-ciu', 'yqc-prov'].forEach(id => { if (val(id)) _tocados.add(id); });
+    ['yqc-dir', 'yqc-ciu', 'yqc-prov', 'yqc-cp'].forEach(id => { if (val(id)) _tocados.add(id); });
     if (val('yqc-obs')) _tocados.add('yqc-obs');
 
     // Transportistas (misma lista compartida que el CRM)
@@ -11245,7 +11248,7 @@ document.addEventListener('keydown', (e) => {
 
   // Columnas del pedido que se copian al autocompletar (último pedido del cliente o un N° puntual)
   const PED_COLS = ['PEDI_NUMERO_SOLO', 'PEDI_FECHA', 'DESC_ESTADO', 'CLIE_ID_CLIE', 'CLIE_NOMBRE', 'CLIE_RAZON_SOCIAL', 'CLIE_CUIT', 'EXTE_ID_EXTE', 'VEHA_ID_VEHA', 'COVE_ID_COVE', 'LIDP_ID_LIDP', 'PUVE_ID_PUVE', 'CEDI_ID_ORIG',
-    'CLIE_ID_FACT', 'FACT_NOMBRE', 'FACT_CUIT', 'PEDI_DIRECCION_DE_ENVIO', 'PEDI_CIUDAD_DE_ENVIO', 'PEDI_PROVINCIA_DE_ENVIO', 'PEDI_PAIS_DE_ENVIO', 'PEDI_LOCALIDAD_DE_ENVIO'];
+    'CLIE_ID_FACT', 'FACT_NOMBRE', 'FACT_CUIT', 'PEDI_DIRECCION_DE_ENVIO', 'PEDI_CIUDAD_DE_ENVIO', 'PEDI_PROVINCIA_DE_ENVIO', 'PEDI_PAIS_DE_ENVIO', 'PEDI_LOCALIDAD_DE_ENVIO', 'PEDI_CODIGO_POSTAL_DE_ENV'];
   const pedCols = () => PED_COLS.map((f, i) => f === 'PEDI_NUMERO_SOLO' ? { field: f, title: f, order: i + 1, sortDirection: 'DESC', sortOrder: 1 } : { field: f, title: f, order: i + 1 });
   function aplicarPedido(o, forzar, elegirFact){
     const ok = [];
@@ -11260,6 +11263,7 @@ document.addEventListener('keydown', (e) => {
     setVal('yqc-prov', o.PEDI_PROVINCIA_DE_ENVIO, forzar);
     setVal('yqc-pais', o.PEDI_PAIS_DE_ENVIO, forzar);
     setVal('yqc-loc', o.PEDI_LOCALIDAD_DE_ENVIO, forzar);
+    setVal('yqc-cp', o.PEDI_CODIGO_POSTAL_DE_ENV, forzar);
     if (o.CLIE_ID_FACT && o.CLIE_ID_FACT !== o.CLIE_ID_CLIE && (forzar || !_cliFact)) { elegirFact({ id: o.CLIE_ID_FACT, CLIE_NOMBRE: o.FACT_NOMBRE, CLIE_CUIT: o.FACT_CUIT }); ok.push('cliente de facturación'); }
     pistaLista();
     return ok;
@@ -11281,7 +11285,7 @@ document.addEventListener('keydown', (e) => {
       } else {
         // Cliente sin pedidos: se usan los datos de su ficha
         setVal('yqc-cove', c.COVE_ID_COVE); setVal('yqc-lidp', c.LIDP_ID_LIDP); setVal('yqc-veha', c.VEHA_ID_VEHA);
-        setVal('yqc-dir', c.CLIE_DOMICILIO); setVal('yqc-loc', c.CLIE_LOCALIDAD); setVal('yqc-prov', PROV_NOMBRE[c.PROV_ID_PROV]);
+        setVal('yqc-dir', c.CLIE_DOMICILIO); setVal('yqc-loc', c.CLIE_LOCALIDAD); setVal('yqc-cp', c.CLIE_CP); setVal('yqc-prov', PROV_NOMBRE[c.PROV_ID_PROV]);
         pistaLista();
         if (marca) marca.textContent = '· sin pedidos anteriores: se usaron los datos de su ficha';
       }
@@ -11371,6 +11375,7 @@ document.addEventListener('keydown', (e) => {
       if (val('yqc-prov')) data.PEDI_PROVINCIA_DE_ENVIO = val('yqc-prov');
       if (val('yqc-pais')) data.PEDI_PAIS_DE_ENVIO = val('yqc-pais');
       if (val('yqc-loc')) data.PEDI_LOCALIDAD_DE_ENVIO = val('yqc-loc');
+      if (val('yqc-cp')) data.PEDI_CODIGO_POSTAL_DE_ENV = val('yqc-cp');
       const ee = estadoEnvioFinal(); if (ee) data.PEDI_ESTADO_DEL_ENVIO = ee;
       if (val('yqc-pago')) data.PEDI_ESTADO_DE_PAGO = val('yqc-pago');
       log('Creando pedido con ' + incl.length + ' productos…');
