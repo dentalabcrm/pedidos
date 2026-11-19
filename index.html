@@ -11767,7 +11767,7 @@ document.addEventListener('keydown', (e) => {
       bar = document.createElement('div'); bar.id = 'yqc-bar'; bar.className = 'yqc-bar';
       bar.innerHTML = `<button type="button" id="yqc-b-ped" title="Crea el pedido en Yiqi con los productos, cantidades y precios de este carrito (atajo: Shift + clic del medio)">📤 Cargar pedido en Yiqi</button>
         <button type="button" class="yqc-cli" id="yqc-b-cli" title="Da de alta un cliente nuevo en Yiqi (atajo: Ctrl + clic del medio)">👤 Cargar cliente en Yiqi</button>
-        <button type="button" id="yqc-b-mail" style="background:#fef2f2;border-color:#fecaca;color:#b91c1c" title="Panel del CRM para mandar un pedido al depósito por mail (con el PDF del presupuesto) y después Google Calendar">✉ Mail al depósito</button><div class="yqc-ult" id="yqc-ult"></div>`;
+        <button type="button" id="yqc-b-mail" style="background:#fef2f2;border-color:#fecaca;color:#b91c1c" title="Panel del CRM para mandar un pedido al depósito por mail (con el PDF del presupuesto) y después Google Calendar (atajo: 3)">✉ Mail al depósito</button><div class="yqc-ult" id="yqc-ult"></div>`;
       ancla.insertAdjacentElement('afterend', bar);
       $('yqc-b-ped').onclick = abrirPedido;
       $('yqc-b-cli').onclick = () => abrirCliente();
@@ -11811,6 +11811,27 @@ document.addEventListener('keydown', (e) => {
   // mousedown dispara la acción; auxclick/mouseup sólo se cancelan (evita autoscroll / abrir links en otra pestaña)
   document.addEventListener('mousedown', e => { if (onMedio(e)) e.preventDefault(); }, true);
   document.addEventListener('auxclick', e => { if (e.button === 1 && esAdmin()) { const k = combosMouse(); if (coincide(e, k.pedido) || coincide(e, k.cliente)) e.preventDefault(); } }, true);
+
+  // ── Atajos con números (solo admin, sin estar escribiendo en un campo): ──
+  // 1 = "Armá tu pedido" (pantalla principal) · 2 = Pedidos Yiqi · 3 = Mail al depósito
+  const MODALES_ABIERTOS = '.yqc-bd, #ped-modal-bd, #gcal-backdrop, .pwfin-backdrop, #zoom-prod-backdrop, #pedido-full-backdrop, #presu-backdrop, #wa-pedido-backdrop, #admin-login-backdrop';
+  function irArmaTuPedido(){
+    try { if (window._pyq && window._pyq.cerrar) window._pyq.cerrar(); } catch (e) {}
+    const h = Array.from(document.querySelectorAll('#app h1, #app h2, #app h3')).find(x => /arm[aá] tu pedido/i.test(x.textContent || ''));
+    if (h) h.scrollIntoView({ behavior: 'smooth', block: 'start' }); else window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.repeat) return;
+    const n = { Digit1: 1, Numpad1: 1, Digit2: 2, Numpad2: 2, Digit3: 3, Numpad3: 3 }[e.code];
+    if (!n || !esAdmin()) return;
+    const el = document.activeElement, tag = (el && el.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
+    if (document.querySelector(MODALES_ABIERTOS)) return;
+    e.preventDefault();
+    if (n === 1) irArmaTuPedido();
+    else if (n === 2) { if (window._pyq && window._pyq.abrir) window._pyq.abrir(); }
+    else if (n === 3) { if (window.depAbrirMailDeposito) window.depAbrirMailDeposito(''); else toast('El panel del depósito todavía se está cargando, probá en un segundo', 'warn'); }
+  });
 
   // Para el módulo "Pedidos en Yiqi" del catálogo
   window._yqc = { token, yfetch, toast, esAdmin, pedirLogin, confirmar, pedirTexto };
@@ -12432,7 +12453,7 @@ document.addEventListener('keydown', (e) => {
     const scrollEl = w.querySelector('.pyq-scroll'); const sTop = scrollEl ? scrollEl.scrollTop : 0, sLeft = scrollEl ? scrollEl.scrollLeft : 0;
     w.innerHTML = `
       <div class="pyq-bar">
-        <button class="pyq-btn sec" data-a="crm" title="Volver al catálogo (Esc)">← Catálogo</button>
+        <button class="pyq-btn sec" data-a="crm" title="Volver al catálogo (Esc o 1)">← Catálogo</button>
         <span class="pyq-title">Pedidos</span>
         <button class="pyq-btn" data-a="refresh">${loading ? '⏳ Actualizando…' : '🔄 Actualizar'}</button>
         <select data-a="dias" title="Período">
@@ -12607,7 +12628,7 @@ document.addEventListener('keydown', (e) => {
     if (!admin || !ancla) { if (b) b.remove(); if (!admin && abierto()) cerrarPanel(); return; }
     if (!b) {
       b = document.createElement('button'); b.id = 'btn-pedidos-yiqi'; b.className = ancla.className;
-      b.textContent = '📋 Pedidos Yiqi'; b.title = 'Ver y modificar los pedidos de Yiqi (solo admin)';
+      b.textContent = '📋 Pedidos Yiqi'; b.title = 'Ver y modificar los pedidos de Yiqi (solo admin) · atajos: 1 catálogo · 2 Pedidos Yiqi · 3 Mail al depósito';
       b.onclick = abrirPanel; ancla.insertAdjacentElement('afterend', b);
     }
   }
