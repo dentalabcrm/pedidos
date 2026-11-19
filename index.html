@@ -10917,7 +10917,19 @@ document.addEventListener('keydown', (e) => {
   #yqc-add-bar .t{font-size:12.5px;font-weight:800;color:#3730a3}
   #yqc-add-bar input{width:210px;border:1px solid #a5b4fc;border-radius:7px;padding:6px 9px;font-size:13px;background:#fff;color:#0f172a}
   #yqc-add-bar .o{font-size:12px;color:#64748b}
-  .yqc-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;z-index:100001;transition:opacity .3s;max-width:90vw}
+  .yqc-conf .yqc-m{width:min(520px,100%)}
+  .yqc-conf-txt{white-space:pre-wrap;font-size:13.5px;line-height:1.5}
+  .yqc-conf-in{width:100%;box-sizing:border-box;margin-top:10px;border:1px solid #cbd5e1;border-radius:8px;padding:8px 10px;font-size:14px}
+  .yqc-btn.rojo{background:#dc2626}
+  .yqc-btn.apagado{opacity:.6}
+  .yqc-marca{outline:3px solid #f59e0b!important;outline-offset:1px}
+  /* Botones de las ventanas: más grandes y siempre a la vista (pie fijo abajo) */
+  .yqc-m .yqc-foot{position:sticky;bottom:0;z-index:3;background:inherit;border-radius:0 0 14px 14px}
+  .yqc-crm .yqc-m .yqc-foot{background:#16213a}
+  .yqc-m .yqc-foot .yqc-btn{min-height:46px;padding:12px 24px;font-size:14.5px;border-radius:10px}
+  .yqc-m .yqc-foot #yqc-go,.yqc-m .yqc-foot #yqc-c-go{min-width:220px}
+  .yqc-m .yqc-foot > span{display:flex;gap:10px;align-items:center}
+  .yqc-toast{pointer-events:none;position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;z-index:100001;transition:opacity .3s;max-width:90vw}
   .yqc-toast.yqc-warn,.yqc-toast.yqc-error{background:#b91c1c}
   `;
   document.head.appendChild(css);
@@ -10934,6 +10946,28 @@ document.addEventListener('keydown', (e) => {
     return bd;
   }
   function cerrar(id){ const el = $(id); if (el) el.remove(); }
+  // Un clic en un botón de estas ventanas no le saca el foco al campo que se estaba escribiendo:
+  // así nada se mueve entre que se aprieta y se suelta el mouse, y el clic siempre entra.
+  document.addEventListener('mousedown', e => { const b = e.target.closest && e.target.closest('.yqc-bd .yqc-btn, #yqc-add-bar .yqc-btn'); if (b && e.button === 0) e.preventDefault(); }, true);
+  // Confirmación y pedido de texto dentro de la página: el navegador puede bloquear confirm()/prompt()
+  // (por ejemplo si el catálogo está dentro de otra página, o si se tildó "no mostrar más diálogos").
+  function confirmar(texto, opciones){
+    const o = opciones || {};
+    return new Promise(resolve => {
+      const id = 'yqc-conf-' + Date.now();
+      const bd = modal(id, o.titulo || 'Confirmar', `<div class="yqc-conf-txt">${esc(texto)}</div>${o.input != null ? `<input id="${id}-in" class="yqc-conf-in" value="${esc(o.input)}" placeholder="${esc(o.placeholder || '')}" autocomplete="off">` : ''}`,
+        `<span></span><span style="display:flex;gap:8px"><button class="yqc-btn sec" data-r="0">${esc(o.cancelar || 'Cancelar')}</button><button class="yqc-btn ${o.peligro ? 'rojo' : 'ok'}" data-r="1">${esc(o.ok || 'Confirmar')}</button></span>`);
+      bd.style.zIndex = 100005; bd.classList.add('yqc-conf');
+      const fin = v => { cerrar(id); resolve(v); };
+      const inp = $(id + '-in');
+      bd.querySelector('[data-r="1"]').onclick = () => fin(inp ? inp.value : true);
+      bd.querySelector('[data-r="0"]').onclick = () => fin(inp ? null : false);
+      bd.querySelector('[data-x]').onclick = () => fin(inp ? null : false);
+      bd.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fin(inp ? null : false); } if (e.key === 'Enter' && (inp || e.target.tagName !== 'BUTTON')) { e.preventDefault(); fin(inp ? inp.value : true); } });
+      setTimeout(() => (inp || bd.querySelector('[data-r="1"]')).focus(), 30);
+    });
+  }
+  const pedirTexto = (texto, def, opciones) => confirmar(texto, Object.assign({ input: def || '', ok: 'Aceptar' }, opciones || {}));
 
   // ── Login de Yiqi (queda guardado sólo en este navegador, como en el CRM) ──
   function pedirLogin(){
@@ -11020,14 +11054,24 @@ document.addEventListener('keydown', (e) => {
   const OBS_ENVIAR = { 5: 'TRANSFERENCIA', 6: 'EFECTIVO', 7: 'LINK DE PAGO (TARJETA)' };
   const COND_PAGO_T = ['EFECTIVO', 'TRANSFERENCIA', 'TARJETA DE CRÉDITO', 'TARJETA DE DÉBITO', 'LINK DE PAGO', 'CUENTA CORRIENTE'];
   const COND_A_ESTADO = { 'EFECTIVO': 'EFECTIVO', 'TRANSFERENCIA': 'TRANSFERENCIA', 'TARJETA DE CRÉDITO': 'LINK DE PAGO (TARJETA)', 'TARJETA DE DÉBITO': 'LINK DE PAGO (TARJETA)', 'LINK DE PAGO': 'LINK DE PAGO (TARJETA)', 'CUENTA CORRIENTE': 'CUENTA CORRIENTE' };
-  const TRANSP_DEF = ['OCA', 'Andreani', 'Correo Argentino', 'Via Cargo', 'Expreso Imagina', 'Envíos Dentalab'];
+  // Todos los transportes: las dos listas compartidas del CRM (dentalab/ed_transportes y dentalab/transportistas)
+  // + los que aparecen en los pedidos de Yiqi. Primero los más usados y después en orden alfabético.
+  const TRANSP_DEF = ['Envíos Dentalab','OCA','Andreani','Correo Argentino','Via Cargo','Expreso Imagina','Transporte Nicolas Gorgone S.R.L','Expreso Lider',
+    'Expreso Mar del Plata','Buspack','Oro Negro','Cruz del Sur','Alta Cordoba','Camionera Mendocina','Jet Smart','Integral Pack','Crucero del Norte',
+    'Crucero Express','Flecha Bus','JetPaq','CREDIFIN','Chevallier','Tres Hermanos','Rodriguez Hnos','Tomas Beraldi','Expreso Demonte',
+    'Central Argentino','Transporte Orion','Expreso Landaburu','Transporte El Padrino','Balut Encomienda','Tascar S.r.l','Expreso Fueguino',
+    'Expreso Lancioni','Micro','Expreso Heral','Expreso Garmendia','Expreso Frontera','Expreso Punta Alta','Expreso Alfa','Expreso Lobruno',
+    'Expreso La Veloz del Norte','Plusmar','Pulky'];
+  const T_PRIMERO = ['Envíos Dentalab','OCA','Andreani','Correo Argentino','Via Cargo'];
   async function transportistas(){
-    try {
-      const v = (await db.ref('dentalab/transportistas').once('value')).val();
-      const arr = v ? (Array.isArray(v) ? v : Object.values(v)).filter(Boolean) : [];
-      TRANSP_DEF.forEach(t => { if (!arr.includes(t)) arr.push(t); });
-      return arr;
-    } catch (e) { return TRANSP_DEF.slice(); }
+    const kk = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const listas = [TRANSP_DEF];
+    for (const path of ['dentalab/ed_transportes', 'dentalab/transportistas']) {
+      try { const v = (await db.ref(path).once('value')).val(); if (v) listas.push((Array.isArray(v) ? v : Object.values(v)).filter(x => typeof x === 'string')); } catch (e) {}
+    }
+    const m = new Map(); listas.flat().forEach(t => { t = String(t || '').trim(); if (t && !m.has(kk(t))) m.set(kk(t), t); });
+    const pos = t => { const i = T_PRIMERO.findIndex(p => kk(p) === kk(t)); return i < 0 ? 99 : i; };
+    return [...m.values()].sort((a, b) => pos(a) - pos(b) || a.localeCompare(b, 'es'));
   }
 
   let _cli = null, _cliFact = null, _ids = {}, _fuente = {}, _tocados = new Set(), _obsModo = 0;
@@ -11072,7 +11116,7 @@ document.addEventListener('keydown', (e) => {
         <div data-w="dia"><label>Día</label><input id="yqc-obs-dia" placeholder="Ej: Lunes 24"></div>
         <div><label>Horario</label><input id="yqc-obs-hor" value="12 a 18 hs"></div>
         <div data-w="tr"><label>Transporte</label><select id="yqc-obs-tr"><option value="">— Elegir —</option></select></div>
-        <div data-w="tr"><label>Tipo</label><select id="yqc-obs-tipo"><option value="">— Elegir —</option><option>Domicilio</option><option>Sucursal</option></select></div>
+        <div data-w="tr"><label>Tipo</label><select id="yqc-obs-tipo"><option value="">— Elegir —</option><option>Domicilio</option><option>Sucursal</option><option>Depósito</option><option>Terminal</option></select></div>
         <div data-w="tr"><label>Pago</label><select id="yqc-obs-cp"><option value="">— Elegir —</option>${COND_PAGO_T.map(x => `<option>${x}</option>`).join('')}</select></div>
       </div>
       <textarea id="yqc-obs" placeholder="Notas internas del pedido…">${esc(val('cf-obs'))}</textarea>
@@ -11084,7 +11128,7 @@ document.addEventListener('keydown', (e) => {
       ${fila('Localidad de envío', `<input id="yqc-loc" placeholder="San Martín">`)}
       <div class="yqc-sec">📊 Estados</div>
       ${fila('Estado del envío', `<select id="yqc-estenv"><option value="">— Sin especificar —</option><option${modalidad === 'retiro' ? ' selected' : ''}>RETIRA</option><option${modalidad === 'envio' ? ' selected' : ''}>ENVIAR</option></select>`,
-        `<div id="yqc-estenv-tr" class="yqc-dos" style="display:none"><select id="yqc-env-tr"><option value="">— Elegir transporte —</option></select><select id="yqc-env-tipo"><option value="">— Domicilio o Sucursal —</option><option>Domicilio</option><option>Sucursal</option></select></div>`)}
+        `<div id="yqc-estenv-tr" class="yqc-dos" style="display:none"><select id="yqc-env-tr"><option value="">— Elegir transporte —</option></select><select id="yqc-env-tipo"><option value="">— Domicilio, Sucursal… —</option><option>Domicilio</option><option>Sucursal</option><option>Depósito</option><option>Terminal</option></select></div>`)}
       ${fila('Estado de pago', `<select id="yqc-pago">${PAGO.map(x => `<option value="${esc(x)}">${esc(x || '— Sin especificar —')}</option>`).join('')}</select>`)}
       <div class="yqc-sec">💲 Cobro del envío (servicio del pedido)</div>
       <div class="yqc-dos3"><label class="yqc-chk"><input type="checkbox" id="yqc-env-on" ${env.activo ? 'checked' : ''}> Cobrar envío</label><select id="yqc-env-seyi">${opts(SEYI, env.seyi)}</select><input id="yqc-env-monto" inputmode="numeric" placeholder="Monto final" value="${env.monto || ''}"></div>
@@ -11094,9 +11138,10 @@ document.addEventListener('keydown', (e) => {
       <div id="yqc-falta-msg"></div>
       <div id="yqc-log" class="yqc-log"></div>`,
       `<span class="yqc-hint">Precios = precio final por unidad (IVA incluido), igual que en el CRM.</span>
-       <span style="display:flex;gap:8px"><button class="yqc-btn sec" id="yqc-cancel">Cancelar</button><button class="yqc-btn violeta" id="yqc-go" disabled>📤 Cargar en Yiqi</button></span>`);
+       <span style="display:flex;gap:8px"><button class="yqc-btn sec" id="yqc-cancel">Cancelar</button><button class="yqc-btn violeta" id="yqc-go">📤 Cargar en Yiqi</button></span>`);
     bd.classList.add('yqc-crm');
     $('yqc-cancel').onclick = () => cerrar('yqc-ped');
+    $('yqc-go').onclick = () => confirmarYCargar(items);
     $('yqc-nuevo-cli').onclick = () => abrirCliente(c => elegirCliente(c));
     // Lo que el admin toca a mano no se pisa con el autocompletado
     bd.querySelectorAll('.yqc-b input, .yqc-b select, .yqc-b textarea').forEach(el => el.addEventListener('input', () => { if (el.id) _tocados.add(el.id); }));
@@ -11141,7 +11186,6 @@ document.addEventListener('keydown', (e) => {
     try { const r = await resolverIds(items.map(i => i.sku)); _ids = r.ids; _fuente = r.fuente; }
     catch (e) { toast('⚠ ' + e.message, 'warn'); }
     pintarIds(items);
-    $('yqc-go').onclick = () => confirmarYCargar(items);
     habilitar();
   }
 
@@ -11277,7 +11321,12 @@ document.addEventListener('keydown', (e) => {
     $('yqc-falta-msg').innerHTML = faltan ? `<div class="yqc-warn">⚠ ${faltan} producto${faltan > 1 ? 's' : ''} sin ID de Yiqi (en rojo): escribí el ID o se carga el pedido SIN ${faltan > 1 ? 'esos productos' : 'ese producto'}.</div>` : '';
     habilitar();
   }
-  function habilitar(){ const b = $('yqc-go'); if (b) b.disabled = !_cli || /⏳/.test($('yqc-items')?.textContent || ''); }
+  function faltaParaCargar(){
+    if (/⏳/.test($('yqc-items')?.textContent || '')) return 'Esperá un segundo: todavía se están buscando los productos en Yiqi.';
+    if (!_cli) return 'Elegí el cliente de la lista (tocá su nombre en los resultados de búsqueda), o creálo con "➕ Nuevo".';
+    return '';
+  }
+  function habilitar(){ const b = $('yqc-go'); if (!b) return; b.disabled = false; b.classList.toggle('apagado', !!faltaParaCargar()); b.title = faltaParaCargar() || 'Crear el pedido en Yiqi'; }
   function log(msg){ const l = $('yqc-log'); if (!l) return; l.style.display = 'block'; l.textContent += (l.textContent ? '\n' : '') + msg; }
 
   function estadoEnvioFinal(){
@@ -11288,7 +11337,8 @@ document.addEventListener('keydown', (e) => {
   }
 
   async function confirmarYCargar(items){
-    if (!_cli) return;
+    const falta = faltaParaCargar();
+    if (falta) { toast('⚠ ' + falta, 'warn'); if (!_cli) { $('yqc-cq-q')?.focus(); const q = $('yqc-cq-q'); if (q) { q.classList.add('yqc-marca'); setTimeout(() => q.classList.remove('yqc-marca'), 1600); } } return; }
     const incl = items.filter(i => _ids[i.sku]);
     const excl = items.filter(i => !_ids[i.sku]);
     const envOn = $('yqc-env-on').checked;
@@ -11302,7 +11352,7 @@ document.addEventListener('keydown', (e) => {
       `Productos: ${incl.length}${excl.length ? ` (${excl.length} SIN incluir: ${excl.map(i => i.sku).join(', ')})` : ''}\n` +
       (envOn && envMonto > 0 ? `Envío: ${$('yqc-env-seyi').selectedOptions[0].text} ${money(envMonto)}\n` : '') +
       `Total aprox.: ${money(tot)}\n\n¿Confirmás?`;
-    if (!confirm(txt)) return;
+    if (!(await confirmar(txt, { titulo: '📤 Cargar pedido en Yiqi', ok: 'Sí, cargar pedido' }))) return;
 
     const btn = $('yqc-go'); btn.disabled = true; btn.textContent = '⏳ Cargando…';
     guardarPrefs({ exte: val('yqc-exte'), veha: val('yqc-veha'), puve: val('yqc-puve'), cedi: val('yqc-cedi') });
@@ -11517,7 +11567,7 @@ document.addEventListener('keydown', (e) => {
         query('CLIENTE', { page: 1, pageSize: 10, columns: cols, filters: [{ columnName: 'CLIE_NOMBRE', operator: '=', value: d.CLIE_NOMBRE }] }).catch(() => null)
       ]);
       const vistos = new Set(), lista = [...(porCuit?.data || []), ...(porNom?.data || [])].filter(c => !vistos.has(c.id) && vistos.add(c.id));
-      if (lista.length && !confirm(`⚠ Ya existe en Yiqi:\n\n${lista.map(c => `• ${c.CLIE_NOMBRE} · ${c.CLIE_CUIT || 'sin CUIT'} (ID ${c.id})`).join('\n')}\n\n¿Crear el cliente igual?`)) {
+      if (lista.length && !(await confirmar(`⚠ Ya existe en Yiqi:\n\n${lista.map(c => `• ${c.CLIE_NOMBRE} · ${c.CLIE_CUIT || 'sin CUIT'} (ID ${c.id})`).join('\n')}\n\n¿Crear el cliente igual?`, { titulo: 'Cliente repetido', ok: 'Crear igual' }))) {
         btn.disabled = false; btn.textContent = '📤 Crear en Yiqi'; return;
       }
       btn.textContent = '👤 Creando…';
@@ -11548,7 +11598,7 @@ document.addEventListener('keydown', (e) => {
       }
     });
     if (!lineas.length) { toast('No hay cambios para guardar', 'ok'); return; }
-    if (!confirm(`Se va a ACTUALIZAR el cliente ID ${_cliEditId} en Yiqi:\n\n${lineas.join('\n')}\n\n¿Confirmás?`)) return;
+    if (!(await confirmar(`Se va a ACTUALIZAR el cliente ID ${_cliEditId} en Yiqi:\n\n${lineas.join('\n')}\n\n¿Confirmás?`, { titulo: '💾 Actualizar cliente', ok: 'Sí, actualizar' }))) return;
     const btn = $('yqc-c-go'); btn.disabled = true; btn.textContent = '💾 Guardando…';
     try {
       await api('CLIENTE/' + _cliEditId + '?schemaId=' + SCHEMA, 'PUT', { schemaId: SCHEMA, data: cambios });
@@ -11607,7 +11657,7 @@ document.addEventListener('keydown', (e) => {
       // Productos que Yiqi no tiene con ese SKU: se pide el ID (queda guardado para todos) o se omiten
       for (const i of items) {
         if (ids[i.sku]) continue;
-        const r = window.prompt(`El SKU ${i.sku} — ${i.nombre} no aparece en Yiqi.\n\nEscribí su ID interno de Yiqi para incluirlo (queda guardado para todos), o dejalo vacío para NO incluirlo.`, '');
+        const r = await pedirTexto(`El SKU ${i.sku} — ${i.nombre} no aparece en Yiqi.\n\nEscribí su ID interno de Yiqi para incluirlo (queda guardado para todos), o dejalo vacío para NO incluirlo.`, '', { titulo: 'Producto sin ID de Yiqi', placeholder: 'ID interno de Yiqi' });
         const id = parseInt(String(r || '').replace(/\D/g, ''), 10);
         if (id) { ids[i.sku] = id; guardarIdExtra(i.sku, id); }
       }
@@ -11631,7 +11681,7 @@ document.addEventListener('keydown', (e) => {
         (yaEsta.length ? `\n⚠ Ya están en el pedido (se agregan como otra línea): ${yaEsta.map(i => i.sku).join(', ')}\n` : '') +
         (ped.estado && !/en espera de pago/i.test(ped.estado) ? `\n⚠ El pedido está "${ped.estado}": Yiqi puede no dejar agregar productos en ese estado.\n` : '') +
         `\nTotal a agregar: ${money(tot)}\n\n¿Es este el pedido?`;
-      if (!confirm(txt)) { setB(orig); return; }
+      if (!(await confirmar(txt, { titulo: '📥 Cargar en pedido Yiqi', ok: 'Sí, es este pedido' }))) { setB(orig); return; }
 
       let ok = 0; const errores = [];
       for (let k = 0; k < incl.length; k++) {
@@ -11753,7 +11803,7 @@ document.addEventListener('keydown', (e) => {
   document.addEventListener('auxclick', e => { if (e.button === 1 && esAdmin()) { const k = combosMouse(); if (coincide(e, k.pedido) || coincide(e, k.cliente)) e.preventDefault(); } }, true);
 
   // Para el módulo "Pedidos en Yiqi" del catálogo
-  window._yqc = { token, yfetch, toast, esAdmin, pedirLogin };
+  window._yqc = { token, yfetch, toast, esAdmin, pedirLogin, confirmar, pedirTexto };
   window.yiqiCatCargarPedido = abrirPedido;
   window.yiqiCatCargarCliente = abrirCliente;
 })();
@@ -11826,8 +11876,10 @@ document.addEventListener('keydown', (e) => {
     'con devolución':['#9333ea','#fff'], 'a reservar':['#f59e0b','#3b2f00'],
     'esperando 2da validación':['#0ea5e9','#fff'], 'en espera de picking list':['#14b8a6','#fff'], 'asociado a picking list':['#0d9488','#fff']
   };
-  let prefs = { dias: 7, ml: false, q: '', estado: '', sort: 'PEDI_NUMERO_SOLO', dir: -1 };
+  let prefs = { dias: 7, ml: false, q: '', estado: '', sort: 'AUDI_FECHA_ALTA', dir: -1 };
   try { Object.assign(prefs, JSON.parse(localStorage.getItem(LS_PREFS) || '{}')); } catch(e) {}
+  // Orden por defecto: fecha de creación, del más reciente al más antiguo (se aplica una vez a lo guardado)
+  if (!prefs.ordenFechaV1) { prefs.sort = 'AUDI_FECHA_ALTA'; prefs.dir = -1; prefs.ordenFechaV1 = true; try { localStorage.setItem(LS_PREFS, JSON.stringify(prefs)); } catch(e) {} }
   const copiando = {}; let resaltar = null;
   const NO_ELIMINABLE = /^(entregado|con devoluci[oó]n|staging out)$/i;
   let rows = [], lastTs = 0, loading = false, editing = null, savingN = 0, lastErr = '', needLogin = false;
@@ -12044,7 +12096,7 @@ document.addEventListener('keydown', (e) => {
   // ── Copiar pedido: misma acción del workflow de Yiqi ("Copiar Pedido" → estado "Copiando Pedido") ──
   async function copiarPedido(id) {
     const r = rows.find(x => String(rowId(x)) === String(id)); if (!r) return;
-    if (!confirm(`¿Copiar el pedido N° ${nro(r)} de ${r.CLIE_NOMBRE || 'cliente'}?\n\nYiqi crea un pedido nuevo igual (mismos productos y datos), en estado En espera de pago.`)) return;
+    if (!(await Y().confirmar(`¿Copiar el pedido N° ${nro(r)} de ${r.CLIE_NOMBRE || 'cliente'}?\n\nYiqi crea un pedido nuevo igual (mismos productos y datos), en estado En espera de pago.`, { titulo: '⧉ Copiar pedido', ok: 'Sí, copiar' }))) return;
     const H = { 'Authorization': 'Bearer ' + await token(), 'Content-Type': 'application/json' };
     const maxNro = rows.reduce((m, x) => Math.max(m, Number(nro(x)) || 0), 0);
     const t0 = Date.now() - 60000;
@@ -12087,7 +12139,7 @@ document.addEventListener('keydown', (e) => {
   async function eliminarPedido(id) {
     const r = rows.find(x => String(rowId(x)) === String(id)); if (!r) return;
     const numero = String(nro(r));
-    const escrito = prompt(`⚠ ELIMINAR PEDIDO EN YIQI\n\nPedido N° ${numero}\nCliente: ${r.CLIE_NOMBRE || '—'}\nTotal: ${fmtMoney(r.PEDI_TOTAL)}\nEstado: ${r.DESC_ESTADO || '—'}\n\nNo se puede deshacer. Para confirmar escribí el número del pedido (${numero}):`);
+    const escrito = await Y().pedirTexto(`⚠ ELIMINAR PEDIDO EN YIQI\n\nPedido N° ${numero}\nCliente: ${r.CLIE_NOMBRE || '—'}\nTotal: ${fmtMoney(r.PEDI_TOTAL)}\nEstado: ${r.DESC_ESTADO || '—'}\n\nNo se puede deshacer. Para confirmar escribí el número del pedido (${numero}):`, '', { titulo: '🗑 Eliminar pedido', ok: 'Eliminar', peligro: true, placeholder: numero });
     if (escrito == null) return;
     if (escrito.trim() !== numero) { toast('No se eliminó: el número escrito no coincide.', 'warn'); return; }
     const H = { 'Authorization': 'Bearer ' + await token(), 'Content-Type': 'application/json' };
@@ -12214,7 +12266,7 @@ document.addEventListener('keydown', (e) => {
     const r = rows.find(x => String(rowId(x)) === String(id)); if (!r) return;
     const numero = nro(r);
     if (!r.COVE_ID_COVE) { toast('⚠ El pedido ' + numero + ' no tiene Condición de venta: completala primero (columna Condición de venta en ⚙ Columnas).', 'warn'); return; }
-    if (!confirm(`¿Solicitar reserva del pedido N° ${numero}?\n\nCliente: ${r.CLIE_NOMBRE || '—'}\nTotal: ${fmtMoney(r.PEDI_TOTAL)}\n\nYiqi lo pasa a "A reservar" y reserva el stock.`)) return;
+    if (!(await Y().confirmar(`¿Solicitar reserva del pedido N° ${numero}?\n\nCliente: ${r.CLIE_NOMBRE || '—'}\nTotal: ${fmtMoney(r.PEDI_TOTAL)}\n\nYiqi lo pasa a "A reservar" y reserva el stock.`, { titulo: '📦 Solicitar reserva', ok: 'Sí, reservar' }))) return;
     copiando[id] = true; render();
     try {
       const H = { 'Authorization': 'Bearer ' + await token(), 'Content-Type': 'application/json' };
@@ -12236,7 +12288,7 @@ document.addEventListener('keydown', (e) => {
     const r = rows.find(x => String(rowId(x)) === String(id)); if (!r) return;
     const numero = nro(r);
     if (typeof carrito === 'undefined' || typeof catalogoBySku === 'undefined') { toast('No encontré el carrito del catálogo', 'warn'); return; }
-    if (carrito.size && !confirm(`Tu pedido actual tiene ${carrito.size} producto(s).\n¿Reemplazarlo por los productos del pedido N° ${numero}?`)) return;
+    if (carrito.size && !(await Y().confirmar(`Tu pedido actual tiene ${carrito.size} producto(s).\n¿Reemplazarlo por los productos del pedido N° ${numero}?`, { titulo: '🛒 Al carrito', ok: 'Reemplazar' }))) return;
     copiando[id] = true; render();
     try {
       const H = { 'Authorization': 'Bearer ' + await token(), 'Content-Type': 'application/json' };
@@ -12298,10 +12350,15 @@ document.addEventListener('keydown', (e) => {
         .some(v => String(v || '').toLowerCase().includes(q));
     });
     const k = prefs.sort, d = prefs.dir, col = COL_DEF[k];
-    const val = r => col && col.map ? (col.map[r[k]] || '') : (k === 'PEDI_NUMERO_SOLO' ? Number(nro(r)) : r[k]);
-    out.sort((a, b) => { const x = val(a), y = val(b);
-      if (typeof x === 'number' || typeof y === 'number') return ((Number(x)||0) - (Number(y)||0)) * d;
-      return String(x || '').localeCompare(String(y || ''), 'es') * d; });
+    const esFecha = k === 'AUDI_FECHA_ALTA' || k === 'PEDI_FECHA';
+    const ts = v => { const t = new Date(v).getTime(); return isNaN(t) ? 0 : t; };
+    const val = r => col && col.map ? (col.map[r[k]] || '') : esFecha ? ts(r[k] || r.PEDI_FECHA || r.AUDI_FECHA_ALTA)
+      : (k === 'PEDI_NUMERO_SOLO' ? Number(nro(r)) : k === 'PEDI_TOTAL' ? Number(r[k]) || 0 : r[k]);
+    // Desempate: N° de pedido, del más nuevo al más viejo
+    out.sort((a, b) => { const x = val(a), y = val(b); let c;
+      if (typeof x === 'number' || typeof y === 'number') c = ((Number(x)||0) - (Number(y)||0)) * d;
+      else c = String(x || '').localeCompare(String(y || ''), 'es') * d;
+      return c || (Number(nro(b)) - Number(nro(a))); });
     return out;
   }
   function puedeEditar(c, r) {
