@@ -4460,7 +4460,7 @@ const SINONIMOS_RAW = [
   ['Escáner intraoral', 'scanner intraoral', 'escaner', 'scanner', 'escáner 3D', 'intraoral'],
   ['RX Portátil', 'rayos x', 'rayos', 'radiografía', 'radiografia', 'equipo de rayos'],
   ['Sistema Radiográfico Digital', 'RVG', 'radiovisiógrafo', 'radiovisiografo', 'sensor', 'sensor RVG', 'sensor digital'],
-  ['Lámpara de Fotocurado', 'fotocurado', 'lámpara LED', 'luz de fotocurado', 'lámpara de luz'],
+  ['Lámpara de Fotocurado', 'lámpara LED', 'luz de fotocurado', 'lámpara de luz'], // sin "fotocurado" suelto: traía adhesivos/barreras al buscar "lámpara"
   ['Autoclave', 'esterilizador', 'esterilizadora', 'clase B', 'autoclave 21L'],
   ['Fisiodispenser', 'motor de implantes', 'implant motor'], // sin "implantes" suelto (traía contra ángulos "• Implantes")
   ['Micromotor Eléctrico', 'motor eléctrico', 'motor de cirugía', 'micromotor LED'],
@@ -5312,7 +5312,9 @@ function _buscarProductosBase(){
         const fields = [idx[0], idx[1]];
         const fieldsSinPunt = [idx[2], idx[3]];
         const _ok = t => {
-          const candidatos = _candidatosSinonimos(t);
+          // Un sinónimo que repite otra palabra de la misma búsqueda no cuenta: "lámpara de fotocurado"
+          // expandía "lámpara" → "fotocurado" y traía todo lo que dice fotocurado (adhesivos, barreras…).
+          const candidatos = _candidatosSinonimos(t).filter(c => c === t || !(tokens.includes(c) || (' ' + tokens.join(' ') + ' ').includes(' ' + c + ' ')));
           return candidatos.some(c =>
             fields.some(f => f.includes(c)) || fieldsSinPunt.some(f => f.includes(_stripAccents(c)))
           );
