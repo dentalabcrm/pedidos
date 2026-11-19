@@ -12460,7 +12460,7 @@ document.addEventListener('keydown', (e) => {
           ${[[1,'Hoy'],[2,'Hoy y ayer'],[3,'Últimos 3 días'],[7,'Últimos 7 días'],[15,'Últimos 15 días'],[30,'Últimos 30 días'],[90,'Últimos 3 meses'],[180,'Últimos 6 meses'],[365,'Último año'],[730,'Últimos 2 años'],[0,'Pendientes (sin entregar, 60 días)']].map(([d,t]) => `<option value="${d}" ${prefs.dias==d?'selected':''}>${t}</option>`).join('')}
         </select>
         <select data-a="vend" title="Vendedor"><option value="">Todos los vendedores</option>${Object.entries(rows.reduce((m, r) => { const k = r.VEHA_ID_VEHA; if (k != null) m[k] = (m[k] || 0) + 1; return m; }, {})).sort((a, b) => String(MAP_VEHA[a[0]] || '#' + a[0]).localeCompare(String(MAP_VEHA[b[0]] || '#' + b[0]))).map(([k, n]) => `<option value="${esc(k)}" ${String(prefs.vend) === String(k) ? 'selected' : ''}>${esc(MAP_VEHA[k] || 'Vendedor #' + k)} (${n})</option>`).join('')}</select>
-        <input type="text" class="pyq-q" data-a="q" placeholder="Buscar nro, cliente, observaciones…" value="${esc(prefs.q)}">
+        <input type="text" class="pyq-q" data-a="q" placeholder="Buscar nro, cliente, observaciones… (Espacio)" value="${esc(prefs.q)}">
         <label class="pyq-chk"><input type="checkbox" data-a="ml" ${prefs.ml ? 'checked' : ''}> Incluir MercadoLibre</label>
         <span style="position:relative;display:inline-block;"><button class="pyq-btn sec" data-a="cols">⚙ Columnas</button>${colsAbierto ? panelCols() : ''}</span>
         <span class="pyq-info">${prefs.dias > 31 ? `<span style="color:#fcd34d">${prefs.q ? 'Búsqueda en Yiqi · ' : (prefs.vend ? '' : (truncadoLargo ? 'Mostrando los 2000 más recientes — escribí en el buscador para buscar en todo el período · ' : 'Escribí en el buscador para buscar en todo el período · '))}</span>` : ''}${lista.length} de ${rows.length} pedidos${hace != null ? ` · actualizado ${hace < 1 ? 'recién' : 'hace ' + hace + ' min'}` : ''} · <span style="color:#a78bfa">✎</span> = editable (clic en la celda)</span>
@@ -12637,6 +12637,16 @@ document.addEventListener('keydown', (e) => {
     setInterval(() => { if (visible()) refrescar(false); }, 120000);
     document.addEventListener('visibilitychange', refrescarSiViejo);
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && abierto() && !editing && !document.querySelector('.yqc-bd')) cerrarPanel(); });
+    // Espacio (con Pedidos Yiqi abierto y sin estar escribiendo) → buscador de la grilla (N°, cliente, observaciones…)
+    document.addEventListener('keydown', e => {
+      if (e.code !== 'Space' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !abierto() || editing) return;
+      const el = document.activeElement, tag = (el && el.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
+      if (document.querySelector('.yqc-bd, #ped-modal-bd, #gcal-backdrop')) return;
+      const q = document.querySelector('#pyq-wrap [data-a="q"]'); if (!q) return;
+      e.preventDefault(); e.stopPropagation();
+      q.focus(); q.select();
+    }, true);
   }
   window._pyq = { refrescar, guardar, render, copiarPedido, eliminarPedido, abrir: abrirPanel, cerrar: cerrarPanel, get rows() { return rows; } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
