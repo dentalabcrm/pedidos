@@ -10931,6 +10931,14 @@ document.addEventListener('keydown', (e) => {
   .yqc-m .yqc-foot .yqc-btn{min-height:46px;padding:12px 24px;font-size:14.5px;border-radius:10px}
   .yqc-m .yqc-foot #yqc-go,.yqc-m .yqc-foot #yqc-c-go{min-width:220px}
   .yqc-m .yqc-foot > span{display:flex;gap:10px;align-items:center}
+  .yqc-dup{border:1px solid #fde68a;background:#fffbeb;border-radius:9px;padding:8px 10px;margin:6px 0 4px;font-size:12.5px}
+  .yqc-dup.fuerte{border-color:#fecaca;background:#fef2f2}
+  .yqc-dup .t{font-weight:800;color:#b45309;margin-bottom:4px}
+  .yqc-dup.fuerte .t{color:#b91c1c}
+  .yqc-dup .r{display:flex;align-items:center;gap:6px;padding:5px 0;border-top:1px solid rgba(0,0,0,.06)}
+  .yqc-dup .r .n{flex:1;min-width:0}
+  .yqc-dup .r span{color:#64748b}
+  .yqc-dup .r em{color:#b91c1c;font-style:normal;font-weight:700}
   .yqc-toast{pointer-events:none;position:fixed;left:50%;top:18px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;z-index:100001;transition:opacity .3s;max-width:90vw}
   .yqc-toast.yqc-warn,.yqc-toast.yqc-error{background:#b91c1c}
   `;
@@ -11463,13 +11471,13 @@ document.addEventListener('keydown', (e) => {
     ['yqc-c-mail', 'CLIE_MAIL', 'Mail'], ['yqc-c-tel', 'CLIE_TE1', 'Teléfono'], ['yqc-c-dom', 'CLIE_DOMICILIO', 'Domicilio'],
     ['yqc-c-cp', 'CLIE_CP', 'CP'], ['yqc-c-loc', 'CLIE_LOCALIDAD', 'Localidad'], ['yqc-c-prov', 'PROV_ID_PROV', 'Provincia', 'num'],
     ['yqc-c-obs', 'CLIE_OBSERVACIONES', 'Observaciones']];
-  let _cliEditId = null, _cliOrig = null;
+  let _cliEditId = null, _cliOrig = null, _cliOnCreado = null, _dupT = null, _dupSeq = 0;
 
   function abrirCliente(onCreado){
     if (!esAdmin()) return;
     (async () => {
       if (!(await asegurarSesion())) return;
-      _cliEditId = null; _cliOrig = null;
+      _cliEditId = null; _cliOrig = null; _cliOnCreado = onCreado || null;
       // Sólo se sugieren los datos del presupuesto (no los datos personales guardados en este navegador)
       const nom = (typeof _presuClienteNombre !== 'undefined' && _presuClienteNombre) ? _presuClienteNombre : '';
       const dni = String((typeof _presuClienteDni !== 'undefined' && _presuClienteDni) || '').replace(/\D/g, '');
@@ -11482,6 +11490,7 @@ document.addEventListener('keydown', (e) => {
         ${fila('Razón Social', `<input id="yqc-c-razon" placeholder="IGUAL AL NOMBRE SI ES PERSONA FÍSICA">`)}
         ${fila('Tipo de documento*', `<select id="yqc-c-tidd">${opts(TIDD_TODOS, dni.length === 11 ? 1 : 3)}</select>`)}
         ${fila('CUIT / Documento*', `<div style="display:flex;gap:6px"><input id="yqc-c-cuit" placeholder="Ej: 20-12345678-9" value="${esc(dni)}"><button type="button" class="yqc-btn sec chico" id="yqc-c-arca" title="Busca el CUIT en el padrón de ARCA y completa razón social, condición de IVA y domicilio fiscal">Completar desde ARCA</button></div>`, '<div id="yqc-c-arca-msg" class="yqc-hint"></div>')}
+        <div id="yqc-c-dupbox"></div>
         <div class="yqc-sec">👤 Cliente</div>
         ${fila('Activo (cliente)', '<span class="yqc-okc">✓ Sí</span>')}
         ${fila('Cuenta contable (como cliente)', '<input value="001.001.002.001 - DEUDORES POR VENTA" readonly>')}
@@ -11513,6 +11522,8 @@ document.addEventListener('keydown', (e) => {
       });
       // Editar un cliente existente: se busca, se cargan sus datos y el botón pasa a "Actualizar"
       montarBuscador('yqc-ce', c => cargarClienteParaEditar(c.id));
+      ['yqc-c-nombre', 'yqc-c-cuit'].forEach(id => $(id).addEventListener('input', () => { if (_cliEditId) return; clearTimeout(_dupT); _dupT = setTimeout(detectarDuplicados, 450); }));
+      if (val('yqc-c-nombre') || val('yqc-c-cuit')) setTimeout(detectarDuplicados, 300);
       setTimeout(() => $('yqc-c-nombre')?.focus(), 50);
     })();
   }
@@ -11530,11 +11541,49 @@ document.addEventListener('keydown', (e) => {
         else e.value = v == null ? '' : String(v);
       });
       _cliEditId = id; _cliOrig = leerFormCliente();
+      if ($('yqc-c-dupbox')) $('yqc-c-dupbox').innerHTML = '';
       $('yqc-ce-q').value = o.CLIE_NOMBRE || '';
       badge.textContent = '✓ ' + (o.CLIE_NOMBRE || '') + ' (ID ' + id + ')';
       $('yqc-cli').querySelector('.yqc-h span').firstChild.textContent = '👤 Editar Empresa / Cliente ';
       const b = $('yqc-c-go'); b.textContent = '💾 Actualizar en Yiqi'; b.classList.remove('violeta'); b.classList.add('ok');
     } catch (e) { badge.textContent = ''; toast('⚠ No se pudo leer el cliente: ' + e.message, 'warn'); }
+  }
+
+  // ── Detección de clientes ya cargados: busca en vivo mientras se escribe el nombre o el DNI/CUIT ──
+  async function detectarDuplicados(){
+    const box = $('yqc-c-dupbox'); if (!box || _cliEditId) return;
+    const nombre = val('yqc-c-nombre');
+    const doc = val('yqc-c-cuit').replace(/\D/g, '');
+    const palabras = nombre.split(/\s+/).filter(w => w.length >= 3).slice(0, 4);
+    if (!palabras.length && doc.length < 6) { box.innerHTML = ''; return; }
+    const my = ++_dupSeq;
+    box.innerHTML = '<div class="yqc-hint" style="margin:6px 0">🔎 Buscando si ya está cargado en Yiqi…</div>';
+    const cols = [{ field: 'CLIE_NOMBRE', title: 'Nombre' }, { field: 'CLIE_RAZON_SOCIAL', title: 'Razón' }, { field: 'CLIE_CUIT', title: 'CUIT' }, { field: 'CLIE_LOCALIDAD', title: 'Localidad' }, { field: 'COVE_ID_COVE', title: 'COVE' }, { field: 'LIDP_ID_LIDP', title: 'LIDP' }, { field: 'VEHA_ID_VEHA', title: 'VEHA' }];
+    const q = (filters, por) => query('CLIENTE', { page: 1, pageSize: 8, columns: cols, filters }).then(j => (j?.data || []).map(c => Object.assign(c, { _por: por }))).catch(() => []);
+    try {
+      const pedidos = [];
+      if (doc.length >= 6) {
+        pedidos.push(q([{ columnName: 'CLIE_CUIT', operator: 'LIKE', value: doc }], 'doc'));
+        if (doc.length === 11) pedidos.push(q([{ columnName: 'CLIE_CUIT', operator: 'LIKE', value: doc.slice(2, 10) }], 'doc'));
+      }
+      if (palabras.length) {
+        pedidos.push(q(palabras.map(w => ({ columnName: 'CLIE_NOMBRE', operator: 'LIKE', value: w })), 'nombre'));
+        pedidos.push(q(palabras.map(w => ({ columnName: 'CLIE_RAZON_SOCIAL', operator: 'LIKE', value: w })), 'nombre'));
+      }
+      const todos = (await Promise.all(pedidos)).flat();
+      if (my !== _dupSeq || _cliEditId) return;
+      const m = new Map();
+      todos.forEach(c => { const k = String(c.id); const v = m.get(k); if (!v || c._por === 'doc') m.set(k, c); });
+      const lista = [...m.values()].sort((a, b) => (a._por === 'doc' ? 0 : 1) - (b._por === 'doc' ? 0 : 1)).slice(0, 8);
+      if (!lista.length) { box.innerHTML = `<div class="yqc-hint" style="margin:6px 0;color:#059669">✓ No hay ningún cliente en Yiqi con ese ${doc.length >= 6 && palabras.length ? 'nombre ni DNI/CUIT' : doc.length >= 6 ? 'DNI/CUIT' : 'nombre'}.</div>`; return; }
+      const fuerte = lista.some(c => c._por === 'doc');
+      box.innerHTML = `<div class="yqc-dup ${fuerte ? 'fuerte' : ''}"><div class="t">${fuerte ? '⚠ Ya existe un cliente con ese DNI/CUIT' : '⚠ Puede que ya esté cargado'} (${lista.length})</div>
+        ${lista.map((c, i) => `<div class="r"><div class="n"><b>${esc(c.CLIE_NOMBRE || c.CLIE_RAZON_SOCIAL)}</b> <span>· ${esc(c.CLIE_CUIT || 'sin CUIT')}${c.CLIE_LOCALIDAD ? ' · ' + esc(c.CLIE_LOCALIDAD) : ''} · ID ${esc(c.id)}</span>${c._por === 'doc' ? ' <em>mismo DNI/CUIT</em>' : ''}</div>
+          ${_cliOnCreado ? `<button type="button" class="yqc-btn ok chico" data-dup-usar="${i}">✓ Usar en el pedido</button>` : ''}<button type="button" class="yqc-btn sec chico" data-dup-abrir="${i}">✏️ Abrir este</button></div>`).join('')}
+        <div class="yqc-hint">"Abrir este" carga sus datos para revisarlos o actualizarlos, sin crear uno nuevo.</div></div>`;
+      box.querySelectorAll('[data-dup-abrir]').forEach(b => b.onclick = () => { const c = lista[+b.dataset.dupAbrir]; $('yqc-ce-q').value = c.CLIE_NOMBRE || ''; cargarClienteParaEditar(c.id); });
+      box.querySelectorAll('[data-dup-usar]').forEach(b => b.onclick = () => { const c = lista[+b.dataset.dupUsar]; cerrar('yqc-cli'); toast('✓ Se usa el cliente que ya estaba cargado: ' + (c.CLIE_NOMBRE || ''), 'ok'); _cliOnCreado(c); });
+    } catch (e) { if (my === _dupSeq) box.innerHTML = ''; }
   }
 
   function leerFormCliente(){
