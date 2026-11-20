@@ -11258,7 +11258,7 @@ document.addEventListener('keydown', (e) => {
 
   // Columnas del pedido que se copian al autocompletar (último pedido del cliente o un N° puntual)
   const PED_COLS = ['PEDI_NUMERO_SOLO', 'PEDI_FECHA', 'DESC_ESTADO', 'CLIE_ID_CLIE', 'CLIE_NOMBRE', 'CLIE_RAZON_SOCIAL', 'CLIE_CUIT', 'EXTE_ID_EXTE', 'VEHA_ID_VEHA', 'COVE_ID_COVE', 'LIDP_ID_LIDP', 'PUVE_ID_PUVE', 'CEDI_ID_ORIG',
-    'CLIE_ID_FACT', 'FACT_NOMBRE', 'FACT_CUIT', 'PEDI_DIRECCION_DE_ENVIO', 'PEDI_CIUDAD_DE_ENVIO', 'PEDI_PROVINCIA_DE_ENVIO', 'PEDI_PAIS_DE_ENVIO', 'PEDI_LOCALIDAD_DE_ENVIO', 'PEDI_CODIGO_POSTAL_DE_ENV'];
+    'CLIE_ID_FACT', 'FACT_NOMBRE', 'FACT_CUIT', 'PEDI_DIRECCION_DE_ENVIO', 'PEDI_CIUDAD_DE_ENVIO', 'PEDI_PROVINCIA_DE_ENVIO', 'PEDI_PAIS_DE_ENVIO', 'PEDI_LOCALIDAD_DE_ENVIO', 'PEDI_CODIGO_POSTAL_DE_ENV', 'PEDI_OBSERVACIONES'];
   const pedCols = () => PED_COLS.map((f, i) => f === 'PEDI_NUMERO_SOLO' ? { field: f, title: f, order: i + 1, sortDirection: 'DESC', sortOrder: 1 } : { field: f, title: f, order: i + 1 });
   function aplicarPedido(o, forzar, elegirFact){
     const ok = [];
@@ -11274,6 +11274,11 @@ document.addEventListener('keydown', (e) => {
     setVal('yqc-pais', o.PEDI_PAIS_DE_ENVIO, forzar);
     setVal('yqc-loc', o.PEDI_LOCALIDAD_DE_ENVIO, forzar);
     setVal('yqc-cp', o.PEDI_CODIGO_POSTAL_DE_ENV, forzar);
+    // Notas internas (Observaciones en Yiqi): al copiar un N° se reemplazan; desde el último pedido solo si están vacías
+    const obsTa = $('yqc-obs'), obsV = String(o.PEDI_OBSERVACIONES || '').trim();
+    if (obsTa && obsV && (forzar || (!_tocados.has('yqc-obs') && !obsTa.value.trim()))) {
+      obsTa.value = obsV; ok.push('notas internas');
+    }
     if (o.CLIE_ID_FACT && o.CLIE_ID_FACT !== o.CLIE_ID_CLIE && (forzar || !_cliFact)) { elegirFact({ id: o.CLIE_ID_FACT, CLIE_NOMBRE: o.FACT_NOMBRE, CLIE_CUIT: o.FACT_CUIT }); ok.push('cliente de facturación'); }
     pistaLista();
     return ok;
