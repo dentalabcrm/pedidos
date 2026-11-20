@@ -11413,7 +11413,17 @@ document.addEventListener('keydown', (e) => {
         const o = (g && (g.data || g)) || {};
         numero = o.PEDI_NUMERO_SOLO || o.PEDI_NUMERO || '';
         totalYiqi = o.PEDI_TOTAL_MD != null ? Number(o.PEDI_TOTAL_MD) : null;
-      } catch (e) {}
+      } catch (e) { console.warn('[yiqi-cat] no se pudo leer el pedido creado', e); }
+      // Si Yiqi no devolvió el N°, se busca por ID (hasta 3 intentos)
+      for (let k = 0; !numero && k < 3; k++) {
+        try {
+          if (k) await new Promise(r => setTimeout(r, 1200));
+          const q = await query('PEDIDO', { page: 1, pageSize: 1, columns: ['ID', 'PEDI_NUMERO_SOLO', 'PEDI_TOTAL_MD'].map((f, i) => ({ field: f, title: f, order: i + 1 })), filters: [{ columnName: 'ID', operator: '=', value: Number(newId) }] });
+          const o = ((q && q.data) || [])[0] || {};
+          numero = o.PEDI_NUMERO_SOLO || '';
+          if (totalYiqi == null && o.PEDI_TOTAL_MD != null) totalYiqi = Number(o.PEDI_TOTAL_MD);
+        } catch (e) { console.warn('[yiqi-cat] no se pudo buscar el N° del pedido', e); }
+      }
       try { localStorage.setItem(LS_ULTIMO, JSON.stringify({ id: newId, numero, ts: Date.now(), firma: firma(nombreClienteSugerido(), items) })); } catch (e) {}
       mostrarExito(newId, numero, totalYiqi, tot, envMsg, excl, datosMail);
       actualizarBarra();
@@ -11440,15 +11450,20 @@ document.addEventListener('keydown', (e) => {
     m.querySelector('.yqc-foot').innerHTML = `<span style="display:flex;gap:8px;flex-wrap:wrap">
       ${numero ? `<button class="yqc-btn sec" id="yqc-copy">📋 Copiar N°</button>` : ''}
       <button class="yqc-btn sec" id="yqc-pdf">📄 PDF del pedido</button>
-      ${numero ? `<button class="yqc-btn" id="yqc-mail-dep" style="background:linear-gradient(135deg,#ef4444,#dc2626)" title="Abrir el panel del CRM para mandar el pedido al depósito por mail (y después Google Calendar)">✉ Mail al depósito</button>` : ''}</span>
+      <button class="yqc-btn" id="yqc-mail-dep" style="background:linear-gradient(135deg,#ef4444,#dc2626)" title="Abrir el panel del CRM para mandar el pedido al depósito por mail (y después Google Calendar)">✉ Mail al depósito</button></span>
       <button class="yqc-btn ok" id="yqc-fin">Listo</button>`;
     if (numero) $('yqc-copy').onclick = () => { try { navigator.clipboard.writeText(String(numero)).catch(() => {}); toast('📋 N° ' + numero + ' copiado', 'ok'); } catch (e) {} };
     $('yqc-pdf').onclick = () => pdfPedido(id, $('yqc-pdf'));
-    if (numero && $('yqc-mail-dep')) $('yqc-mail-dep').onclick = () => { cerrar('yqc-ped'); if (window.depAbrirMailDeposito) window.depAbrirMailDeposito(numero, datosMail); else toast('El panel del depósito todavía se está cargando, probá en un segundo', 'warn'); };
+    const abrirMail = (cerrarExito) => { if (cerrarExito) cerrar('yqc-ped'); if (window.depAbrirMailDeposito) window.depAbrirMailDeposito(numero, datosMail || {}); else toast('El panel del depósito todavía se está cargando, probá en un segundo', 'warn'); };
+    if ($('yqc-mail-dep')) $('yqc-mail-dep').onclick = () => abrirMail(true);
     $('yqc-fin').onclick = () => cerrar('yqc-ped');
     toast('✅ Pedido ' + (numero ? 'N° ' + numero + ' ' : '') + 'cargado en Yiqi', 'ok');
-    // Sin avisos que revisar → se abre solo el mail al depósito con todo completo
-    if (numero && !dif && !excl.length && window.depAbrirMailDeposito) setTimeout(() => { cerrar('yqc-ped'); window.depAbrirMailDeposito(numero, datosMail); }, 600);
+    // Se abre solo el mail al depósito con todo completo. Si hay avisos (total distinto, productos afuera),
+    // la pantalla de éxito queda abajo para verlos al cerrar el mail.
+    const hayAvisos = dif || excl.length > 0;
+    if (!numero) toast('⚠ Yiqi no devolvió el N° del pedido: completalo a mano en el mail', 'warn');
+    if (hayAvisos) toast('⚠ Revisá los avisos del pedido (quedan abajo del mail)', 'warn');
+    setTimeout(() => abrirMail(!hayAvisos), 500);
   }
   async function pdfPedido(id, btn){
     const w = window.open('', '_blank');
