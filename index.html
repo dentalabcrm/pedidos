@@ -11367,6 +11367,8 @@ document.addEventListener('keydown', (e) => {
       (envOn && envMonto > 0 ? `Envío: ${$('yqc-env-seyi').selectedOptions[0].text} ${money(envMonto)}\n` : '') +
       `Total aprox.: ${money(tot)}\n\n¿Confirmás?`;
     if (!(await confirmar(txt, { titulo: '📤 Cargar pedido en Yiqi', ok: 'Sí, cargar pedido' }))) return;
+    const datosMail = { cliente: _cli.CLIE_NOMBRE || _cli.CLIE_RAZON_SOCIAL || '', vendedor: $('yqc-veha').selectedOptions[0].text,
+      origen: $('yqc-exte').selectedOptions[0].text, envio: estadoEnvioFinal(), pago: val('yqc-pago'), cond: ($('yqc-cove').selectedOptions[0] || {}).text || '' };
 
     const btn = $('yqc-go'); btn.disabled = true; btn.textContent = '⏳ Cargando…';
     guardarPrefs({ exte: val('yqc-exte'), veha: val('yqc-veha'), puve: val('yqc-puve'), cedi: val('yqc-cedi') });
@@ -11413,7 +11415,7 @@ document.addEventListener('keydown', (e) => {
         totalYiqi = o.PEDI_TOTAL_MD != null ? Number(o.PEDI_TOTAL_MD) : null;
       } catch (e) {}
       try { localStorage.setItem(LS_ULTIMO, JSON.stringify({ id: newId, numero, ts: Date.now(), firma: firma(nombreClienteSugerido(), items) })); } catch (e) {}
-      mostrarExito(newId, numero, totalYiqi, tot, envMsg, excl);
+      mostrarExito(newId, numero, totalYiqi, tot, envMsg, excl, datosMail);
       actualizarBarra();
     } catch (e) {
       log('❌ ' + e.message);
@@ -11422,7 +11424,7 @@ document.addEventListener('keydown', (e) => {
     }
   }
 
-  function mostrarExito(id, numero, totalYiqi, totalEsperado, envMsg, excl){
+  function mostrarExito(id, numero, totalYiqi, totalEsperado, envMsg, excl, datosMail){
     const dif = totalYiqi != null && Math.abs(totalYiqi - totalEsperado) > 2;
     const m = $('yqc-ped'); if (!m) return;
     m.querySelector('.yqc-b').innerHTML = `
@@ -11442,9 +11444,11 @@ document.addEventListener('keydown', (e) => {
       <button class="yqc-btn ok" id="yqc-fin">Listo</button>`;
     if (numero) $('yqc-copy').onclick = () => { try { navigator.clipboard.writeText(String(numero)).catch(() => {}); toast('📋 N° ' + numero + ' copiado', 'ok'); } catch (e) {} };
     $('yqc-pdf').onclick = () => pdfPedido(id, $('yqc-pdf'));
-    if (numero && $('yqc-mail-dep')) $('yqc-mail-dep').onclick = () => { cerrar('yqc-ped'); if (window.depAbrirMailDeposito) window.depAbrirMailDeposito(numero); else toast('El panel del depósito todavía se está cargando, probá en un segundo', 'warn'); };
+    if (numero && $('yqc-mail-dep')) $('yqc-mail-dep').onclick = () => { cerrar('yqc-ped'); if (window.depAbrirMailDeposito) window.depAbrirMailDeposito(numero, datosMail); else toast('El panel del depósito todavía se está cargando, probá en un segundo', 'warn'); };
     $('yqc-fin').onclick = () => cerrar('yqc-ped');
     toast('✅ Pedido ' + (numero ? 'N° ' + numero + ' ' : '') + 'cargado en Yiqi', 'ok');
+    // Sin avisos que revisar → se abre solo el mail al depósito con todo completo
+    if (numero && !dif && !excl.length && window.depAbrirMailDeposito) setTimeout(() => { cerrar('yqc-ped'); window.depAbrirMailDeposito(numero, datosMail); }, 600);
   }
   async function pdfPedido(id, btn){
     const w = window.open('', '_blank');
@@ -12896,6 +12900,69 @@ const TIPOS_PEDIDO = new Proxy([], {
     return arr[prop];
   }
 });
+
+// ── Después de cargar un pedido en Yiqi: abrir "Nuevo pedido → depósito" con todo completo ──
+// Tipo de pedido según el origen y el estado del envío del pedido cargado.
+function _mailDepTipo(origen, envio) {
+  const env = /^\s*ENVIAR/i.test(String(envio || '')) ? 'enviar' : 'retira';
+  const o = String(origen || '').toLowerCase();
+  const pre = /web/.test(o) ? 'web-' : /jorge/.test(o) ? 'jorge-' : /gregorio/.test(o) ? 'gregorio-' : /^local/.test(o) ? 'mostrador-' : '';
+  return pre + env;
+}
+// Cobro según el estado de pago (y si no hay, la condición de venta). null = dejar el que pone el modal.
+function _mailDepCobro(pago, cond) {
+  const p = String(pago || '').toUpperCase().trim(), c = String(cond || '').toLowerCase();
+  if (p === 'TRANSFERENCIA') return 'TRANSFERENCIA';
+  if (p === 'EFECTIVO') return 'EFECTIVO';
+  if (/MOSTRADOR/.test(p)) return 'EF. /DEB. /TRANSF.';
+  if (/LINK DE PAGO/.test(p)) return 'LINK DE PAGO';
+  if (p === 'CUENTA CORRIENTE') return 'CUENTA CORRIENTE';
+  if (p === 'EN ESPERA') return 'A CONFIRMAR';
+  if (/transferencia/.test(c)) return 'TRANSFERENCIA';
+  if (/cuenta corriente/.test(c)) return 'CUENTA CORRIENTE';
+  if (/mercado pago|tarjeta/.test(c)) return 'LINK DE PAGO';
+  return null;
+}
+// d = { nro, cliente, vendedor, origen, envio, pago, cond }
+function _mailDepCompletar(d) {
+  const bd = document.getElementById('ped-modal-bd'); if (!bd || !d) return;
+  const $ = s => bd.querySelector(s);
+  const fire = (el, ev) => { if (el) el.dispatchEvent(new Event(ev, { bubbles: true })); };
+  const tiene = (el, v) => !!el && v != null && Array.from(el.options).some(o => o.value === v);
+  // 1) Vendedor (dispara su regla de cobro por defecto); no cambia el vendedor predeterminado guardado
+  const vSel = $('#env-vendedor');
+  if (tiene(vSel, d.vendedor)) {
+    let prev = null; try { prev = loadVendedorDefault(); } catch (e) {}
+    vSel.value = d.vendedor; fire(vSel, 'change');
+    try { if (prev != null) saveVendedorDefault(prev); } catch (e) {}
+  }
+  // 2) Tipo de pedido (Retira / Enviar / Web / Jorge / Gregorio / Mostrador)
+  const tipo = _mailDepTipo(d.origen, d.envio);
+  const t = TIPOS_PEDIDO.find(x => x.value === tipo);
+  const tSel = $('#env-tipo'), tTxt = $('#env-tipo-text');
+  if (t && tSel) { tSel.value = t.value; if (tTxt) tTxt.value = t.label; fire(tSel, 'change'); }
+  // 3) Responsable (tipos Web/Jorge/Gregorio/Mostrador) y cobro: se re-aplican si el modal los pisa al completar N° o cliente
+  const cobro = _mailDepCobro(d.pago, d.cond);
+  const cSel = $('#env-cobro');
+  cSel?.addEventListener('change', e => { if (e.isTrusted) bd.dataset.cobroManual = '1'; });
+  const rSel = $('#env-web-responsable');
+  rSel?.addEventListener('change', e => { if (e.isTrusted) bd.dataset.respManual = '1'; });
+  const aplicar = () => {
+    const wrap = $('#env-web-responsable-wrap');
+    if (wrap && wrap.style.display !== 'none' && bd.dataset.respManual !== '1' && tiene(rSel, d.vendedor) && rSel.value !== d.vendedor) { rSel.value = d.vendedor; fire(rSel, 'change'); }
+    if (cobro && bd.dataset.cobroManual !== '1' && tiene(cSel, cobro) && cSel.value !== cobro) { cSel.value = cobro; fire(cSel, 'change'); }
+  };
+  aplicar();
+  // 4) Cliente (al instante; después Yiqi lo confirma con el N°)
+  const cliIn = $('#env-cliente');
+  if (cliIn && d.cliente && !cliIn.value.trim()) { cliIn.value = String(d.cliente).trim(); cliIn.dataset.auto = '1'; fire(cliIn, 'input'); }
+  // 5) N° de pedido → completa cliente y adjunta el PDF del presupuesto
+  const nroIn = $('#env-nro');
+  [nroIn, cliIn].forEach(el => el?.addEventListener('input', () => setTimeout(aplicar, 0)));
+  if (nroIn && d.nro) { nroIn.value = String(d.nro).replace(/\D/g, ''); fire(nroIn, 'input'); nroIn.dispatchEvent(new Event('blur')); }
+  setTimeout(aplicar, 0);
+}
+window._mailDepCompletar = _mailDepCompletar;
 
 function abrirModalNuevoPedido() {
   const existing = document.getElementById('ped-modal-bd');
@@ -16420,10 +16487,12 @@ function saveVendedorDefault(nombre) {
   window.openEnvioGCalModal = openEnvioGCalModal;
   window.gcalAbrirEditorTransportes = gcalAbrirEditorTransportes;
   // Abre el panel con el N° de pedido ya puesto (se completa cliente + PDF del presupuesto solo)
-  window.depAbrirMailDeposito = async function(nro){
+  window.depAbrirMailDeposito = async function(nro, datos){
     if (!(Y().esAdmin && Y().esAdmin())) return;
     await enviosListos();
+    document.getElementById('ped-modal-bd')?.remove();
     abrirModalNuevoPedido();
+    if (datos && window._mailDepCompletar) { setTimeout(() => window._mailDepCompletar(Object.assign({ nro }, datos)), 120); return; }
     if (nro) setTimeout(() => {
       const inp = document.querySelector('#ped-modal-bd #env-nro');
       if (inp) { inp.value = String(nro).replace(/\D/g, ''); inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('blur')); }
