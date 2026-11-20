@@ -11481,9 +11481,22 @@ document.addEventListener('keydown', (e) => {
     // Se abre solo el mail al depósito con todo completo. Si hay avisos (total distinto, productos afuera),
     // la pantalla de éxito queda abajo para verlos al cerrar el mail.
     const hayAvisos = dif || excl.length > 0;
-    if (!numero) toast('⚠ Yiqi no devolvió el N° del pedido: completalo a mano en el mail', 'warn');
     if (hayAvisos) toast('⚠ Revisá los avisos del pedido (quedan abajo del mail)', 'warn');
-    setTimeout(() => abrirMail(!hayAvisos), 500);
+    setTimeout(() => {
+      abrirMail(!hayAvisos);
+      // Sin N° todavía: se sigue buscando en Yiqi con el mail abierto y se completa solo
+      if (!numero && window._mailDepEsperarNro) {
+        toast('⏳ Yiqi todavía no asignó el N° del pedido: se completa solo en el mail en cuanto aparezca', 'ok');
+        window._mailDepEsperarNro(async () => {
+          try { const g = await api('PEDIDO/' + id + '?schemaId=' + SCHEMA); const o = (g && (g.data || g)) || {}; if (o.PEDI_NUMERO_SOLO || o.PEDI_NUMERO) return o.PEDI_NUMERO_SOLO || o.PEDI_NUMERO; } catch (e) {}
+          const q = await query('PEDIDO', { page: 1, pageSize: 1, columns: [{ field: 'ID', title: 'ID', order: 1 }, { field: 'PEDI_NUMERO_SOLO', title: 'PEDI_NUMERO_SOLO', order: 2 }], filters: [{ columnName: 'ID', operator: '=', value: Number(id) }] });
+          return (((q && q.data) || [])[0] || {}).PEDI_NUMERO_SOLO || '';
+        }, {
+          onOk: n => { toast('✅ Yiqi asignó el N° ' + n + ': completado en el mail', 'ok'); try { const u = JSON.parse(localStorage.getItem(LS_ULTIMO) || 'null'); if (u && String(u.id) === String(id)) { u.numero = n; localStorage.setItem(LS_ULTIMO, JSON.stringify(u)); } } catch (e) {} },
+          onFalla: () => toast('⚠ Yiqi no asignó el N° en 2 minutos: completalo a mano en el mail', 'warn')
+        });
+      } else if (!numero) toast('⚠ Yiqi no devolvió el N° del pedido: completalo a mano en el mail', 'warn');
+    }, 500);
   }
   async function pdfPedido(id, btn){
     const w = window.open('', '_blank');
@@ -13163,6 +13176,42 @@ function _mailDepCompletar(d) {
   setTimeout(aplicar, 0);
 }
 window._mailDepCompletar = _mailDepCompletar;
+
+// Si Yiqi todavía no asignó el N° del pedido, se sigue buscando en segundo plano (con el mail ya abierto)
+// y se completa solo en cuanto aparece → eso trae el cliente y adjunta el PDF del presupuesto.
+// buscar(): promesa con el N° o vacío. Se detiene si cerrás el mail o escribís el N° a mano.
+function _mailDepEsperarNro(buscar, opts) {
+  opts = opts || {};
+  const maxMs = opts.maxMs || 120000, cada = opts.cada || 3000, t0 = Date.now();
+  let miBd = null;
+  const fin = (nroIn, ph) => { if (nroIn) { nroIn.placeholder = ph != null ? ph : (nroIn.dataset.ph || ''); delete nroIn.dataset.esperando; } };
+  const tick = async () => {
+    const bd = document.getElementById('ped-modal-bd');
+    if (!bd) { if (miBd || Date.now() - t0 > 8000) return; return setTimeout(tick, 300); }
+    if (miBd && bd !== miBd) return;           // se abrió otro mail: no tocarlo
+    miBd = bd;
+    const nroIn = bd.querySelector('#env-nro'); if (!nroIn) return;
+    if (nroIn.value.trim()) return fin(nroIn); // ya tiene N° (a mano o encontrado)
+    if (!nroIn.dataset.esperando) { nroIn.dataset.esperando = '1'; nroIn.dataset.ph = nroIn.placeholder || ''; nroIn.placeholder = '⏳ esperando N°…'; nroIn.title = 'Yiqi todavía no asignó el N° del pedido: se completa solo en cuanto aparezca'; }
+    let nro = '';
+    try { nro = String((await buscar()) || '').replace(/\D/g, ''); } catch (e) {}
+    if (document.getElementById('ped-modal-bd') !== bd) return;
+    if (nroIn.value.trim()) return fin(nroIn);
+    if (nro) {
+      fin(nroIn);
+      nroIn.value = nro;
+      nroIn.dispatchEvent(new Event('input', { bubbles: true })); nroIn.dispatchEvent(new Event('blur'));
+      nroIn.style.transition = 'box-shadow .3s'; nroIn.style.boxShadow = '0 0 0 3px rgba(16,185,129,.55)'; setTimeout(() => { nroIn.style.boxShadow = ''; }, 2500);
+      try { opts.onOk && opts.onOk(nro); } catch (e) {}
+      return;
+    }
+    if (Date.now() - t0 > maxMs) { fin(nroIn, 'completalo a mano'); try { opts.onFalla && opts.onFalla(); } catch (e) {} return; }
+    setTimeout(tick, cada);
+  };
+  setTimeout(tick, 400);
+}
+window._mailDepEsperarNro = _mailDepEsperarNro;
+
 
 function abrirModalNuevoPedido() {
   const existing = document.getElementById('ped-modal-bd');
