@@ -12824,7 +12824,10 @@ document.addEventListener('keydown', (e) => {
   document.addEventListener('keydown', e => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const t = e.target;
-    if (t && t.closest && t.closest('input,textarea,select,[contenteditable="true"]')) return;
+    // En el buscador de la grilla, las flechas ↑ ↓ igual mueven entre pedidos (el resto de las teclas escriben normal)
+    const enBuscador = !!(t && t.matches && t.matches('#pyq-wrap input.pyq-q'));
+    if (enBuscador && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    if (!enBuscador && t && t.closest && t.closest('input,textarea,select,[contenteditable="true"]')) return;
     // Solo si el foco está en la grilla, en el panel o en ningún lado (no dentro de otro modal)
     if (t && t !== document.body && t !== document.documentElement && !(t.closest && t.closest('#pyq-wrap,#pyq-prev'))) return;
     if (!grillaVisible() || document.getElementById('ped-modal-bd')) return;
