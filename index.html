@@ -13136,12 +13136,25 @@ function _mailDepCobro(pago, cond) {
   if (/mercado pago|tarjeta/.test(c)) return 'LINK DE PAGO';
   return null;
 }
-// d = { nro, cliente, vendedor, origen, envio, pago, cond }
-function _mailDepCompletar(d) {
+// Nombres de vendedor / origen / condición de venta según su ID en Yiqi (para completar el mail desde el N°)
+const MD_VEHA = {12:'Aris Samandjian',13:'Mercado Libre',4:'Juan Martin Gaffuri',8:'Federico Silva',7:'Eduardo Balassanian',5:'Jorge Campagnoli',3:'Carlos Cirigliano',1:'Local',10:'Mostrador',11:'Patricia Bazan',6:'POS Factura',9:'Showroom',2:'Gregorio Samandjian'};
+const MD_EXTE = {13:'WhatsApp',3:'Local',4:'Jorge (Dep 7)',6:'Gregorio (Dep 2)',10:'E. Balassanian',11:'Web',16:'Sólo Factura',2:'MercadoLibre'};
+const MD_COVE = {3:'Contado',6:'Transferencia bancaria',5:'Mercado Pago',7:'Tarjeta de Crédito',8:'Tarjeta de Débito',9:'Cuenta Corriente',4:'Cuenta Corriente - 30 días',2:'15 Días Fecha de Factura',1:'30 Días Fecha de Factura',10:'15 + 15 días F.P.F.'};
+const _mdId = v => (v && typeof v === 'object') ? (v.id != null ? v.id : v.ID) : v;
+// Datos del mail a partir de un pedido de Yiqi (fila de PEDIDO/query)
+function _mailDepDatosDePedido(p) {
+  const nom = (map, v) => { const id = _mdId(v); return map[id] || (typeof v === 'string' && isNaN(Number(v)) ? v : ''); };
+  return { vendedor: nom(MD_VEHA, p.VEHA_ID_VEHA), origen: nom(MD_EXTE, p.EXTE_ID_EXTE), envio: p.PEDI_ESTADO_DEL_ENVIO || '', pago: p.PEDI_ESTADO_DE_PAGO || '', cond: nom(MD_COVE, p.COVE_ID_COVE) };
+}
+window._mailDepDatosDePedido = _mailDepDatosDePedido;
+// d = { nro, cliente, vendedor, origen, envio, pago, cond }. desdeNro: los datos vienen de buscar el N° (pisan lo elegido antes)
+function _mailDepCompletar(d, opts) {
   const bd = document.getElementById('ped-modal-bd'); if (!bd || !d) return;
+  opts = opts || {};
   const $ = s => bd.querySelector(s);
   const fire = (el, ev) => { if (el) el.dispatchEvent(new Event(ev, { bubbles: true })); };
-  const tiene = (el, v) => !!el && v != null && Array.from(el.options).some(o => o.value === v);
+  const tiene = (el, v) => !!el && v != null && v !== '' && Array.from(el.options).some(o => o.value === v);
+  if (opts.desdeNro) { delete bd.dataset.cobroManual; delete bd.dataset.respManual; }
   // 1) Vendedor (dispara su regla de cobro por defecto); no cambia el vendedor predeterminado guardado
   const vSel = $('#env-vendedor');
   if (tiene(vSel, d.vendedor)) {
@@ -13150,28 +13163,31 @@ function _mailDepCompletar(d) {
     try { if (prev != null) saveVendedorDefault(prev); } catch (e) {}
   }
   // 2) Tipo de pedido (Retira / Enviar / Web / Jorge / Gregorio / Mostrador)
-  const tipo = _mailDepTipo(d.origen, d.envio);
-  const t = TIPOS_PEDIDO.find(x => x.value === tipo);
-  const tSel = $('#env-tipo'), tTxt = $('#env-tipo-text');
-  if (t && tSel) { tSel.value = t.value; if (tTxt) tTxt.value = t.label; fire(tSel, 'change'); }
-  // 3) Responsable (tipos Web/Jorge/Gregorio/Mostrador) y cobro: se re-aplican si el modal los pisa al completar N° o cliente
-  const cobro = _mailDepCobro(d.pago, d.cond);
-  const cSel = $('#env-cobro');
-  cSel?.addEventListener('change', e => { if (e.isTrusted) bd.dataset.cobroManual = '1'; });
-  const rSel = $('#env-web-responsable');
-  rSel?.addEventListener('change', e => { if (e.isTrusted) bd.dataset.respManual = '1'; });
+  if (d.origen || d.envio) {
+    const t = TIPOS_PEDIDO.find(x => x.value === _mailDepTipo(d.origen, d.envio));
+    const tSel = $('#env-tipo'), tTxt = $('#env-tipo-text');
+    if (t && tSel) { tSel.value = t.value; if (tTxt) tTxt.value = t.label; fire(tSel, 'change'); }
+  }
+  // 3) Responsable (tipos Web/Jorge/Gregorio/Mostrador) y cobro: se guardan en el modal y se re-aplican
+  //    si el modal los pisa al completar N° o cliente (los listeners se ponen una sola vez)
+  bd._mdDatos = { vendedor: d.vendedor, cobro: _mailDepCobro(d.pago, d.cond) };
+  const cSel = $('#env-cobro'), rSel = $('#env-web-responsable'), cliIn = $('#env-cliente'), nroIn = $('#env-nro');
   const aplicar = () => {
-    const wrap = $('#env-web-responsable-wrap');
-    if (wrap && wrap.style.display !== 'none' && bd.dataset.respManual !== '1' && tiene(rSel, d.vendedor) && rSel.value !== d.vendedor) { rSel.value = d.vendedor; fire(rSel, 'change'); }
-    if (cobro && bd.dataset.cobroManual !== '1' && tiene(cSel, cobro) && cSel.value !== cobro) { cSel.value = cobro; fire(cSel, 'change'); }
+    const md = bd._mdDatos || {}, wrap = $('#env-web-responsable-wrap');
+    if (wrap && wrap.style.display !== 'none' && bd.dataset.respManual !== '1' && tiene(rSel, md.vendedor) && rSel.value !== md.vendedor) { rSel.value = md.vendedor; fire(rSel, 'change'); }
+    if (md.cobro && bd.dataset.cobroManual !== '1' && tiene(cSel, md.cobro) && cSel.value !== md.cobro) { cSel.value = md.cobro; fire(cSel, 'change'); }
   };
+  if (!bd.dataset.mdListen) {
+    bd.dataset.mdListen = '1';
+    cSel?.addEventListener('change', e => { if (e.isTrusted) bd.dataset.cobroManual = '1'; });
+    rSel?.addEventListener('change', e => { if (e.isTrusted) bd.dataset.respManual = '1'; });
+    [nroIn, cliIn].forEach(el => el?.addEventListener('input', () => setTimeout(() => bd._mdAplicar && bd._mdAplicar(), 0)));
+  }
+  bd._mdAplicar = aplicar;
   aplicar();
   // 4) Cliente (al instante; después Yiqi lo confirma con el N°)
-  const cliIn = $('#env-cliente');
   if (cliIn && d.cliente && !cliIn.value.trim()) { cliIn.value = String(d.cliente).trim(); cliIn.dataset.auto = '1'; fire(cliIn, 'input'); }
-  // 5) N° de pedido → completa cliente y adjunta el PDF del presupuesto
-  const nroIn = $('#env-nro');
-  [nroIn, cliIn].forEach(el => el?.addEventListener('input', () => setTimeout(aplicar, 0)));
+  // 5) N° de pedido → completa cliente, tipo, cobro, vendedor y adjunta el PDF del presupuesto
   if (nroIn && d.nro) { nroIn.value = String(d.nro).replace(/\D/g, ''); fire(nroIn, 'input'); nroIn.dispatchEvent(new Event('blur')); }
   setTimeout(aplicar, 0);
 }
@@ -13397,7 +13413,7 @@ function abrirModalNuevoPedido() {
       try {
         // 2) Pedido por N° (nunca por "adivinar" el ID)
         const r = await yiqiFetch(`${API}/api/public/PEDIDO/query?schemaId=${SCHEMA}`, { method: 'POST', headers: H,
-          body: JSON.stringify({ page: 1, pageSize: 5, columns: ['ID', 'PEDI_NUMERO_SOLO', 'CLIE_NOMBRE', 'PEDI_RAZON_SOCIAL', 'DESC_ESTADO'].map((f, i) => ({ field: f, title: f, order: i + 1 })),
+          body: JSON.stringify({ page: 1, pageSize: 5, columns: ['ID', 'PEDI_NUMERO_SOLO', 'CLIE_NOMBRE', 'PEDI_RAZON_SOCIAL', 'DESC_ESTADO', 'VEHA_ID_VEHA', 'EXTE_ID_EXTE', 'COVE_ID_COVE', 'PEDI_ESTADO_DEL_ENVIO', 'PEDI_ESTADO_DE_PAGO'].map((f, i) => ({ field: f, title: f, order: i + 1 })),
             filters: [{ columnName: 'PEDI_NUMERO_SOLO', operator: '=', value: Number(nro) }] }) });
         if (my !== _envSeq) return;
         const j = r.ok ? await r.json() : {};
@@ -13406,6 +13422,8 @@ function abrirModalNuevoPedido() {
         const id = p.id || p.ID;
         const nombre = String(p.PEDI_RAZON_SOCIAL || p.CLIE_NOMBRE || '').trim();
         if (nombre && autoNombre() && my === _envSeq) { cliIn.value = nombre; cliIn.dataset.auto = '1'; cliIn.dispatchEvent(new Event('input', { bubbles: true })); }
+        // Tipo de pedido, cobro y vendedor del pedido de Yiqi
+        if (my === _envSeq && window._mailDepCompletar && window._mailDepDatosDePedido) { try { window._mailDepCompletar(window._mailDepDatosDePedido(p), { desdeNro: true }); } catch (e) { console.warn('[mail] no se pudieron completar tipo/cobro/vendedor', e); } }
         estado('<span style="color:#34d399">✓ ' + (nombre || 'Pedido encontrado') + (p.DESC_ESTADO ? ' · ' + p.DESC_ESTADO : '') + '</span> · <a href="https://me.yiqi.com.ar/view/PEDIDO?schemaId=328#/' + id + '" target="_blank" style="color:var(--blue)">ver en Yiqi ↗</a>');
         // 3) PDF del pedido → adjunto
         const atts = window._envAttachments || (window._envAttachments = []);
