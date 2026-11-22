@@ -12682,7 +12682,7 @@ document.addEventListener('keydown', (e) => {
   function marcarFila(id) {
     selId = id == null ? null : String(id);
     document.querySelectorAll('#pyq-wrap tr.pyq-sel').forEach(t => t.classList.remove('pyq-sel'));
-    if (selId == null) return;
+    if (selId == null) { aplicarCelda(false); return; }   // sin pedido marcado: también se borra la celda activa
     const tr = document.querySelector(`#pyq-wrap tr[data-id="${CSS.escape(selId)}"]`);
     if (tr) { tr.classList.add('pyq-sel'); tr.scrollIntoView({ block: 'nearest' }); }
     aplicarCelda();
@@ -12915,7 +12915,11 @@ document.addEventListener('keydown', (e) => {
     // En el buscador de la grilla, las flechas ↑ ↓ igual mueven entre pedidos (el resto de las teclas escriben normal)
     const enBuscador = !!(t && t.matches && t.matches('#pyq-wrap input.pyq-q'));
     const lateral = e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight');
-    if (enBuscador && e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && !lateral) return;
+    // En el buscador: ← → mueven el cursor del texto, salvo que ya hayas marcado un pedido con ↑ ↓
+    // (ahí se mueven entre celdas). Esc desmarca y vuelven a mover el cursor del texto.
+    const celdaDesdeBuscador = enBuscador && selId != null && !e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight');
+    const escDesdeBuscador = enBuscador && selId != null && e.key === 'Escape';
+    if (enBuscador && e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && !lateral && !celdaDesdeBuscador && !escDesdeBuscador) return;
     if (!enBuscador && t && t.closest && t.closest('input,textarea,select,[contenteditable="true"]')) return;
     // Solo si el foco está en la grilla, en el panel o en ningún lado (no dentro de otro modal)
     if (t && t !== document.body && t !== document.documentElement && !(t.closest && t.closest('#pyq-wrap,#pyq-prev'))) return;
