@@ -12567,7 +12567,7 @@ document.addEventListener('keydown', (e) => {
         <input type="text" class="pyq-q" data-a="q" placeholder="Buscar nro, cliente, observaciones… (Retroceso)" value="${esc(prefs.q)}">
         <label class="pyq-chk"><input type="checkbox" data-a="ml" ${prefs.ml ? 'checked' : ''}> Incluir MercadoLibre</label>
         <span style="position:relative;display:inline-block;"><button class="pyq-btn sec" data-a="cols">⚙ Columnas</button>${colsAbierto ? panelCols() : ''}</span>
-        <span class="pyq-info">${prefs.dias > 31 ? `<span style="color:#fcd34d">${prefs.q ? 'Búsqueda en Yiqi · ' : (prefs.vend ? '' : (truncadoLargo ? 'Mostrando los 2000 más recientes — escribí en el buscador para buscar en todo el período · ' : 'Escribí en el buscador para buscar en todo el período · '))}</span>` : ''}${lista.length} de ${rows.length} pedidos${hace != null ? ` · actualizado ${hace < 1 ? 'recién' : 'hace ' + hace + ' min'}` : ''} · <span style="color:#a78bfa">✎</span> = editable (clic en la celda) · ↑ ↓ ← → moverse · Shift + ← → costados · F2 editar · mouse + Enter o clic = ficha del pedido</span>
+        <span class="pyq-info">${prefs.dias > 31 ? `<span style="color:#fcd34d">${prefs.q ? 'Búsqueda en Yiqi · ' : (prefs.vend ? '' : (truncadoLargo ? 'Mostrando los 2000 más recientes — escribí en el buscador para buscar en todo el período · ' : 'Escribí en el buscador para buscar en todo el período · '))}</span>` : ''}${lista.length} de ${rows.length} pedidos${hace != null ? ` · actualizado ${hace < 1 ? 'recién' : 'hace ' + hace + ' min'}` : ''} · <span style="color:#a78bfa">✎</span> = editable (clic en la celda) · ↑ ↓ ← → moverse · Shift + ← → costados · Enter editar / guardar · Shift + Enter o clic = ficha del pedido</span>
       </div>
       ${needLogin ? `<div class="pyq-login">🔑 Ingresá tu usuario de Yiqi para ver los pedidos:
           <input type="text" id="pyq-u" placeholder="Usuario" autocomplete="username"><input type="password" id="pyq-p" placeholder="Contraseña" autocomplete="current-password">
@@ -12603,7 +12603,7 @@ document.addEventListener('keydown', (e) => {
     if (c.ed === 'select') {
       html = `<select><option value="">—</option>${Object.entries(c.map).map(([vid, t]) => `<option value="${vid}" ${String(actual)===vid?'selected':''}>${esc(t)}</option>`).join('')}</select>`;
     } else if (c.ed === 'textarea') {
-      html = `<textarea>${esc(norm(actual))}</textarea><div class="pyq-hint">Ctrl+Enter guarda · Esc cancela</div>`;
+      html = `<textarea>${esc(norm(actual))}</textarea><div class="pyq-hint">Enter guarda · Shift+Enter nueva línea · Esc cancela</div>`;
     } else {
       const dl = 'pyq-dl-' + k;
       html = `<input type="text" list="${dl}" value="${esc(norm(actual))}"><datalist id="${dl}">${sugerencias(k).map(s => `<option value="${esc(s)}">`).join('')}</datalist><div class="pyq-hint">Enter guarda · Esc cancela</div>`;
@@ -12635,7 +12635,7 @@ document.addEventListener('keydown', (e) => {
     };
     inp.addEventListener('keydown', e => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cerrar(false); } // solo cancela la edición (no cierra la grilla)
-      else if (e.key === 'Enter' && (c.ed !== 'textarea' || e.ctrlKey || e.metaKey)) { e.preventDefault(); cerrar(true); }
+      else if (e.key === 'Enter' && !(c.ed === 'textarea' && e.shiftKey)) { e.preventDefault(); e.stopPropagation(); cerrar(true); } // Enter guarda (en textos largos, Shift+Enter = nueva línea)
     });
     if (c.ed === 'select') inp.addEventListener('change', () => cerrar(true));
     inp.addEventListener('blur', () => setTimeout(() => cerrar(true), 120));
@@ -12872,10 +12872,13 @@ document.addEventListener('keydown', (e) => {
     localStorage.removeItem('pyq_prev_w'); aplicarAnchoPrev(0);
     const p = document.getElementById('pyq-prev'); if (p && prevBlob) setTimeout(() => mostrarPdfPrev(p.querySelector('.pp-b'), prevBlob, ++prevSeq, prevNro).catch(() => {}), 50);
   });
+  let hoverTd = null, ultimoMouse = false;
   document.addEventListener('mouseover', e => {
     const tr = e.target.closest && e.target.closest('#pyq-wrap tbody tr[data-id]');
     hoverId = tr ? tr.dataset.id : null;
+    hoverTd = (e.target.closest && e.target.closest('#pyq-wrap tbody td')) || null;
   });
+  document.addEventListener('mousemove', e => { if (e.target.closest && e.target.closest('#pyq-wrap tbody')) ultimoMouse = true; }, { passive: true });
   // Shift + ← / → : mover la grilla hacia los costados, de a una columna
   function moverLateral(d) {
     const sc = document.querySelector('#pyq-wrap .pyq-scroll'); if (!sc) return;
@@ -12898,14 +12901,25 @@ document.addEventListener('keydown', (e) => {
     if (!grillaVisible() || document.getElementById('ped-modal-bd')) return;
     const k = e.key, abierto = !!(prevId && document.getElementById('pyq-prev'));
     let ok = true;
+    if (k.startsWith('Arrow')) ultimoMouse = false;
     if (lateral) moverLateral(k === 'ArrowRight' ? 1 : -1);
     else if (k === 'ArrowLeft' || k === 'ArrowRight') moverCelda(k === 'ArrowRight' ? 1 : -1);
     else if (k === 'F2') { const td = tdActiva(); if (td && td.classList.contains('ed')) td.click(); else ok = false; }
     else if (k === 'ArrowDown' || k === 'ArrowUp') moverPreview(k === 'ArrowDown' ? 1 : -1);
     else if (k === 'Enter') {
       if (t && t.closest && t.closest('button,a')) return; // Enter sobre un botón: que haga lo suyo
-      const id = hoverId || selId; if (!id) return;
-      abrirPreview(id);
+      if (e.shiftKey) {                                   // Shift + Enter: ficha del pedido
+        const id = (ultimoMouse && hoverId) || selId || hoverId; if (!id) return;
+        abrirPreview(id);
+      } else {                                            // Enter: editar la celda (activa o bajo el mouse)
+        const td = (ultimoMouse && hoverTd && document.contains(hoverTd)) ? hoverTd : (tdActiva() || hoverTd);
+        if (!td) return;
+        if (td.classList.contains('ed')) {
+          const tr = td.closest('tr[data-id]'), th = document.querySelectorAll('#pyq-wrap thead th')[[...tr.children].indexOf(td)];
+          if (th && th.dataset.col) { selCol = th.dataset.col; selId = tr.dataset.id; marcarFila(selId); }
+          td.click();
+        } else if (typeof toast === 'function') toast('Esta celda no se edita desde acá · Shift + Enter abre la ficha del pedido', 'warn');
+      }
     }
     else if (k === 'Escape' && !abierto && selId) marcarFila(null);
     else if (!abierto) ok = false;
