@@ -6048,6 +6048,7 @@ function renderCarrito(){
     }).join('');
   }
   if (totalEl) totalEl.textContent = fmtMoney(calcularTotal());
+  _pintarEnvioDesdePedido(totalEl);
   _actualizarResumenEnvio();
   const finTotalCont = document.getElementById('fin-total-cuotas');
   if (finTotalCont) {
@@ -6099,6 +6100,27 @@ let _pedidoFullOrden = 'original'; // 'original' | 'precio_asc' | 'precio_desc' 
 // se carga un monto válido se colapsa solo, para que la captura le quede limpia
 // al cliente. Solo existe en modo "Pedido": en "Presupuesto" no se ofrece.
 let _pedidoEnvioAdmin = { activo: false, tipo: 'Envío a domicilio', costo: '', editando: false };
+// Envío traído de un pedido de Yiqi con "🛒 Al carrito": { seyi, nombre, monto, nro }.
+// Se ve como una línea del carrito, se suma al total y, al "Cargar pedido en Yiqi", se carga como servicio.
+window._envioDesdePedido = null;
+const _SEYI_A_TIPO = { 7: 'Envío a domicilio', 5: 'Retiro en sucursal', 2: 'Envío por transporte', 4: 'Envío rápido (CABA)' };
+const _TIPO_A_SEYI = { 'Envío a domicilio': 7, 'Retiro en sucursal': 5, 'Envío por transporte': 2, 'Envío rápido (CABA)': 4 };
+function _envioPedidoActual(){ const e = window._envioDesdePedido; return e && e.monto > 0 && carrito.size ? e : null; }
+window._quitarEnvioDesdePedido = () => {
+  window._envioDesdePedido = null;
+  if (_pedidoEnvioAdmin.seyi) _pedidoEnvioAdmin = { activo: false, tipo: 'Envío a domicilio', costo: '', editando: false };
+  renderCarrito();
+};
+function _pintarEnvioDesdePedido(totalEl){
+  if (!carrito.size) window._envioDesdePedido = null;
+  const ep = _envioPedidoActual();
+  let fila = document.getElementById('fila-envio-pedido');
+  if (!ep) { if (fila) fila.remove(); return; }
+  const rowTotal = totalEl && totalEl.closest('.row');
+  if (!fila && rowTotal) { fila = document.createElement('div'); fila.id = 'fila-envio-pedido'; fila.className = 'row'; fila.style.cssText = 'font-size:13px;font-weight:600;'; rowTotal.parentNode.insertBefore(fila, rowTotal); }
+  if (fila) fila.innerHTML = `<span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">🚚 Envío <small style="opacity:.7;font-weight:500">(${escHtml(ep.nombre || 'Envío')})</small><button onclick="_quitarEnvioDesdePedido()" title="Quitar el envío del pedido" style="border:none;background:none;cursor:pointer;color:#dc2626;font-size:12px;padding:0 2px;">✕</button></span><span>${fmtMoney(ep.monto)}</span>`;
+  if (totalEl) totalEl.textContent = fmtMoney(calcularTotal() + ep.monto);
+}
 // SKU cuyo precio se está editando a mano ahora mismo en el modal "Pantalla completa"
 // (solo puede haber uno a la vez, como con el envío) — null cuando no se está editando nada.
 let _pedidoEditandoPrecioSku = null;
@@ -6122,6 +6144,8 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
     _pedidoFullDosListas = false;
     _pedidoFullOrden = 'original';
     _pedidoEnvioAdmin = { activo: false, tipo: 'Envío a domicilio', costo: '', editando: false };
+    const _ep = _envioPedidoActual();
+    if (_ep && esAdminCatalogo()) _pedidoEnvioAdmin = { activo: true, tipo: _SEYI_A_TIPO[_ep.seyi] || 'Envío a domicilio', costo: _ep.monto, editando: false, seyi: _ep.seyi };
     _pedidoEditandoPrecioSku = null;
   }
   document.getElementById('pedido-full-backdrop')?.remove();
@@ -6354,11 +6378,14 @@ window._pedidoToggleEnvio = (activo) => {
   if (!esAdminCatalogo()) return;
   _pedidoEnvioAdmin.activo = activo;
   _pedidoEnvioAdmin.editando = activo; // al activar entra en modo edición; al desactivar no hay nada que mostrar
+  if (!activo) { window._envioDesdePedido = null; delete _pedidoEnvioAdmin.seyi; try { renderCarrito(); } catch (e) {} }
   abrirVistaCompletaPedido(true);
 };
 window._pedidoCambiarTipoEnvio = (tipo) => {
   if (!esAdminCatalogo()) return;
   _pedidoEnvioAdmin.tipo = tipo;
+  delete _pedidoEnvioAdmin.seyi;
+  if (window._envioDesdePedido) { window._envioDesdePedido.seyi = _TIPO_A_SEYI[tipo] || 7; window._envioDesdePedido.nombre = tipo; try { renderCarrito(); } catch (e) {} }
   abrirVistaCompletaPedido(true);
 };
 window._pedidoCommitCostoEnvio = (v) => {
@@ -6366,6 +6393,7 @@ window._pedidoCommitCostoEnvio = (v) => {
   const num = parseFloat(String(v || '').replace(/[^0-9.]/g, '')) || 0;
   _pedidoEnvioAdmin.costo = num || '';
   if (num > 0) _pedidoEnvioAdmin.editando = false; // monto cargado → colapsar el panel
+  if (window._envioDesdePedido) { if (num > 0) window._envioDesdePedido.monto = num; else window._envioDesdePedido = null; try { renderCarrito(); } catch (e) {} }
   abrirVistaCompletaPedido(true);
 };
 window._pedidoEditarEnvio = () => {
@@ -10686,6 +10714,7 @@ document.addEventListener('keydown', (e) => {
   const COIV = [['Consumidor Final',7],['Monotributista',5],['Responsable Inscripto',2],['Exento',1]];
   const TIDD = [['DNI',3],['CUIT',1],['CUIL',5],['Pasaporte',4]];
   const PROV = {'CABA':1,'Capital Federal':1,'Buenos Aires':2,'Catamarca':3,'Córdoba':4,'Corrientes':5,'Chaco':6,'Chubut':7,'Entre Ríos':8,'Formosa':9,'Jujuy':10,'La Pampa':11,'La Rioja':12,'Mendoza':13,'Misiones':14,'Neuquén':15,'Río Negro':16,'Salta':17,'San Juan':18,'San Luis':19,'Santa Cruz':20,'Santa Fe':21,'Santiago del Estero':22,'Tierra del Fuego':23,'Tucumán':24};
+  window._SEYI_NOMBRES = Object.fromEntries(SEYI.map(([n, i]) => [i, n]));
   const ENVIO_TIPO_A_SEYI = {'Envío a domicilio':7,'Retiro en sucursal':5,'Envío por transporte':2,'Envío rápido (CABA)':4};
 
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -10807,7 +10836,9 @@ document.addEventListener('keydown', (e) => {
   function envioSugerido(){
     try {
       if (typeof _pedidoEnvioAdmin !== 'undefined' && _pedidoEnvioAdmin.activo && parseFloat(_pedidoEnvioAdmin.costo) > 0)
-        return { activo: true, seyi: ENVIO_TIPO_A_SEYI[_pedidoEnvioAdmin.tipo] || 7, monto: parseFloat(_pedidoEnvioAdmin.costo) };
+        return { activo: true, seyi: _pedidoEnvioAdmin.seyi || ENVIO_TIPO_A_SEYI[_pedidoEnvioAdmin.tipo] || 7, monto: parseFloat(_pedidoEnvioAdmin.costo) };
+      const _ep = window._envioDesdePedido;                       // envío traído con "Al carrito"
+      if (_ep && _ep.monto > 0 && typeof carrito !== 'undefined' && carrito.size) return { activo: true, seyi: _ep.seyi || 7, monto: _ep.monto };
       const fila = $('fila-envio-caba');
       if (fila && fila.style.display !== 'none') {
         const m = parseInt(($('envio-caba-monto')?.textContent || '').replace(/\D/g, ''), 10);
@@ -12465,12 +12496,29 @@ document.addEventListener('keydown', (e) => {
         const actual = it && typeof precioDe === 'function' ? precioDe(it) : 0;
         if (pu > 0 && Math.abs(pu - actual) > 1 && typeof _preciosManualesCarrito !== 'undefined') _preciosManualesCarrito.set(sku, pu);
       });
+      // Envío del pedido (servicios en Yiqi: Estándar a domicilio, etc.)
+      let envTxt = '';
+      window._envioDesdePedido = null;
+      try {
+        const rs = await yiqiFetch(`${API}/api/public/DET_PED_SERV/query?schemaId=${SCHEMA}`, { method: 'POST', headers: H,
+          body: JSON.stringify({ page: 1, pageSize: 20, columns: ['PEDI_ID_PEDI','SEYI_ID_SEYI','DEPE_CANTIDAD','DEPE_PRECIO_UNITARIO_FINA'].map((f, i) => ({ field: f, title: f, order: i + 1 })),
+            filters: [{ columnName: 'PEDI_ID_PEDI', operator: '=', value: Number(id) }] }) });
+        if (rs.ok) {
+          const serv = ((await rs.json()).data || []).filter(x => String(x.PEDI_ID_PEDI ?? id) === String(id));
+          const monto = serv.reduce((a, x) => a + (Number(x.DEPE_PRECIO_UNITARIO_FINA) || 0) * (Number(x.DEPE_CANTIDAD) || 1), 0);
+          if (monto > 0) {
+            const seyi = Number(serv[0].SEYI_ID_SEYI) || 7, nombre = (window._SEYI_NOMBRES || {})[seyi] || 'Envío';
+            window._envioDesdePedido = { seyi, nombre, monto: Math.round(monto * 100) / 100, nro: numero };
+            envTxt = ` + envío ${nombre} ${fmtMoney(monto)}`;
+          }
+        }
+      } catch (e) { console.warn('[pedidosYiqi] no se pudo leer el envío del pedido', e); }
       try { _presuClienteNombre = r.CLIE_NOMBRE || ''; } catch(e) {}
       try { _guardarPreciosManualesLS(); } catch(e) {}
       try { renderCarrito(); } catch(e) {}
       delete copiando[id];
       cerrarPanel();
-      toast(`🛒 Pedido N° ${numero}: ${lineas.length - faltan.length} producto(s) en tu pedido, con sus precios${faltan.length ? ` · sin encontrar en el catálogo: ${faltan.join(', ')}` : ''}`, faltan.length ? 'warn' : 'ok');
+      toast(`🛒 Pedido N° ${numero}: ${lineas.length - faltan.length} producto(s) en tu pedido, con sus precios${envTxt}${faltan.length ? ` · sin encontrar en el catálogo: ${faltan.join(', ')}` : ''}`, faltan.length ? 'warn' : 'ok');
     } catch(e) { delete copiando[id]; render(); toast('⚠ No se pudieron traer los productos: ' + e.message, 'warn'); }
   }
 
