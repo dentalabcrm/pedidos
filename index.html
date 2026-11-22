@@ -10287,6 +10287,8 @@ document.addEventListener('keydown', (e) => {
   if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return; // no pisar otros atajos (Ctrl+C, etc.)
   if (e.key === 'Enter' && e.shiftKey) return; // Shift+Enter es otro atajo (abre la pantalla completa del producto), no lo pisamos acá
+  // No con una ventana del catálogo abierta (confirmar, cargar pedido…) ni con la grilla de Pedidos abierta encima
+  if (document.querySelector('.yqc-bd, #ped-modal-bd') || (() => { const g = document.getElementById('pyq-bd'); return !!g && g.style.display !== 'none' && g.getClientRects().length > 0; })()) return;
   const el = document.activeElement;
   const tag = (el && el.tagName) || '';
   // El buscador es la única excepción: ahí también queremos que funcionen las flechas +
@@ -10455,6 +10457,7 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keydown', (e) => {
   if (typeof esAdminCatalogo !== 'function' || !esAdminCatalogo()) return; // por ahora, solo admin
   if (e.key !== 'Enter' || !e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (document.querySelector('.yqc-bd, #ped-modal-bd') || (() => { const g = document.getElementById('pyq-bd'); return !!g && g.style.display !== 'none' && g.getClientRects().length > 0; })()) return;
   const el = document.activeElement;
   const tag = (el && el.tagName) || '';
   const esBuscador = el && el.id === 'input-busqueda';
@@ -10490,6 +10493,8 @@ document.addEventListener('keydown', (e) => {
   // de navegación de arriba — no lo procesamos acá también, o se terminaría agregando o
   // sacando el producto DOS veces (una por cada atajo) en el mismo Enter.
   if (typeof _navIdxSeleccionado !== 'undefined' && _navIdxSeleccionado >= 0) return;
+  // No con una ventana del catálogo abierta (confirmar, cargar pedido…) ni con la grilla de Pedidos abierta encima
+  if (document.querySelector('.yqc-bd, #ped-modal-bd') || (() => { const g = document.getElementById('pyq-bd'); return !!g && g.style.display !== 'none' && g.getClientRects().length > 0; })()) return;
   const el = document.activeElement;
   const tag = (el && el.tagName) || '';
   if (el && el.id === 'input-busqueda') return;
@@ -11006,7 +11011,11 @@ document.addEventListener('keydown', (e) => {
       bd.querySelector('[data-r="1"]').onclick = () => fin(inp ? inp.value : true);
       bd.querySelector('[data-r="0"]').onclick = () => fin(inp ? null : false);
       bd.querySelector('[data-x]').onclick = () => fin(inp ? null : false);
-      bd.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fin(inp ? null : false); } if (e.key === 'Enter' && (inp || e.target.tagName !== 'BUTTON')) { e.preventDefault(); fin(inp ? inp.value : true); } });
+      bd.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fin(inp ? null : false); }
+        if (e.key === 'Enter' && !inp && e.target.tagName === 'BUTTON') { e.preventDefault(); e.stopPropagation(); e.target.click(); return; } // Enter = clic en el botón marcado
+        if (e.key === 'Enter' && (inp || e.target.tagName !== 'BUTTON')) { e.preventDefault(); e.stopPropagation(); fin(inp ? inp.value : true); }
+      });
       // ← → (o ↑ ↓) pasan de un botón al otro; Enter hace clic en el que está marcado
       bd.addEventListener('keydown', e => {
         if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key) || (inp && e.target === inp)) return;
