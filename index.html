@@ -12003,7 +12003,13 @@ document.addEventListener('keydown', (e) => {
     'PEDI_TOTAL','PEDI_OBSERVACIONES','PEDI_ESTADO_DEL_ENVIO','PEDI_ESTADO_DE_PAGO','PEDI_ESTADO','PEDI_ESTADO_ACTUAL_DEL_PE',
     'PEDI_PROVINCIA_DE_ENVIO','DESC_ESTADO','EXTE_ID_EXTE','PUVE_ID_PUVE','VEHA_ID_VEHA','COVE_ID_COVE','PEDI_DIRECCION_DE_ENVIO',
     'PEDI_LOCALIDAD_DE_ENVIO','PEDI_TELEFONO','PEDI_FACTURAS','PEDI_TIPOS_FACT_GENERADOS','CLIE_ID_CLIE'];
+  // Solo en pantalla: "Staging Out" y "Entregado" se muestran como "Facturado", y "Con Devolución" como "Cancelado por NC" (en Yiqi no cambia nada;
+  // la lógica interna —reservas, pedidos cerrados, envíos automáticos— sigue usando el estado real)
+  const ESTADO_ALIAS = { 'staging out': 'Facturado', 'entregado': 'Facturado', 'con devolución': 'Cancelado por NC', 'con devolucion': 'Cancelado por NC' };
+  function estadoVer(v) { return ESTADO_ALIAS[String(v || '').toLowerCase().trim()] || v; }
   const ESTADO_COLOR = {
+    'cancelado por nc':['#9333ea','#fff'],
+    'facturado':['#16a34a','#fff'],
     'en espera de pago':['#1a73e8','#fff'], 'entregado':['#f6c445','#3b2f00'],
     'staging out':['#16a34a','#fff'], 'quiebre 2':['#dc3545','#fff'],
     'anulado':['#6b7280','#fff'], 'a anular':['#9ca3af','#fff'],
@@ -12478,10 +12484,10 @@ document.addEventListener('keydown', (e) => {
   function filtradas() {
     const q = prefs.q.trim().toLowerCase();
     let out = rows.filter(r => {
-      if (prefs.estado && (r.DESC_ESTADO || '') !== prefs.estado) return false;
+      if (prefs.estado && estadoVer(r.DESC_ESTADO || '') !== estadoVer(prefs.estado)) return false;
       if (prefs.vend && String(r.VEHA_ID_VEHA ?? '') !== String(prefs.vend)) return false;
       if (!q) return true;
-      return [nro(r), r.CLIE_NOMBRE, MAP_VEHA[r.VEHA_ID_VEHA], MAP_EXTE[r.EXTE_ID_EXTE], MAP_CEDI[r.CEDI_ID_ORIG], MAP_COVE[r.COVE_ID_COVE], r.PEDI_OBSERVACIONES, r.PEDI_ESTADO_DEL_ENVIO, r.PEDI_ESTADO_DE_PAGO, r.PEDI_ESTADO, r.PEDI_ESTADO_ACTUAL_DEL_PE, r.PEDI_PROVINCIA_DE_ENVIO]
+      return [nro(r), r.CLIE_NOMBRE, MAP_VEHA[r.VEHA_ID_VEHA], MAP_EXTE[r.EXTE_ID_EXTE], MAP_CEDI[r.CEDI_ID_ORIG], MAP_COVE[r.COVE_ID_COVE], r.PEDI_OBSERVACIONES, r.PEDI_ESTADO_DEL_ENVIO, r.PEDI_ESTADO_DE_PAGO, r.PEDI_ESTADO, r.PEDI_ESTADO_ACTUAL_DEL_PE, r.PEDI_PROVINCIA_DE_ENVIO, r.DESC_ESTADO, estadoVer(r.DESC_ESTADO)]
         .some(v => String(v || '').toLowerCase().includes(q));
     });
     const k = prefs.sort, d = prefs.dir, col = COL_DEF[k];
@@ -12516,7 +12522,7 @@ document.addEventListener('keydown', (e) => {
     }
     if (c.k === 'AUDI_FECHA_ALTA' || c.k === 'PEDI_FECHA') return fmtFecha(v);
     if (c.k === 'PEDI_TOTAL') return fmtMoney(v);
-    if (c.k === 'DESC_ESTADO') { const [bg, fg] = ESTADO_COLOR[String(v||'').toLowerCase()] || []; return v ? `<span class="pyq-badge" style="${bg ? `background:${bg};color:${fg}` : ''}">${esc(v)}</span>` : ''; }
+    if (c.k === 'DESC_ESTADO') { const vv = estadoVer(v), [bg, fg] = ESTADO_COLOR[String(vv||'').toLowerCase()] || []; return v ? `<span class="pyq-badge" style="${bg ? `background:${bg};color:${fg}` : ''}" title="${vv !== v ? 'En Yiqi: ' + esc(v) : ''}">${esc(vv)}</span>` : ''; }
     const txt = c.map ? (c.map[v] || (v ? '#' + v : '')) : (v || '');
     if (c.ed && vacio(txt)) return puedeEditar(c, r) ? '<span class="pyq-empty">—</span>' : '';
     return `<div class="pyq-txt">${esc(txt)}</div>`;
@@ -12552,7 +12558,7 @@ document.addEventListener('keydown', (e) => {
     const paginas = Math.max(1, Math.ceil(lista.length / POR_PAG)); if (pag > paginas) pag = paginas; if (pag < 1) pag = 1;
     const pagina = lista.slice((pag - 1) * POR_PAG, pag * POR_PAG);
     const VC = visibles();
-    const estados = {}; rows.forEach(r => { const e = r.DESC_ESTADO || '(sin estado)'; estados[e] = (estados[e] || 0) + 1; });
+    const estados = {}; rows.forEach(r => { const e = estadoVer(r.DESC_ESTADO) || '(sin estado)'; estados[e] = (estados[e] || 0) + 1; });
     const hace = lastTs ? Math.round((Date.now() - lastTs) / 60000) : null;
     const scrollEl = w.querySelector('.pyq-scroll'); const sTop = scrollEl ? scrollEl.scrollTop : 0, sLeft = scrollEl ? scrollEl.scrollLeft : 0;
     w.innerHTML = `
@@ -12732,11 +12738,11 @@ document.addEventListener('keydown', (e) => {
     let p = document.getElementById('pyq-prev');
     if (!p) { p = document.createElement('div'); p.id = 'pyq-prev'; document.body.appendChild(p); }
     const fmt = prevFmt();
-    const [bg, fg] = (typeof ESTADO_COLOR_CLARO !== 'undefined' && document.body.classList.contains('light-mode') ? ESTADO_COLOR_CLARO : ESTADO_COLOR)[String(r.DESC_ESTADO || '').toLowerCase()] || [];
+    const [bg, fg] = (typeof ESTADO_COLOR_CLARO !== 'undefined' && document.body.classList.contains('light-mode') ? ESTADO_COLOR_CLARO : ESTADO_COLOR)[String(estadoVer(r.DESC_ESTADO) || '').toLowerCase()] || [];
     const fecha = r.AUDI_FECHA_ALTA || r.PEDI_FECHA;
     p.innerHTML = `<div class="pp-drag" title="Arrastrá para cambiar el ancho del panel (doble clic: ancho normal)"></div>
       <div class="pp-h">
-        <div class="pp-t"><b>Pedido ${esc(nro(r))}</b>${r.DESC_ESTADO ? `<span class="pp-badge" style="${bg ? `background:${bg};color:${fg}` : ''}">${esc(r.DESC_ESTADO)}</span>` : ''}
+        <div class="pp-t"><b>Pedido ${esc(nro(r))}</b>${r.DESC_ESTADO ? `<span class="pp-badge" style="${bg ? `background:${bg};color:${fg}` : ''}" title="${estadoVer(r.DESC_ESTADO) !== r.DESC_ESTADO ? 'En Yiqi: ' + esc(r.DESC_ESTADO) : ''}">${esc(estadoVer(r.DESC_ESTADO))}</span>` : ''}
           <div class="pp-s" title="${esc(r.CLIE_NOMBRE || '')}">${esc(r.CLIE_NOMBRE || '')}${r.PEDI_TOTAL != null && r.PEDI_TOTAL !== '' ? ' · ' + fmtMoney(r.PEDI_TOTAL) : ''}${fecha ? ' · ' + fmtFecha(fecha) : ''}</div></div>
         <button class="pp-x" data-pp="x" title="Cerrar (Esc)">✕</button></div>
       <div class="pp-tabs"><button data-pp="tab-datos" class="${prevTab === 'datos' ? 'on' : ''}" title="Todos los datos del pedido (D)">📋 Datos</button><button data-pp="tab-pdf" class="${prevTab === 'pdf' ? 'on' : ''}" title="Vista previa del PDF (P)">📄 PDF</button><button data-pp="tab-cc" class="${prevTab === 'cc' ? 'on' : ''}" title="Cuenta corriente del cliente (C)">📒 CC cliente</button>
