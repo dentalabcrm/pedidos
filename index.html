@@ -1148,10 +1148,145 @@ function _restaurarPreciosManualesLS(){
 // Precio a usar para un producto DENTRO del carrito/pedido — si tiene un precio manual
 // cargado, ese; si no, el precio normal de catálogo (precioDe). La grilla de búsqueda
 // sigue usando precioDe directamente, nunca esta función.
-function precioCarritoDe(sku){
+function precioBaseCarritoDe(sku){
   if (_preciosManualesCarrito.has(sku)) return _preciosManualesCarrito.get(sku);
   const it = catalogoBySku.get(sku);
   return it ? precioDe(it) : 0;
+}
+// ── Descuentos del pedido (solo admin), igual que en Presupuestos del CRM ──
+// Por producto: % o $ (el $ es sobre el renglón completo, como en el CRM).
+// Global: % o $ sobre el subtotal. Se guardan junto con el pedido (localStorage).
+const LS_KEY_DESC_CARRITO = 'dentalab_pedido_descuentos_v1';
+let _descItemCarrito = new Map();             // sku -> { m: 'pct' | 'monto', v: número }
+let _descGlobalCarrito = { m: 'pct', v: 0 };  // descuento global sobre el subtotal
+let _descuentosRestaurados = false;           // hasta restaurarlos no se guarda nada (para no borrarlos al iniciar)
+function _guardarDescuentosLS(){
+  if (!_descuentosRestaurados) return;
+  try {
+    const items = Array.from(_descItemCarrito.entries()).filter(([, d]) => d && d.v > 0);
+    if (items.length || _descGlobalCarrito.v > 0) localStorage.setItem(LS_KEY_DESC_CARRITO, JSON.stringify({ items, g: _descGlobalCarrito }));
+    else localStorage.removeItem(LS_KEY_DESC_CARRITO);
+  } catch(e) {}
+}
+function _restaurarDescuentosLS(){
+  _descuentosRestaurados = true;
+  try {
+    const d = JSON.parse(localStorage.getItem(LS_KEY_DESC_CARRITO) || 'null');
+    if (!d) return;
+    if (Array.isArray(d.items)) d.items.forEach(([sku, x]) => { if (x && Number(x.v) > 0) _descItemCarrito.set(sku, { m: x.m === 'monto' ? 'monto' : 'pct', v: Number(x.v) }); });
+    if (d.g && Number(d.g.v) > 0) _descGlobalCarrito = { m: d.g.m === 'monto' ? 'monto' : 'pct', v: Number(d.g.v) };
+  } catch(e) {}
+}
+window._limpiarDescuentosCarrito = () => { _descItemCarrito.clear(); _descGlobalCarrito = { m: 'pct', v: 0 }; _guardarDescuentosLS(); };
+function _descItemUnitario(sku, base){
+  const d = _descItemCarrito.get(sku);
+  if (!d || !(d.v > 0) || !(base > 0)) return 0;
+  if (d.m === 'monto') { const q = Number(carrito.get(sku)) || 1; return Math.min(base, d.v / q); }
+  return base * Math.min(100, d.v) / 100;
+}
+// Precio a usar para un producto DENTRO del carrito/pedido — precio manual (o el de
+// catálogo) menos el descuento del producto, si tiene.
+function precioCarritoDe(sku){
+  const base = precioBaseCarritoDe(sku);
+  return Math.max(0, base - _descItemUnitario(sku, base));
+}
+const _fmtNumDesc = n => (Math.round(Number(n) * 100) / 100).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+function _descItemTexto(sku){
+  const d = _descItemCarrito.get(sku);
+  if (!d || !(d.v > 0)) return '';
+  return d.m === 'monto' ? `−${fmtMoney(d.v)}` : `−${_fmtNumDesc(d.v)}%`;
+}
+function calcularSubtotalCarrito(){
+  let total = 0;
+  carrito.forEach((qty, sku) => { if (catalogoBySku.has(sku)) total += precioCarritoDe(sku) * qty; });
+  return total;
+}
+function descuentoGlobalMontoCarrito(){
+  const g = _descGlobalCarrito;
+  if (!g || !(g.v > 0)) return 0;
+  const sub = calcularSubtotalCarrito();
+  if (!(sub > 0)) return 0;
+  return g.m === 'monto' ? Math.min(g.v, sub) : sub * Math.min(100, g.v) / 100;
+}
+// % equivalente del descuento global (para mandarlo a Yiqi como "Dto Global %")
+function descuentoGlobalPctCarrito(){
+  const sub = calcularSubtotalCarrito(), m = descuentoGlobalMontoCarrito();
+  return sub > 0 && m > 0 ? (_descGlobalCarrito.m === 'pct' ? Math.min(100, _descGlobalCarrito.v) : m / sub * 100) : 0;
+}
+function _descGlobalEtiqueta(){
+  const g = _descGlobalCarrito;
+  return g.m === 'monto' ? 'Descuento' : `Descuento (${_fmtNumDesc(g.v)}%)`;
+}
+function _parseDescuento(txt, modo){
+  let t = String(txt == null ? '' : txt).trim().replace(/[$%\s]/g, '');
+  if (!t) return 0;
+  if (modo === 'monto') t = t.replace(/\./g, '').replace(',', '.');
+  else t = t.replace(',', '.');
+  const n = parseFloat(t);
+  return Number.isFinite(n) && n > 0 ? (modo === 'pct' ? Math.min(100, n) : n) : 0;
+}
+function _refrescarVistasDescuento(){
+  _guardarDescuentosLS();
+  renderCarrito();
+  if (document.getElementById('pedido-full-backdrop')) abrirVistaCompletaPedido(true);
+}
+window.setDescItemCarrito = (sku, txt) => {
+  if (!esAdminCatalogo()) return;
+  const d = _descItemCarrito.get(sku) || { m: 'pct', v: 0 };
+  d.v = _parseDescuento(txt, d.m);
+  _descItemCarrito.set(sku, d);
+  _refrescarVistasDescuento();
+};
+window.toggleModoDescItemCarrito = (sku) => {
+  if (!esAdminCatalogo()) return;
+  const d = _descItemCarrito.get(sku) || { m: 'pct', v: 0 };
+  d.m = d.m === 'pct' ? 'monto' : 'pct'; d.v = 0;
+  _descItemCarrito.set(sku, d);
+  _refrescarVistasDescuento();
+};
+window.setDescGlobalCarrito = (txt) => {
+  if (!esAdminCatalogo()) return;
+  _descGlobalCarrito.v = _parseDescuento(txt, _descGlobalCarrito.m);
+  _refrescarVistasDescuento();
+};
+window.toggleModoDescGlobalCarrito = () => {
+  if (!esAdminCatalogo()) return;
+  _descGlobalCarrito = { m: _descGlobalCarrito.m === 'pct' ? 'monto' : 'pct', v: 0 };
+  _refrescarVistasDescuento();
+};
+// Control (admin) para el descuento de un producto: [ valor ][ % | $ ]
+function _htmlCtlDescItem(sku, claseExtra){
+  if (!esAdminCatalogo()) return '';
+  const d = _descItemCarrito.get(sku) || { m: 'pct', v: 0 };
+  const s = escHtml(sku);
+  return `<span class="${claseExtra || ''}" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--text3);" onclick="event.stopPropagation()" title="Descuento de este producto (solo para este pedido)">Dto
+    <input type="text" inputmode="decimal" value="${d.v > 0 ? escHtml(String(d.v).replace('.', ',')) : ''}" placeholder="0" onchange="setDescItemCarrito('${s}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" onclick="this.select()" style="width:58px;border:1px solid var(--border);border-radius:5px;padding:2px 5px;font-size:11.5px;background:var(--panel);color:var(--text);text-align:right;">
+    <button onclick="toggleModoDescItemCarrito('${s}')" title="Cambiar entre % y $" style="border:1px solid var(--border);border-radius:5px;background:var(--panel2);color:var(--text);font-size:11px;font-weight:800;padding:2px 6px;cursor:pointer;min-width:24px;">${d.m === 'pct' ? '%' : '$'}</button>
+  </span>`;
+}
+// Etiqueta visible (para todos) cuando el producto tiene descuento: precio tachado + descuento
+function _htmlBadgeDescItem(sku){
+  const t = _descItemTexto(sku);
+  if (!t) return '';
+  return ` <span style="text-decoration:line-through;opacity:.6;font-weight:500;">${fmtMoney(precioBaseCarritoDe(sku))}</span> <span style="color:#16a34a;font-weight:800;">Dto ${t}</span>`;
+}
+// Fila de descuento global en "Tu pedido" (barra lateral)
+function _pintarDescGlobal(totalEl){
+  const rowTotal = totalEl && totalEl.closest('.row');
+  let fila = document.getElementById('fila-desc-global');
+  const admin = esAdminCatalogo(), monto = descuentoGlobalMontoCarrito();
+  if (!carrito.size || (!admin && !(monto > 0)) || !rowTotal) { if (fila) fila.remove(); return; }
+  if (!fila) { fila = document.createElement('div'); fila.id = 'fila-desc-global'; rowTotal.parentNode.insertBefore(fila, rowTotal); }
+  const g = _descGlobalCarrito;
+  fila.innerHTML =
+    (monto > 0 ? `<div class="row" style="font-size:13px;font-weight:600;"><span>Subtotal</span><span>${fmtMoney(calcularSubtotalCarrito())}</span></div>` : '') +
+    `<div class="row" style="font-size:13px;font-weight:600;align-items:center;">
+      <span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">🏷️ ${escHtml(_descGlobalEtiqueta())}${admin ? `
+        <input type="text" inputmode="decimal" value="${g.v > 0 ? escHtml(String(g.v).replace('.', ',')) : ''}" placeholder="0" onchange="setDescGlobalCarrito(this.value)" onkeydown="if(event.key==='Enter')this.blur()" onclick="this.select()" title="Descuento global sobre el subtotal" style="width:70px;border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px;background:var(--panel);color:var(--text);text-align:right;">
+        <button onclick="toggleModoDescGlobalCarrito()" title="Cambiar entre % y $" style="border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--text);font-size:12px;font-weight:800;padding:3px 8px;cursor:pointer;">${g.m === 'pct' ? '%' : '$'}</button>` : ''}
+      </span>
+      <span style="color:#16a34a;">${monto > 0 ? '− ' + fmtMoney(monto) : ''}</span>
+    </div>`;
 }
 window.setPrecioManual = (sku, valorTexto) => {
   if (!esAdminCatalogo()) return;
@@ -4307,6 +4442,7 @@ async function cargarCatalogo(){
     _restaurarCarritoLS();
     _restaurarOcultarAgotadoLS();
     _restaurarPreciosManualesLS();
+    _restaurarDescuentosLS();
     _restaurarOrdenManualLS();
     const estadoGuardado = _restaurarEstadoLS();
     if (carrito.size && estadoGuardado && estadoGuardado.listaActiva) {
@@ -5938,11 +6074,7 @@ window.quitarDelCarrito = (sku) => {
 };
 
 function calcularTotal(){
-  let total = 0;
-  carrito.forEach((qty, sku) => {
-    if (catalogoBySku.has(sku)) total += precioCarritoDe(sku) * qty;
-  });
-  return total;
+  return calcularSubtotalCarrito() - descuentoGlobalMontoCarrito();
 }
 
 // ── Reglas de envío (CABA) ──
@@ -6019,7 +6151,8 @@ function renderCarrito(){
             <div class="ci-info">
               <div class="ci-nombre">${escHtml(it.n)}</div>
               <div class="ci-sku">SKU: ${escHtml(it.s)}</div>
-              <div class="ci-precio">${fmtMoney(precio)} c/u${_preciosManualesCarrito.has(sku) ? ' <span style="color:var(--blue);font-weight:700;">✏️ precio a medida</span>' : ''}</div>
+              <div class="ci-precio">${fmtMoney(precio)} c/u${_htmlBadgeDescItem(sku)}${_preciosManualesCarrito.has(sku) ? ' <span style="color:var(--blue);font-weight:700;">✏️ precio a medida</span>' : ''}</div>
+              ${esAdminCatalogo() ? `<div style="margin-top:3px;">${_htmlCtlDescItem(sku)}</div>` : ''}
               <div class="ci-stock-row">
                 ${it.st
                   ? (_ocultarAgotadoSet.has(sku)
@@ -6048,6 +6181,13 @@ function renderCarrito(){
     }).join('');
   }
   if (totalEl) totalEl.textContent = fmtMoney(calcularTotal());
+  // Descuentos de productos que ya no están en el carrito: se olvidan
+  if (_descuentosRestaurados) {
+    _descItemCarrito.forEach((d, sku) => { if (!carrito.has(sku)) _descItemCarrito.delete(sku); });
+    if (!carrito.size) _descGlobalCarrito = { m: _descGlobalCarrito.m, v: 0 };
+    _guardarDescuentosLS();
+  }
+  _pintarDescGlobal(totalEl);
   _pintarEnvioDesdePedido(totalEl);
   _actualizarResumenEnvio();
   const finTotalCont = document.getElementById('fin-total-cuotas');
@@ -6207,7 +6347,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
         <div style="flex:1;min-width:0;">
           <div style="font-size:14.5px;font-weight:700;color:var(--text);line-height:1.3;">${escHtml(it.n)}</div>
           <div class="ci-sku" style="margin-top:2px;">SKU: ${escHtml(it.s)}</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px;">${_dual ? `${qty} ${qty === 1 ? 'unidad' : 'unidades'} · Contado ${fmtMoney(it.p1)} c/u · Tarjeta ${fmtMoney(it.p2)} c/u` : `${fmtMoney(precio)} c/u × ${qty}`}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px;">${_dual ? `${qty} ${qty === 1 ? 'unidad' : 'unidades'} · Contado ${fmtMoney(it.p1)} c/u · Tarjeta ${fmtMoney(it.p2)} c/u` : `${fmtMoney(precio)} c/u × ${qty}${_htmlBadgeDescItem(sku)}`}</div>
           <div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${stockHtml}${it.of ? '<span style="font-size:10.5px;font-weight:800;color:#fff;background:#dc2626;border-radius:5px;padding:2px 7px;letter-spacing:.3px;">🏷️ OFERTA</span>' : ''}${it.st && esAdmin ? `<button onclick="toggleOcultarAgotado('${escHtml(sku)}')" title="${_ocultarAgotadoSet.has(sku) ? 'Volver a mostrar \'Agotado\' a este producto' : 'Ocultarle \'Agotado\' a este producto (acá, en el carrito y en el PDF)'}" style="background:none;border:none;font-size:13px;cursor:pointer;padding:0 2px;line-height:1;${_ocultarAgotadoSet.has(sku) ? 'opacity:.5;' : ''}">🙈</button>` : ''}${medioPagoBadge}</div>
           ${medioPagoDetalle}
         </div>
@@ -6225,6 +6365,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
                 ${esAdmin ? `<button onclick="_pedidoEditandoPrecioSku='${escHtml(sku)}'; abrirVistaCompletaPedido(true);" title="Cambiar el precio de este producto a mano, solo para este pedido" class="ci-precio-col-hover-btn" style="background:none;border:none;font-size:12px;cursor:pointer;padding:0 2px;line-height:1;">✏️</button>` : ''}
               </div>
               ${_preciosManualesCarrito.has(sku) ? `<button onclick="quitarPrecioManual('${escHtml(sku)}')" title="Volver al precio de catálogo" class="ci-precio-col-hover-btn" style="background:none;border:none;font-size:10px;color:var(--text3);cursor:pointer;padding:0;text-decoration:underline;">↺ precio de catálogo</button>` : ''}`}
+          ${esAdmin && !_dual ? _htmlCtlDescItem(sku, _descItemTexto(sku) ? '' : 'ci-precio-col-hover-btn') : ''}
           <button onclick="quitarDelPedidoCompleto('${escHtml(sku)}')" title="Quitar del pedido" class="${esAdmin ? 'ci-precio-col-hover-btn' : ''}" style="
             background:none;border:1px solid var(--border);border-radius:8px;color:var(--red,#dc2626);
             font-size:12px;padding:4px 8px;cursor:pointer;white-space:nowrap;
@@ -6311,6 +6452,20 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
             <button onclick="_pedidoEditarEnvio()" title="Editar envío" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:0;line-height:1;">✏️</button>
           </span>
         </div>` : ''}
+        ${(() => {
+          if (_dual) return '';
+          const _dgM = descuentoGlobalMontoCarrito(), _verTot = (!_esPresu || _pedidoFullMostrarTotal), g = _descGlobalCarrito;
+          const ctl = esAdmin ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;font-weight:700;color:var(--text2);margin-bottom:8px;">
+              <span>🏷️ Descuento global sobre subtotal</span>
+              <span style="display:flex;align-items:center;gap:6px;">
+                <input type="text" inputmode="decimal" value="${g.v > 0 ? escHtml(String(g.v).replace('.', ',')) : ''}" placeholder="0" onchange="setDescGlobalCarrito(this.value)" onkeydown="if(event.key==='Enter')this.blur()" onclick="this.select()" style="width:90px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12.5px;background:var(--panel);color:var(--text);text-align:right;">
+                <button onclick="toggleModoDescGlobalCarrito()" title="Cambiar entre % y $" style="border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--text);font-size:12.5px;font-weight:800;padding:5px 10px;cursor:pointer;min-width:34px;">${g.m === 'pct' ? '%' : '$'}</button>
+              </span>
+            </div>` : '';
+          const lineas = (_verTot && _dgM > 0) ? `<div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--text2);margin-bottom:4px;"><span>Subtotal</span><span>${fmtMoney(calcularSubtotalCarrito())}</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:700;color:#16a34a;margin-bottom:6px;"><span>${escHtml(_descGlobalEtiqueta())}</span><span>− ${fmtMoney(_dgM)}</span></div>` : '';
+          return ctl + lineas;
+        })()}
         ${(_dual && _pedidoFullMostrarTotal) ? `<div style="display:flex;align-items:center;justify-content:space-between;font-size:15px;font-weight:800;color:var(--text);margin-bottom:2px;">
           <span>💵 Total Contado <span style="font-size:10.5px;font-weight:600;color:var(--text3);">(Efectivo, débito o transferencia)</span></span><span>${fmtMoney(_totalPorLista('p1'))}</span>
         </div>
@@ -6723,7 +6878,7 @@ window.descargarPedidoPDFConFotos = async () => {
       const offsetY = nombreLineas.length > 1 ? 13 : 9;
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(130, 140, 160);
       doc.text(`SKU: ${it.s}`, textX, y + offsetY);
-      if (!_dual) doc.text(`${fmtMoney(precio)} c/u × ${qty}`, textX, y + offsetY + 4.5);
+      if (!_dual) doc.text(`${fmtMoney(precio)} c/u × ${qty}${_descItemTexto(sku) ? '  (Dto ' + _descItemTexto(sku) + ')' : ''}`, textX, y + offsetY + 4.5);
 
       // Estado de stock — mismo texto y criterio que se ve en pantalla, salvo que acá
       // "Agotado" se muestra como "Stock a confirmar" (mismo texto y color naranja que ya
@@ -6777,8 +6932,19 @@ window.descargarPedidoPDFConFotos = async () => {
     }
 
     if (!_esPresu || _pedidoFullMostrarTotal) {
-      if (y + (_dual ? 32 : (_envioMontoPDF > 0 ? 22 : 14)) > pageH - margin) { doc.addPage(); y = margin; }
+      const _dgPDF = _dual ? 0 : descuentoGlobalMontoCarrito();
+      if (y + (_dual ? 32 : (_envioMontoPDF > 0 ? 22 : 14) + (_dgPDF > 0 ? 14 : 0)) > pageH - margin) { doc.addPage(); y = margin; }
       y += 4;
+      if (_dgPDF > 0) {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(80, 90, 110);
+        doc.text('Subtotal', margin, y);
+        doc.text(fmtMoney(calcularSubtotalCarrito()), pageW - margin, y, { align: 'right' });
+        y += 7;
+        doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 163, 74);
+        doc.text(_descGlobalEtiqueta(), margin, y);
+        doc.text('- ' + fmtMoney(_dgPDF), pageW - margin, y, { align: 'right' });
+        y += 7;
+      }
       if (_envioMontoPDF > 0) {
         doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(80, 90, 110);
         doc.text(`Envío (${_pedidoEnvioAdmin.tipo})`, margin, y);
@@ -9313,6 +9479,7 @@ function _aplicarCatalogoEnVivo(data){
     carrito.clear();
 
     if (typeof _preciosManualesCarrito !== 'undefined' && _preciosManualesCarrito && _preciosManualesCarrito.clear) _preciosManualesCarrito.clear();
+    if (typeof _limpiarDescuentosCarrito === 'function') _limpiarDescuentosCarrito();
     _skuGrupo.clear();
     _grupos.forEach((g, i) => g.elegidos.forEach((q, sku) => {
       if (!catalogoBySku.has(sku)) return;
@@ -11425,7 +11592,8 @@ document.addEventListener('keydown', (e) => {
     const excl = items.filter(i => !_ids[i.sku]);
     const envOn = $('yqc-env-on').checked;
     const envMonto = parseFloat(String(val('yqc-env-monto')).replace(/\./g, '').replace(',', '.')) || 0;
-    const tot = incl.reduce((s, i) => s + i.qty * i.precio, 0) + (envOn ? envMonto : 0);
+    const _dtoG = typeof descuentoGlobalPctCarrito === 'function' ? descuentoGlobalPctCarrito() : 0;
+    const tot = incl.reduce((s, i) => s + i.qty * i.precio, 0) * (1 - _dtoG / 100) + (envOn ? envMonto : 0);
     if (!incl.length) { toast('⚠ Ningún producto tiene ID de Yiqi', 'warn'); return; }
     const txt = `Se va a CREAR un pedido nuevo en Yiqi:\n\n` +
       `Cliente: ${_cli.CLIE_NOMBRE || _cli.CLIE_RAZON_SOCIAL} (ID ${_cli.id})\n` +
@@ -11433,6 +11601,7 @@ document.addEventListener('keydown', (e) => {
       `Vendedor: ${$('yqc-veha').selectedOptions[0].text} · Origen: ${$('yqc-exte').selectedOptions[0].text}\n` +
       `Productos: ${incl.length}${excl.length ? ` (${excl.length} SIN incluir: ${excl.map(i => i.sku).join(', ')})` : ''}\n` +
       (envOn && envMonto > 0 ? `Envío: ${$('yqc-env-seyi').selectedOptions[0].text} ${money(envMonto)}\n` : '') +
+      (_dtoG > 0 ? `Descuento global: ${(Math.round(_dtoG * 100) / 100).toLocaleString('es-AR')}%\n` : '') +
       `Total aprox.: ${money(tot)}\n\n¿Confirmás?`;
     if (!(await confirmar(txt, { titulo: '📤 Cargar pedido en Yiqi', ok: 'Sí, cargar pedido' }))) return;
     const datosMail = { cliente: _cli.CLIE_NOMBRE || _cli.CLIE_RAZON_SOCIAL || '', vendedor: $('yqc-veha').selectedOptions[0].text,
@@ -11448,6 +11617,7 @@ document.addEventListener('keydown', (e) => {
         PUVE_ID_PUVE: Number(val('yqc-puve')), CEDI_ID_ORIG: Number(val('yqc-cedi')),
         PRODUCTOS: incl.map(i => ({ MATE_ID_MATE: _ids[i.sku], DEDP_CANTIDAD: i.qty, DEDP_PRECIO_UNITARIO_FINA: Math.round(i.precio * 100) / 100, DEDP_BONIFICACION: 0 }))
       };
+      if (_dtoG > 0) data.PEDI_DTO_GLOBAL = _dtoG;
       if (_cliFact && String(_cliFact.id) !== String(_cli.id)) data.CLIE_ID_FACT = Number(_cliFact.id);
       if (val('yqc-obs')) data.PEDI_OBSERVACIONES = val('yqc-obs');
       if (val('yqc-dir')) data.PEDI_DIRECCION_DE_ENVIO = val('yqc-dir');
@@ -11838,6 +12008,7 @@ document.addEventListener('keydown', (e) => {
         (excl.length ? `\nSIN incluir (no están en Yiqi): ${excl.map(i => i.sku).join(', ')}\n` : '') +
         (yaEsta.length ? `\n⚠ Ya están en el pedido (se agregan como otra línea): ${yaEsta.map(i => i.sku).join(', ')}\n` : '') +
         (ped.estado && !/en espera de pago/i.test(ped.estado) ? `\n⚠ El pedido está "${ped.estado}": Yiqi puede no dejar agregar productos en ese estado.\n` : '') +
+        ((typeof descuentoGlobalMontoCarrito === 'function' && descuentoGlobalMontoCarrito() > 0) ? `\nℹ El descuento global de "Tu pedido" no se carga: al agregar a un pedido existente rige el descuento global que ya tenga ese pedido en Yiqi. (Los descuentos por producto sí van, en el precio de cada uno.)\n` : '') +
         `\nTotal a agregar: ${money(tot)}\n\n¿Es este el pedido?`;
       if (!(await confirmar(txt, { titulo: '📥 Cargar en pedido Yiqi', ok: 'Sí, es este pedido' }))) { setB(orig); return; }
 
@@ -12492,8 +12663,16 @@ document.addEventListener('keydown', (e) => {
       const j = await res.json();
       const lineas = (j.data || j.items || []).filter(x => String(x.PEDI_ID_PEDI ?? id) === String(id));
       if (!lineas.length) throw new Error('el pedido no tiene productos');
+      // Descuento global del pedido (Dto Global % de Yiqi): se aplica al precio de cada producto
+      let dtoG = Number(r.PEDI_DTO_GLOBAL);
+      if (!(dtoG >= 0)) { dtoG = 0;
+        try { const rp = await yiqiFetch(`${API}/api/public/PEDIDO/${encodeURIComponent(id)}?schemaId=${SCHEMA}`, { headers: H });
+              if (rp.ok) dtoG = Number((await rp.json()).PEDI_DTO_GLOBAL) || 0; } catch (e) { console.warn('[pedidosYiqi] no se pudo leer el descuento global', e); } }
+      if (!(dtoG > 0 && dtoG < 100)) dtoG = 0;
       const idx = new Map(); catalogoBySku.forEach((it, sku) => idx.set(String(sku).trim().toUpperCase(), sku));
       carrito.clear(); if (typeof _preciosManualesCarrito !== 'undefined') _preciosManualesCarrito.clear();
+      if (typeof _limpiarDescuentosCarrito === 'function') _limpiarDescuentosCarrito();
+      if (dtoG > 0 && typeof _descGlobalCarrito !== 'undefined') _descGlobalCarrito = { m: 'pct', v: dtoG };
       const faltan = [];
       lineas.forEach(l => {
         const sku = idx.get(String(l.DEDP_SKU || '').trim().toUpperCase());
@@ -12524,10 +12703,11 @@ document.addEventListener('keydown', (e) => {
       } catch (e) { console.warn('[pedidosYiqi] no se pudo leer el envío del pedido', e); }
       try { _presuClienteNombre = r.CLIE_NOMBRE || ''; } catch(e) {}
       try { _guardarPreciosManualesLS(); } catch(e) {}
+      try { _guardarDescuentosLS(); } catch(e) {}
       try { renderCarrito(); } catch(e) {}
       delete copiando[id];
       cerrarPanel();
-      toast(`🛒 Pedido N° ${numero}: ${lineas.length - faltan.length} producto(s) en tu pedido, con sus precios${envTxt}${faltan.length ? ` · sin encontrar en el catálogo: ${faltan.join(', ')}` : ''}`, faltan.length ? 'warn' : 'ok');
+      toast(`🛒 Pedido N° ${numero}: ${lineas.length - faltan.length} producto(s) en tu pedido, con sus precios${dtoG ? ` (con el descuento global de ${(Math.round(dtoG * 100) / 100).toLocaleString('es-AR')}% aplicado)` : ''}${envTxt}${faltan.length ? ` · sin encontrar en el catálogo: ${faltan.join(', ')}` : ''}`, faltan.length ? 'warn' : 'ok');
     } catch(e) { delete copiando[id]; render(); toast('⚠ No se pudieron traer los productos: ' + e.message, 'warn'); }
   }
 
