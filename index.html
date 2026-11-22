@@ -12919,7 +12919,9 @@ document.addEventListener('keydown', (e) => {
     // (ahí se mueven entre celdas). Esc desmarca y vuelven a mover el cursor del texto.
     const celdaDesdeBuscador = enBuscador && selId != null && !e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight');
     const escDesdeBuscador = enBuscador && selId != null && e.key === 'Escape';
-    if (enBuscador && e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && !lateral && !celdaDesdeBuscador && !escDesdeBuscador) return;
+    const enterDesdeBuscador = enBuscador && selId != null && e.key === 'Enter'; // Enter actúa sobre la celda / botón marcado
+    if (enBuscador && e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && !lateral && !celdaDesdeBuscador && !escDesdeBuscador && !enterDesdeBuscador) return;
+    if (enterDesdeBuscador) ultimoMouse = false;   // desde el buscador manda el teclado (la celda marcada), no el mouse
     if (!enBuscador && t && t.closest && t.closest('input,textarea,select,[contenteditable="true"]')) return;
     // Solo si el foco está en la grilla, en el panel o en ningún lado (no dentro de otro modal)
     if (t && t !== document.body && t !== document.documentElement && !(t.closest && t.closest('#pyq-wrap,#pyq-prev'))) return;
@@ -12947,6 +12949,11 @@ document.addEventListener('keydown', (e) => {
           const tr = td.closest('tr[data-id]'), th = document.querySelectorAll('#pyq-wrap thead th')[[...tr.children].indexOf(td)];
           if (th && th.dataset.col) { selCol = th.dataset.col; selId = tr.dataset.id; marcarFila(selId); }
           td.click();
+          // Si se editó desde el buscador, al terminar (guardar o cancelar) el cursor vuelve al buscador
+          if (enBuscador) {
+            const ed = td.querySelector('textarea,input,select'), q = t;
+            if (ed) ed.addEventListener('blur', () => setTimeout(() => { if (!document.activeElement || document.activeElement === document.body) { q.focus(); } }, 200), { once: true });
+          }
         } else if (typeof toast === 'function') toast('Esta celda no se edita desde acá · Shift + Enter abre la ficha del pedido', 'warn');
       }
     }
