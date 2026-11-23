@@ -9096,9 +9096,7 @@ function _aplicarCatalogoEnVivo(data){
         v.df++; v.prods.push(i);
       });
     });
-    // El grupo "Autoclave = esterilizador/esterilizadora" sirve para el buscador, pero acá (modo WhatsApp y
-    // Shift + clic) hacía que "autoclave" también marcara estufas esterilizadoras y el esterilizador a cuarzo.
-    const sinon = [...(typeof SINONIMOS !== 'undefined' ? SINONIMOS.filter(g => !g.includes('autoclave')) : []), ..._SINONIMOS_PEDIDOS].map(g => g.map(t => _tokens(t)).filter(t => t.length === 1).map(t => t[0]));
+    const sinon = [...(typeof SINONIMOS !== 'undefined' ? SINONIMOS : []), ..._SINONIMOS_PEDIDOS].map(g => g.map(t => _tokens(t)).filter(t => t.length === 1).map(t => t[0]));
     _idx = { ref: catalogo, len: catalogo.length, vocab, prods, N: catalogo.length || 1, sinon };
     return _idx;
   }
@@ -10018,13 +10016,18 @@ function _aplicarCatalogoEnVivo(data){
           const principal = n => nz(n).split(/\s[•·|]\s/)[0].replace(/\([^)]*\)/g, ' ').split(/\s(?:p\/|para|c\/|con)\s/)[0];
           const toks = nz(texto).split(/\s+/).filter(t => t && !/^\d+$/.test(t) && !(typeof _STOPWORDS_BUSQUEDA !== 'undefined' && _STOPWORDS_BUSQUEDA.has(t)));
           if (toks.length) {
-            const okTok = (t, pr) => {
-              const cands = (typeof _candidatosSinonimos === 'function' ? _candidatosSinonimos(t) : [t]).map(nz);
+            const okTok = (t, pr, conSinonimos) => {
+              const cands = (conSinonimos && typeof _candidatosSinonimos === 'function' ? _candidatosSinonimos(t) : [t]).map(nz);
               return cands.some(c => pr.includes(c) || pr.includes(sing(c)));
             };
             // La 1ª palabra (lo que se busca: "turbina", "adhesivo", "cemento"…) tiene que ser el producto en sí;
             // las demás pueden estar en cualquier parte (ej. "adhesivo bracket" → "Adhesivo p/ Brackets …").
-            const _princ = _cand.filter(it => { const pr = principal(it.n), todo = nz(it.n); return okTok(toks[0], pr) && toks.slice(1).every(t => okTok(t, todo)); });
+            // Primero con la palabra tal cual: si hay productos que la tienen, se usan solo esos (ej. "autoclave" →
+            // los Autoclaves, no las Estufas Esterilizadoras ni el Esterilizador a Cuarzo, que entran por sinónimo).
+            // Solo si ninguno la tiene tal cual, se prueba con los sinónimos.
+            const _filtrar = conSin => _cand.filter(it => { const pr = principal(it.n), todo = nz(it.n); return okTok(toks[0], pr, conSin) && toks.slice(1).every(t => okTok(t, todo, conSin)); });
+            let _princ = _filtrar(false);
+            if (!_princ.length) _princ = _filtrar(true);
             if (_princ.length) _cand = _princ;
           }
         }
