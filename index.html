@@ -12368,17 +12368,20 @@ document.addEventListener('keydown', (e) => {
         if (vids.length) consultas.push([{ c: 'VEHA_ID_VEHA', op: 'IN', v: vids }]);
       }
       if (!consultas.length) return [];
-    } else if (prefs.vend) {
-      consultas.push([{ c: 'VEHA_ID_VEHA', op: '=', v: Number(prefs.vend) }]);
+    } else if (prefs.vend || prefs.orig) {
+      const fv = [];
+      if (prefs.vend) fv.push({ c: 'VEHA_ID_VEHA', op: '=', v: Number(prefs.vend) });
+      if (prefs.orig) fv.push({ c: 'EXTE_ID_EXTE', op: '=', v: Number(prefs.orig) });
+      consultas.push(fv);
     } else {
       consultas.push([]);
     }
     let out = [], okAlguna = false, ultimoErr;
     for (const extra of consultas) {
       try {
-        const lote = await traerTodo(H, QCOLS, base.concat(extra), q || prefs.vend ? 5 : 10);
+        const lote = await traerTodo(H, QCOLS, base.concat(extra), q || prefs.vend || prefs.orig ? 5 : 10);
         okAlguna = true; out = out.concat(lote);
-        if (!q && !prefs.vend && lote.length >= 2000) truncadoLargo = true;
+        if (!q && !prefs.vend && !prefs.orig && lote.length >= 2000) truncadoLargo = true;
       } catch(e) { ultimoErr = e; console.warn('[pedidosYiqi] búsqueda larga falló:', extra, e.message); }
     }
     if (!okAlguna) throw ultimoErr || new Error('Sin respuesta de Yiqi');
@@ -12765,6 +12768,7 @@ document.addEventListener('keydown', (e) => {
     let out = rows.filter(r => {
       if (prefs.estado && estadoVer(r.DESC_ESTADO || '') !== estadoVer(prefs.estado)) return false;
       if (prefs.vend && String(r.VEHA_ID_VEHA ?? '') !== String(prefs.vend)) return false;
+      if (prefs.orig && String(r.EXTE_ID_EXTE ?? '') !== String(prefs.orig)) return false;
       if (!q) return true;
       return [nro(r), r.CLIE_NOMBRE, MAP_VEHA[r.VEHA_ID_VEHA], MAP_EXTE[r.EXTE_ID_EXTE], MAP_CEDI[r.CEDI_ID_ORIG], MAP_COVE[r.COVE_ID_COVE], r.PEDI_OBSERVACIONES, r.PEDI_ESTADO_DEL_ENVIO, r.PEDI_ESTADO_DE_PAGO, r.PEDI_ESTADO, r.PEDI_ESTADO_ACTUAL_DEL_PE, r.PEDI_PROVINCIA_DE_ENVIO, r.DESC_ESTADO, estadoVer(r.DESC_ESTADO)]
         .some(v => String(v || '').toLowerCase().includes(q));
@@ -12849,10 +12853,11 @@ document.addEventListener('keydown', (e) => {
           ${[[1,'Hoy'],[2,'Hoy y ayer'],[3,'Últimos 3 días'],[7,'Últimos 7 días'],[15,'Últimos 15 días'],[30,'Últimos 30 días'],[90,'Últimos 3 meses'],[180,'Últimos 6 meses'],[365,'Último año'],[730,'Últimos 2 años'],[0,'Pendientes (sin entregar, 60 días)']].map(([d,t]) => `<option value="${d}" ${prefs.dias==d?'selected':''}>${t}</option>`).join('')}
         </select>
         <select data-a="vend" title="Vendedor"><option value="">Todos los vendedores</option>${Object.entries(rows.reduce((m, r) => { const k = r.VEHA_ID_VEHA; if (k != null) m[k] = (m[k] || 0) + 1; return m; }, {})).sort((a, b) => String(MAP_VEHA[a[0]] || '#' + a[0]).localeCompare(String(MAP_VEHA[b[0]] || '#' + b[0]))).map(([k, n]) => `<option value="${esc(k)}" ${String(prefs.vend) === String(k) ? 'selected' : ''}>${esc(MAP_VEHA[k] || 'Vendedor #' + k)} (${n})</option>`).join('')}</select>
+        <select data-a="orig" title="Origen del pedido"><option value="">Todos los orígenes</option>${Object.entries(rows.reduce((m, r) => { const k = r.EXTE_ID_EXTE; if (k != null) m[k] = (m[k] || 0) + 1; return m; }, prefs.orig ? { [prefs.orig]: 0 } : {})).sort((a, b) => String(MAP_EXTE[a[0]] || '#' + a[0]).localeCompare(String(MAP_EXTE[b[0]] || '#' + b[0]))).map(([k, n]) => `<option value="${esc(k)}" ${String(prefs.orig) === String(k) ? 'selected' : ''}>${esc(MAP_EXTE[k] || 'Origen #' + k)} (${n})</option>`).join('')}</select>
         <input type="text" class="pyq-q" data-a="q" placeholder="Buscar nro, cliente, observaciones… (Retroceso)" value="${esc(prefs.q)}">
         <label class="pyq-chk"><input type="checkbox" data-a="ml" ${prefs.ml ? 'checked' : ''}> Incluir MercadoLibre</label>
         <span style="position:relative;display:inline-block;"><button class="pyq-btn sec" data-a="cols">⚙ Columnas</button>${colsAbierto ? panelCols() : ''}</span>
-        ${acNota ? `<div class="pyq-acnota">${window._acNotaHTML(acNota.orig, acNota.corr, 'window._pyqAcExacto()', null)}</div>` : ''}<span class="pyq-info">${prefs.dias > 31 ? `<span style="color:#fcd34d">${prefs.q ? 'Búsqueda en Yiqi · ' : (prefs.vend ? '' : (truncadoLargo ? 'Mostrando los 2000 más recientes — escribí en el buscador para buscar en todo el período · ' : 'Escribí en el buscador para buscar en todo el período · '))}</span>` : ''}${lista.length} de ${rows.length} pedidos${hace != null ? ` · actualizado ${hace < 1 ? 'recién' : 'hace ' + hace + ' min'}` : ''} · <span style="color:#a78bfa">✎</span> = editable (clic en la celda) · ↑ ↓ ← → moverse · Shift + ← → costados · Enter editar / guardar · Shift + Enter o clic = ficha del pedido</span>
+        ${acNota ? `<div class="pyq-acnota">${window._acNotaHTML(acNota.orig, acNota.corr, 'window._pyqAcExacto()', null)}</div>` : ''}<span class="pyq-info">${prefs.dias > 31 ? `<span style="color:#fcd34d">${prefs.q ? 'Búsqueda en Yiqi · ' : (prefs.vend || prefs.orig ? '' : (truncadoLargo ? 'Mostrando los 2000 más recientes — escribí en el buscador para buscar en todo el período · ' : 'Escribí en el buscador para buscar en todo el período · '))}</span>` : ''}${lista.length} de ${rows.length} pedidos${hace != null ? ` · actualizado ${hace < 1 ? 'recién' : 'hace ' + hace + ' min'}` : ''} · <span style="color:#a78bfa">✎</span> = editable (clic en la celda) · ↑ ↓ ← → moverse · Shift + ← → costados · Enter editar / guardar · Shift + Enter o clic = ficha del pedido</span>
       </div>
       ${needLogin ? `<div class="pyq-login">🔑 Ingresá tu usuario de Yiqi para ver los pedidos:
           <input type="text" id="pyq-u" placeholder="Usuario" autocomplete="username"><input type="password" id="pyq-p" placeholder="Contraseña" autocomplete="current-password">
@@ -13306,6 +13311,7 @@ document.addEventListener('keydown', (e) => {
       prefs.ocultas = [...h]; savePrefs(); return render();
     }
     if (a === 'vend') { prefs.vend = e.target.value; pag = 1; savePrefs(); if (prefs.dias > 31) return refrescar(true); return render(); }
+    if (a === 'orig') { prefs.orig = e.target.value; pag = 1; savePrefs(); if (prefs.dias > 31) return refrescar(true); return render(); }
     if (a === 'dias') { prefs.dias = Number(e.target.value); savePrefs(); refrescar(true); }
     if (a === 'ml') { prefs.ml = e.target.checked; savePrefs(); refrescar(true); }
   });
