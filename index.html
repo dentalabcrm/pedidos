@@ -9096,7 +9096,9 @@ function _aplicarCatalogoEnVivo(data){
         v.df++; v.prods.push(i);
       });
     });
-    const sinon = [...(typeof SINONIMOS !== 'undefined' ? SINONIMOS : []), ..._SINONIMOS_PEDIDOS].map(g => g.map(t => _tokens(t)).filter(t => t.length === 1).map(t => t[0]));
+    // El grupo "Autoclave = esterilizador/esterilizadora" sirve para el buscador, pero acá (modo WhatsApp y
+    // Shift + clic) hacía que "autoclave" también marcara estufas esterilizadoras y el esterilizador a cuarzo.
+    const sinon = [...(typeof SINONIMOS !== 'undefined' ? SINONIMOS.filter(g => !g.includes('autoclave')) : []), ..._SINONIMOS_PEDIDOS].map(g => g.map(t => _tokens(t)).filter(t => t.length === 1).map(t => t[0]));
     _idx = { ref: catalogo, len: catalogo.length, vocab, prods, N: catalogo.length || 1, sinon };
     return _idx;
   }
