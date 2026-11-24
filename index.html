@@ -576,6 +576,9 @@
      ahí el botón se ve siempre (en celular no hay hover para revelarlo). */
   .ci-precio-col-hover-btn{ opacity:0; pointer-events:none; transition:opacity .12s; }
   .ci-precio-col-hover:hover .ci-precio-col-hover-btn{ opacity:1; pointer-events:auto; }
+  /* Descuento global sin aplicar: no se muestra; aparece al pasar el mouse por el total (solo admin) */
+  .desc-g-hover{ display:none; }
+  .totales:hover .desc-g-hover, #pedido-full-footer:hover .desc-g-hover, .desc-g-hover:focus-within{ display:block; }
   .prod-restock-badge{
     display:inline-flex;align-items:center;font-size:10px;font-weight:800;color:var(--blue);
     background:rgba(2,132,199,.12);border:1px solid rgba(2,132,199,.4);border-radius:5px;
@@ -1277,6 +1280,7 @@ function _pintarDescGlobal(totalEl){
   const admin = esAdminCatalogo(), monto = descuentoGlobalMontoCarrito();
   if (!carrito.size || (!admin && !(monto > 0)) || !rowTotal) { if (fila) fila.remove(); return; }
   if (!fila) { fila = document.createElement('div'); fila.id = 'fila-desc-global'; rowTotal.parentNode.insertBefore(fila, rowTotal); }
+  fila.className = monto > 0 ? '' : 'desc-g-hover';
   const g = _descGlobalCarrito;
   fila.innerHTML =
     (monto > 0 ? `<div class="row" style="font-size:13px;font-weight:600;"><span>Subtotal</span><span>${fmtMoney(calcularSubtotalCarrito())}</span></div>` : '') +
@@ -6455,13 +6459,13 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
         ${(() => {
           if (_dual) return '';
           const _dgM = descuentoGlobalMontoCarrito(), _verTot = (!_esPresu || _pedidoFullMostrarTotal), g = _descGlobalCarrito;
-          const ctl = esAdmin ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;font-weight:700;color:var(--text2);margin-bottom:8px;">
+          const ctl = esAdmin ? `<div class="${_dgM > 0 ? '' : 'desc-g-hover'}"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;font-weight:700;color:var(--text2);margin-bottom:8px;">
               <span>🏷️ Descuento global sobre subtotal</span>
               <span style="display:flex;align-items:center;gap:6px;">
                 <input type="text" inputmode="decimal" value="${g.v > 0 ? escHtml(String(g.v).replace('.', ',')) : ''}" placeholder="0" onchange="setDescGlobalCarrito(this.value)" onkeydown="if(event.key==='Enter')this.blur()" onclick="this.select()" style="width:90px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12.5px;background:var(--panel);color:var(--text);text-align:right;">
                 <button onclick="toggleModoDescGlobalCarrito()" title="Cambiar entre % y $" style="border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--text);font-size:12.5px;font-weight:800;padding:5px 10px;cursor:pointer;min-width:34px;">${g.m === 'pct' ? '%' : '$'}</button>
               </span>
-            </div>` : '';
+            </div></div>` : '';
           const lineas = (_verTot && _dgM > 0) ? `<div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--text2);margin-bottom:4px;"><span>Subtotal</span><span>${fmtMoney(calcularSubtotalCarrito())}</span></div>
             <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:700;color:#16a34a;margin-bottom:6px;"><span>${escHtml(_descGlobalEtiqueta())}</span><span>− ${fmtMoney(_dgM)}</span></div>` : '';
           return ctl + lineas;
