@@ -11513,7 +11513,16 @@ document.addEventListener('keydown', (e) => {
       $('yqc-estenv').dispatchEvent(new Event('change'));
     }
     const ep = String(o.PEDI_ESTADO_DE_PAGO || '').trim();
-    if (ep && llenarEst('yqc-pago') && setVal('yqc-pago', ep, true)) ok.push('estado de pago');
+    if (ep && llenarEst('yqc-pago')) {
+      // El estado guardado puede no ser igual a una opción de la lista (ej. "EFECTIVO (Pagado)"):
+      // se busca la opción que corresponde, sin lo que va entre paréntesis ni acentos/mayúsculas.
+      const nzp = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+      const sinPar = x => nzp(x).replace(/\s*\([^)]*\)\s*$/, '').trim();
+      const opcs = Array.from(($('yqc-pago') || {}).options || []).map(x => x.value).filter(Boolean);
+      const elegida = opcs.find(v => v === ep) || opcs.find(v => nzp(v) === nzp(ep)) || opcs.find(v => nzp(v) === sinPar(ep)) || opcs.find(v => sinPar(v) === sinPar(ep))
+        || (/MOSTRADOR/.test(nzp(ep)) ? opcs.find(v => /MOSTRADOR/.test(nzp(v))) : undefined); // ej. "EFECT, DEBI, TRANSF, (MOSTRADOR)"
+      if (elegida && setVal('yqc-pago', elegida, true)) ok.push('estado de pago');
+    }
     if (o.CLIE_ID_FACT && o.CLIE_ID_FACT !== o.CLIE_ID_CLIE && (forzar || !_cliFact)) { elegirFact({ id: o.CLIE_ID_FACT, CLIE_NOMBRE: o.FACT_NOMBRE, CLIE_CUIT: o.FACT_CUIT }); ok.push('cliente de facturación'); }
     pistaLista();
     return ok;
