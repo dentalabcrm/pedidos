@@ -11623,7 +11623,7 @@ document.addEventListener('keydown', (e) => {
       `Total aprox.: ${money(tot)}\n\n¿Confirmás?`;
     if (!(await confirmar(txt, { titulo: '📤 Cargar pedido en Yiqi', ok: 'Sí, cargar pedido' }))) return;
     const datosMail = { cliente: _cli.CLIE_NOMBRE || _cli.CLIE_RAZON_SOCIAL || '', vendedor: $('yqc-veha').selectedOptions[0].text,
-      origen: $('yqc-exte').selectedOptions[0].text, envio: estadoEnvioFinal(), pago: val('yqc-pago'), cond: ($('yqc-cove').selectedOptions[0] || {}).text || '' };
+      origen: $('yqc-exte').selectedOptions[0].text, envio: estadoEnvioFinal(), pago: val('yqc-pago'), cond: ($('yqc-cove').selectedOptions[0] || {}).text || '', obs: val('yqc-obs') };
 
     const btn = $('yqc-go'); btn.disabled = true; btn.textContent = '⏳ Cargando…';
     guardarPrefs({ exte: val('yqc-exte'), veha: val('yqc-veha'), puve: val('yqc-puve'), cedi: val('yqc-cedi') });
@@ -13591,10 +13591,25 @@ const TIPOS_PEDIDO = new Proxy([], {
 
 // ── Después de cargar un pedido en Yiqi: abrir "Nuevo pedido → depósito" con todo completo ──
 // Tipo de pedido según el origen y el estado del envío del pedido cargado.
-function _mailDepTipo(origen, envio) {
-  const env = /^\s*ENVIAR/i.test(String(envio || '')) ? 'enviar' : 'retira';
-  const o = String(origen || '').toLowerCase();
-  const pre = /web/.test(o) ? 'web-' : /jorge/.test(o) ? 'jorge-' : /gregorio/.test(o) ? 'gregorio-' : /^local/.test(o) ? 'mostrador-' : '';
+// Retira o Enviar: se mira el Estado del envío y, si no dice nada, las observaciones.
+function _mailDepRetiraOEnvia(txt) {
+  const t = String(txt || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (!t.trim()) return null;
+  const iR = t.search(/\bretir|\bpasa(?:n|ra|rian)? a buscar|\bbusca(?:n|ra)?\b|\ben el local\b|\bmostrador\b/);
+  const iE = t.search(/\benvi[aoe]|\benvio|\bmandar|\bdespach|\btransporte|\bexpreso|\bcargo\b|\bcargaro|\bterminal\b|\boca\b|\bandreani|\bcorreo|\bcadete|\bmoto\b|\bflete|\ba domicilio|\bvia cargo|\bcomisionista/);
+  if (iR < 0 && iE < 0) return null;
+  if (iR < 0) return 'enviar';
+  if (iE < 0) return 'retira';
+  return iE < iR ? 'enviar' : 'retira'; // si dice las dos cosas, manda la que aparece primero
+}
+// Tipo de pedido: origen Web → Web; si no, según el vendedor (Jorge, Aris, Carlos Cirigliano → Mary, Gregorio);
+// si no, según el origen (Jorge (Dep 7), Gregorio (Dep 2), Local → Mostrador).
+function _mailDepTipo(origen, envio, vendedor, obs) {
+  const env = _mailDepRetiraOEnvia(envio) || _mailDepRetiraOEnvia(obs) || 'retira';
+  const o = String(origen || '').toLowerCase(), v = String(vendedor || '').toLowerCase();
+  const pre = /web/.test(o) ? 'web-'
+    : /jorge/.test(v) ? 'jorge-' : /\baris\b/.test(v) ? 'aris-' : /cirigliano|\bcarlos\b/.test(v) ? 'mary-' : /gregorio/.test(v) ? 'gregorio-'
+    : /jorge/.test(o) ? 'jorge-' : /gregorio/.test(o) ? 'gregorio-' : /^local/.test(o) ? 'mostrador-' : '';
   return pre + env;
 }
 // Cobro según el estado de pago (y si no hay, la condición de venta). null = dejar el que pone el modal.
@@ -13619,7 +13634,7 @@ const _mdId = v => (v && typeof v === 'object') ? (v.id != null ? v.id : v.ID) :
 // Datos del mail a partir de un pedido de Yiqi (fila de PEDIDO/query)
 function _mailDepDatosDePedido(p) {
   const nom = (map, v) => { const id = _mdId(v); return map[id] || (typeof v === 'string' && isNaN(Number(v)) ? v : ''); };
-  return { vendedor: nom(MD_VEHA, p.VEHA_ID_VEHA), origen: nom(MD_EXTE, p.EXTE_ID_EXTE), envio: p.PEDI_ESTADO_DEL_ENVIO || '', pago: p.PEDI_ESTADO_DE_PAGO || '', cond: nom(MD_COVE, p.COVE_ID_COVE) };
+  return { vendedor: nom(MD_VEHA, p.VEHA_ID_VEHA), origen: nom(MD_EXTE, p.EXTE_ID_EXTE), envio: p.PEDI_ESTADO_DEL_ENVIO || '', pago: p.PEDI_ESTADO_DE_PAGO || '', cond: nom(MD_COVE, p.COVE_ID_COVE), obs: p.PEDI_OBSERVACIONES || '' };
 }
 window._mailDepDatosDePedido = _mailDepDatosDePedido;
 // d = { nro, cliente, vendedor, origen, envio, pago, cond }. desdeNro: los datos vienen de buscar el N° (pisan lo elegido antes)
@@ -13638,8 +13653,8 @@ function _mailDepCompletar(d, opts) {
     try { if (prev != null) saveVendedorDefault(prev); } catch (e) {}
   }
   // 2) Tipo de pedido (Retira / Enviar / Web / Jorge / Gregorio / Mostrador)
-  if (d.origen || d.envio) {
-    const t = TIPOS_PEDIDO.find(x => x.value === _mailDepTipo(d.origen, d.envio));
+  if (d.origen || d.envio || d.vendedor || d.obs) {
+    const t = TIPOS_PEDIDO.find(x => x.value === _mailDepTipo(d.origen, d.envio, d.vendedor, d.obs));
     const tSel = $('#env-tipo'), tTxt = $('#env-tipo-text');
     if (t && tSel) { tSel.value = t.value; if (tTxt) tTxt.value = t.label; fire(tSel, 'change'); }
   }
@@ -13888,7 +13903,7 @@ function abrirModalNuevoPedido() {
       try {
         // 2) Pedido por N° (nunca por "adivinar" el ID)
         const r = await yiqiFetch(`${API}/api/public/PEDIDO/query?schemaId=${SCHEMA}`, { method: 'POST', headers: H,
-          body: JSON.stringify({ page: 1, pageSize: 5, columns: ['ID', 'PEDI_NUMERO_SOLO', 'CLIE_NOMBRE', 'PEDI_RAZON_SOCIAL', 'DESC_ESTADO', 'VEHA_ID_VEHA', 'EXTE_ID_EXTE', 'COVE_ID_COVE', 'PEDI_ESTADO_DEL_ENVIO', 'PEDI_ESTADO_DE_PAGO'].map((f, i) => ({ field: f, title: f, order: i + 1 })),
+          body: JSON.stringify({ page: 1, pageSize: 5, columns: ['ID', 'PEDI_NUMERO_SOLO', 'CLIE_NOMBRE', 'PEDI_RAZON_SOCIAL', 'DESC_ESTADO', 'VEHA_ID_VEHA', 'EXTE_ID_EXTE', 'COVE_ID_COVE', 'PEDI_ESTADO_DEL_ENVIO', 'PEDI_ESTADO_DE_PAGO', 'PEDI_OBSERVACIONES'].map((f, i) => ({ field: f, title: f, order: i + 1 })),
             filters: [{ columnName: 'PEDI_NUMERO_SOLO', operator: '=', value: Number(nro) }] }) });
         if (my !== _envSeq) return;
         const j = r.ok ? await r.json() : {};
