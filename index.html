@@ -10785,6 +10785,32 @@ document.addEventListener('keydown', (e) => {
     return encontrados;
   }
 
+  // Envío de un PDF de pedido/presupuesto de Yiqi: lee la sección "Servicios" (entre "Servicios" y
+  // "Observaciones"), suma los montos de cada renglón y reconoce el tipo de servicio por el nombre.
+  function _parsearEnvioDesdePDFPresupuesto(lines) {
+    const iS = lines.findIndex(l => /^\s*servicios\s*$/i.test(String(l).replace(/\t/g, ' ')));
+    if (iS < 0) return null;
+    let iF = lines.findIndex((l, i) => i > iS && /observaciones|^\s*neto\b/i.test(String(l)));
+    if (iF < 0) iF = Math.min(lines.length, iS + 12);
+    const tramo = lines.slice(iS + 1, iF).map(l => String(l).replace(/\t/g, ' '));
+    const aNum = t => Number(String(t).replace(/[$\s.]/g, '').replace(',', '.')) || 0;
+    let monto = 0, texto = '';
+    tramo.forEach(l => {
+      if (/c[oó]digo.*descripci[oó]n/i.test(l)) return; // encabezado de la tabla
+      texto += ' ' + l;
+      const montos = l.match(/\$\s?[\d.]+,\d{2}/g);
+      if (montos && montos.length) monto += aNum(montos[montos.length - 1]); // última columna: Neto c/dto
+    });
+    if (!(monto > 0)) return null;
+    const t = texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const nombres = window._SEYI_NOMBRES || {};
+    // primero, el nombre exacto de algún servicio de Yiqi; si no, por palabras
+    let seyi = Number(Object.keys(nombres).find(id => t.includes(String(nombres[id]).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())));
+    if (!seyi) seyi = /retiro en una sucursal|retira/.test(t) ? 5 : /rapido|caba|moto/.test(t) ? 4 : /transporte|expreso|normal a domicilio/.test(t) ? 2 : 7;
+    const nro = (lines.join(' ').match(/(?:manual|web|whatsapp|local)\s*-\s*(\d{4,6})/i) || [])[1] || '';
+    return { seyi, nombre: nombres[seyi] || 'Envío', monto: Math.round(monto * 100) / 100, nro };
+  }
+
   // Reconstruye SKUs que el PDF cortó en dos líneas por una columna angosta (mismo
   // criterio que usa el CRM), y arma pares {sku, qty} leyendo la tabla de Productos.
   function _parsearProductosDesdePDFPresupuesto(lines) {
@@ -10870,7 +10896,8 @@ document.addEventListener('keydown', (e) => {
       }
 
       let encontrados = _parsearProductosDesdePDFPedidoPropio(lines);
-      if (!encontrados.length) encontrados = _parsearProductosDesdePDFPresupuesto(lines);
+      let envioPDF = null;
+      if (!encontrados.length) { encontrados = _parsearProductosDesdePDFPresupuesto(lines); envioPDF = _parsearEnvioDesdePDFPresupuesto(lines); }
       if (!encontrados.length) {
         _zoomMostrarAviso('⚠ No encontramos productos de nuestro catálogo en ese PDF');
         return;
@@ -10882,11 +10909,14 @@ document.addEventListener('keydown', (e) => {
         carrito.set(sku, qty);
         agregados++;
       });
+      // Envío del PDF (sección "Servicios" del pedido de Yiqi): se carga igual que con "🛒 Al carrito"
+      if (agregados && esAdminCatalogo()) window._envioDesdePedido = envioPDF;
       if (typeof renderResultados === 'function') renderResultados();
       renderCarrito();
       if (typeof _guardarCarritoLS === 'function') _guardarCarritoLS();
       const msg = agregados
         ? `✅ Se cargaron ${agregados} producto${agregados !== 1 ? 's' : ''} de tu pedido`
+          + (agregados && envioPDF && esAdminCatalogo() ? ` + envío ${envioPDF.nombre} ${fmtMoney(envioPDF.monto)}` : '')
           + (noDisponibles ? ` · ${noDisponibles} ya no ${noDisponibles !== 1 ? 'están' : 'está'} disponible${noDisponibles !== 1 ? 's' : ''}` : '')
         : '⚠ No encontramos esos productos en el catálogo actual';
       _zoomMostrarAviso(msg);
