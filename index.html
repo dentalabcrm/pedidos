@@ -576,6 +576,7 @@
      ahí el botón se ve siempre (en celular no hay hover para revelarlo). */
   .ci-precio-col-hover-btn{ opacity:0; pointer-events:none; transition:opacity .12s; }
   .ci-precio-col-hover:hover .ci-precio-col-hover-btn{ opacity:1; pointer-events:auto; }
+  .ci-precio-col-hover .ci-precio-col-hover-btn:focus-within{ opacity:1; pointer-events:auto; }
   /* Cantidad bien visible en el pedido: etiqueta "4 unidades" */
   .cant-pill{ display:inline-block; background:#e6f1fb; color:#0c447c; font-weight:800; font-size:13.5px; border-radius:6px; padding:2px 9px; margin-right:6px; vertical-align:baseline; }
   [data-theme="dark"] .cant-pill, .dark .cant-pill{ background:#0c447c; color:#e6f1fb; }
@@ -1953,8 +1954,37 @@ function _presuItems(){
     const it = catalogoBySku.get(sku);
     if (!it) return null;
     const precio = precioCarritoDe(sku);
-    return { sku, nombre: it.n, qty, precio: precio || 0, subtotal: (precio || 0) * qty };
+    return { sku, nombre: it.n, qty, precio: precio || 0, subtotal: (precio || 0) * qty,
+      p1: Number(it.p1) || 0, p2: Number(it.p2) || 0,
+      precioLista: (typeof precioBaseCarritoDe === 'function' ? precioBaseCarritoDe(sku) : precio) || precio || 0,
+      dto: (typeof _descItemTexto === 'function' ? _descItemTexto(sku) : '') || '' };
   }).filter(Boolean);
+}
+// Opciones de "Ver como Presupuesto": si se abre desde la pantalla completa en modo Presupuesto (admin),
+// respeta lo tildado ahí: "Mostrar el total", "Mostrar forma de pago" y "Mostrar Lista 1 y Lista 2".
+// Desde cualquier otro lado se ve completo, como siempre.
+let _presuOpc = { total: true, formaPago: true, dosListas: false };
+function _presuOpcDesdePantalla(desdePantalla){
+  const aplica = !!desdePantalla && typeof esAdminCatalogo === 'function' && esAdminCatalogo()
+    && typeof _pedidoFullModo !== 'undefined' && _pedidoFullModo === 'presupuesto';
+  _presuOpc = aplica
+    ? { total: !!_pedidoFullMostrarTotal, formaPago: !!_pedidoFullMostrarFormaPago, dosListas: !!_pedidoFullDosListas }
+    : { total: true, formaPago: true, dosListas: false };
+}
+// Envío del pedido (el que vino del PDF / "Al carrito") para el presupuesto
+function _presuEnvio(){
+  const ep = typeof _envioPedidoActual === 'function' ? _envioPedidoActual() : null;
+  if (!ep) return null;
+  const t = (typeof _presuTransporte !== 'undefined' && _presuTransporte) ? _presuTransporte : '';
+  return { monto: ep.monto, etiqueta: `Envío (${[ep.nombre || 'Envío', t].filter(Boolean).join(' · ')})` };
+}
+function _presuCondicionesTexto(){
+  return (typeof _presuCondiciones !== 'undefined' ? String(_presuCondiciones || '') : '').trim();
+}
+// Descuento global del pedido (si hay) para el presupuesto
+function _presuDescGlobal(sub){
+  const m = typeof descuentoGlobalMontoCarrito === 'function' ? descuentoGlobalMontoCarrito() : 0;
+  return m > 0 && sub > 0 ? { monto: m, etiqueta: typeof _descGlobalEtiqueta === 'function' ? _descGlobalEtiqueta() : 'Descuento' } : null;
 }
 
 // Texto de la columna "Lista" — igual criterio que usa el CRM (contado vs tarjeta).
@@ -1970,17 +2000,53 @@ function _presuDocHtml(items){
   const listaLabel = _presuListaLabel();
   const nombreCliente = _presuDatosCliente().nombre;
   const dniCliente = _presuDatosCliente().dni;
-  const filas = items.map(it => `
+  const O = _presuOpc;
+  const filas = items.map(it => O.dosListas ? `
     <tr>
       <td class="sku-cell">${escHtml(it.sku)}</td>
       <td>${escHtml(it.nombre)}</td>
-      <td class="lista-cell">${listaLabel}</td>
       <td class="center">${it.qty}</td>
-      <td class="num">${fmtMoney(it.precio)}</td>
-      <td class="center">—</td>
+      <td class="num">${fmtMoney(it.p1)}</td>
+      <td class="num subtotal-cell">${fmtMoney(it.p1 * it.qty)}</td>
+      <td class="num">${fmtMoney(it.p2)}</td>
+      <td class="num subtotal-cell">${fmtMoney(it.p2 * it.qty)}</td>
+    </tr>` : `
+    <tr>
+      <td class="sku-cell">${escHtml(it.sku)}</td>
+      <td>${escHtml(it.nombre)}</td>
+      ${O.formaPago ? `<td class="lista-cell">${listaLabel}</td>` : ''}
+      <td class="center">${it.qty}</td>
+      <td class="num">${fmtMoney(it.precioLista)}</td>
+      <td class="center">${it.dto ? escHtml(it.dto) : '—'}</td>
       <td class="num subtotal-cell">${fmtMoney(it.subtotal)}</td>
     </tr>`).join('');
-  const total = items.reduce((a, it) => a + it.subtotal, 0);
+  const subtotal = items.reduce((a, it) => a + it.subtotal, 0);
+  const dg = O.dosListas ? null : _presuDescGlobal(subtotal);
+  const env = _presuEnvio();
+  const total = subtotal - (dg ? dg.monto : 0) + (env ? env.monto : 0);
+  const tot1 = items.reduce((a, it) => a + it.p1 * it.qty, 0) + (env ? env.monto : 0), tot2 = items.reduce((a, it) => a + it.p2 * it.qty, 0) + (env ? env.monto : 0);
+  const filaEnvio = env ? `<div class="presu-totales-row"><span>${escHtml(env.etiqueta)}</span><span>+ ${fmtMoney(env.monto)}</span></div>` : '';
+  const cond = _presuCondicionesTexto();
+  const condHtml = cond ? `<div style="margin-top:18px;padding-top:10px;border-top:1px solid #d8d8d8;"><div style="font-size:11px;font-weight:800;letter-spacing:.4px;color:#1e1e1e;margin-bottom:3px;">CONDICIONES COMERCIALES</div><div style="font-size:12px;color:#333;white-space:pre-line;line-height:1.45;">${escHtml(cond)}</div></div>` : '';
+  const cabecera = O.dosListas
+    ? `<th>SKU</th><th>Producto</th><th class="center">Cant.</th><th class="num">Contado<br>P. Unit.</th><th class="num">Contado<br>Subtotal</th><th class="num">Tarjeta 1 pago<br>P. Unit.</th><th class="num">Tarjeta 1 pago<br>Subtotal</th>`
+    : `<th>SKU</th><th>Producto</th>${O.formaPago ? '<th class="center">Lista</th>' : ''}<th class="center">Cant.</th><th class="num">P. Unit.</th><th class="center">Desc.</th><th class="num">Subtotal</th>`;
+  const totales = !O.total ? '' : O.dosListas ? `
+      <div class="presu-totales">
+        <div class="presu-totales-box">
+          ${filaEnvio}
+          <div class="presu-totales-row total"><span>TOTAL Contado<small style="display:block;font-size:10px;font-weight:600;opacity:.8">Efectivo, transferencia o Mercado Pago</small></span><span>${fmtMoney(tot1)}</span></div>
+          <div class="presu-totales-row total" style="margin-top:6px"><span>TOTAL Tarjeta<small style="display:block;font-size:10px;font-weight:600;opacity:.8">1 pago</small></span><span>${fmtMoney(tot2)}</span></div>
+        </div>
+      </div>` : `
+      <div class="presu-totales">
+        <div class="presu-totales-box">
+          <div class="presu-totales-row"><span>Subtotal</span><span>${fmtMoney(subtotal)}</span></div>
+          ${dg ? `<div class="presu-totales-row"><span>${escHtml(dg.etiqueta)}</span><span>− ${fmtMoney(dg.monto)}</span></div>` : ''}
+          ${filaEnvio}
+          <div class="presu-totales-row total"><span>TOTAL</span><span>${fmtMoney(total)}</span></div>
+        </div>
+      </div>`;
   return `
     <div class="presu-doc" id="presu-doc-contenido">
       <div class="presu-doc-header">
@@ -2005,18 +2071,9 @@ function _presuDocHtml(items){
         <div><div class="lbl">Cuit / DNI</div><div class="val">${escHtml(dniCliente) || '—'}</div></div>
       </div>
       <table class="presu-table">
-        <thead><tr>
-          <th>SKU</th><th>Producto</th><th class="center">Lista</th><th class="center">Cant.</th>
-          <th class="num">P. Unit.</th><th class="center">Desc.</th><th class="num">Subtotal</th>
-        </tr></thead>
+        <thead><tr>${cabecera}</tr></thead>
         <tbody>${filas}</tbody>
-      </table>
-      <div class="presu-totales">
-        <div class="presu-totales-box">
-          <div class="presu-totales-row"><span>Subtotal</span><span>${fmtMoney(total)}</span></div>
-          <div class="presu-totales-row total"><span>TOTAL</span><span>${fmtMoney(total)}</span></div>
-        </div>
-      </div>
+      </table>${totales}${condHtml}
       <div class="presu-doc-footer">Este presupuesto es informativo — para confirmarlo, completá tus datos y enviá el pedido más abajo.<br>Generado a través de <a href="https://dentalabcrm.github.io/pedidos/" target="_blank" style="color:#2563eb;">dentalabcrm.github.io/pedidos</a></div>
     </div>`;
 }
@@ -2149,7 +2206,8 @@ window._historialRepetirPedido = (idx) => {
   }
 };
 
-window.abrirVistaPresupuesto = () => {
+window.abrirVistaPresupuesto = (desdePantalla) => {
+  _presuOpcDesdePantalla(desdePantalla === true);
   const items = _presuItems();
   if (!items.length) return;
   document.getElementById('presu-backdrop')?.remove();
@@ -2225,15 +2283,35 @@ window.descargarPresupuestoPDF = async () => {
     const listaLabelPdf = listaActiva === 'p1'
       ? 'Precio c/dto.\nEfectivo, transferencia\no Mercado Pago'
       : 'Tarjeta\n1 pago';
+    const O = _presuOpc;
+    // Columnas según lo tildado en la pantalla completa (forma de pago / Lista 1 y Lista 2)
+    let headP, bodyP, colsP, derechaP;
+    if (O.dosListas) {
+      headP = [['SKU', 'PRODUCTO', 'CANT.', 'CONTADO\nP. UNIT.', 'CONTADO\nSUBTOTAL', 'TARJETA\nP. UNIT.', 'TARJETA\nSUBTOTAL']];
+      bodyP = items.map(it => [it.sku, it.nombre, String(it.qty), fmtMoney(it.p1), fmtMoney(it.p1 * it.qty), fmtMoney(it.p2), fmtMoney(it.p2 * it.qty)]);
+      colsP = { 0: { cellWidth: 20, fontSize: 8, textColor: [100, 100, 100], halign: 'center' }, 1: { cellWidth: 'auto', fontSize: 9 }, 2: { cellWidth: 13, halign: 'center', fontSize: 9 },
+        3: { cellWidth: 22, halign: 'right', fontSize: 8.5 }, 4: { cellWidth: 24, halign: 'right', fontSize: 8.5, fontStyle: 'bold' }, 5: { cellWidth: 22, halign: 'right', fontSize: 8.5 }, 6: { cellWidth: 24, halign: 'right', fontSize: 8.5, fontStyle: 'bold' } };
+      derechaP = [3, 4, 5, 6];
+    } else if (!O.formaPago) {
+      headP = [['SKU', 'PRODUCTO', 'CANT.', 'P. UNIT.', 'DESC.', 'SUBTOTAL']];
+      bodyP = items.map(it => [it.sku, it.nombre, String(it.qty), fmtMoney(it.precioLista), it.dto || '—', fmtMoney(it.subtotal)]);
+      colsP = { 0: { cellWidth: 23, fontSize: 8, textColor: [100, 100, 100], halign: 'center' }, 1: { cellWidth: 'auto', fontSize: 9 }, 2: { cellWidth: 16, halign: 'center', fontSize: 9 },
+        3: { cellWidth: 26, halign: 'right', fontSize: 9 }, 4: { cellWidth: 16, halign: 'center', fontSize: 9, textColor: [80, 80, 80] }, 5: { cellWidth: 26, halign: 'right', fontSize: 9, fontStyle: 'bold' } };
+      derechaP = [3, 5];
+    } else {
+      headP = [['SKU', 'PRODUCTO', 'LISTA', 'CANT.', 'P. UNIT.', 'DESC.', 'SUBTOTAL']];
+      bodyP = items.map(it => [it.sku, it.nombre, listaLabelPdf, String(it.qty), fmtMoney(it.precioLista), it.dto || '—', fmtMoney(it.subtotal)]);
+      colsP = null; derechaP = [4, 6];
+    }
 
     doc.autoTable({
       startY: y,
-      head: [['SKU', 'PRODUCTO', 'LISTA', 'CANT.', 'P. UNIT.', 'DESC.', 'SUBTOTAL']],
-      body: items.map(it => [it.sku, it.nombre, listaLabelPdf, String(it.qty), fmtMoney(it.precio), '—', fmtMoney(it.subtotal)]),
+      head: headP,
+      body: bodyP,
       theme: 'grid',
       margin: { left: margin, right: margin },
       headStyles: { fillColor: [220, 220, 220], textColor: [20, 20, 20], fontSize: 8, fontStyle: 'bold', cellPadding: 3 },
-      columnStyles: {
+      columnStyles: colsP || {
         0: { cellWidth: 23, fontSize: 8, textColor: [100, 100, 100], halign: 'center' },
         1: { cellWidth: 'auto', fontSize: 9 },
         2: { cellWidth: 24, fontSize: 7.5, halign: 'center', textColor: [60, 60, 60] },
@@ -2246,27 +2324,64 @@ window.descargarPresupuestoPDF = async () => {
       styles: { overflow: 'linebreak', cellPadding: 2.5, lineColor: [200, 200, 200], lineWidth: 0.1, textColor: [20, 20, 20] },
       rowPageBreak: 'avoid',
       didParseCell: (data) => {
-        if (data.section === 'head' && data.column.index !== 1) data.cell.styles.halign = (data.column.index === 4 || data.column.index === 6) ? 'right' : 'center';
+        if (data.section === 'head' && data.column.index !== 1) data.cell.styles.halign = derechaP.includes(data.column.index) ? 'right' : 'center';
       },
     });
 
-    const total = items.reduce((a, it) => a + it.subtotal, 0);
+    const subtotalP = items.reduce((a, it) => a + it.subtotal, 0);
+    const dgP = O.dosListas ? null : _presuDescGlobal(subtotalP);
+    const envP = _presuEnvio();
+    const total = subtotalP - (dgP ? dgP.monto : 0) + (envP ? envP.monto : 0);
     y = doc.lastAutoTable.finalY + 6;
 
     const totalsX = pageW - margin - 72;
     const totalsW = 72;
-    doc.setFillColor(248, 248, 248); doc.setDrawColor(200, 200, 200);
-    doc.rect(totalsX, y, totalsW, 8, 'FD');
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-    doc.text('Subtotal', totalsX + 3, y + 5.5);
-    doc.text(fmtMoney(total) || '', totalsX + totalsW - 3, y + 5.5, { align: 'right' });
-    y += 8;
+    const filaGris = (lbl, val) => {
+      doc.setFillColor(248, 248, 248); doc.setDrawColor(200, 200, 200);
+      doc.rect(totalsX, y, totalsW, 8, 'FD');
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+      doc.text(lbl, totalsX + 3, y + 5.5);
+      doc.text(val || '', totalsX + totalsW - 3, y + 5.5, { align: 'right' });
+      y += 8;
+    };
+    const filaNegra = (lbl, val, sub) => {
+      doc.setFillColor(30, 30, 30);
+      doc.roundedRect(totalsX, y, totalsW, sub ? 13 : 11, 2, 2, 'F');
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      doc.text(lbl, totalsX + 3, y + 7);
+      doc.text(val || '', totalsX + totalsW - 3, y + 7, { align: 'right' });
+      if (sub) { doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.text(sub, totalsX + 3, y + 11); }
+      y += (sub ? 13 : 11) + 2;
+    };
+    if (O.total) {
+      if (O.dosListas) {
+        if (envP) filaGris(envP.etiqueta, '+ ' + fmtMoney(envP.monto));
+        filaNegra('TOTAL Contado', fmtMoney(items.reduce((a, it) => a + it.p1 * it.qty, 0) + (envP ? envP.monto : 0)), 'Efectivo, transferencia o Mercado Pago');
+        filaNegra('TOTAL Tarjeta', fmtMoney(items.reduce((a, it) => a + it.p2 * it.qty, 0) + (envP ? envP.monto : 0)), '1 pago');
+      } else {
+        filaGris('Subtotal', fmtMoney(subtotalP));
+        if (dgP) filaGris(dgP.etiqueta, '- ' + fmtMoney(dgP.monto));
+        if (envP) filaGris(envP.etiqueta, '+ ' + fmtMoney(envP.monto));
+        filaNegra('TOTAL', fmtMoney(total));
+      }
+    }
 
-    doc.setFillColor(30, 30, 30);
-    doc.roundedRect(totalsX, y, totalsW, 11, 2, 2, 'F');
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-    doc.text('TOTAL', totalsX + 3, y + 7.5);
-    doc.text(fmtMoney(total) || '', totalsX + totalsW - 3, y + 7.5, { align: 'right' });
+    // Condiciones comerciales (al pie, como en el PDF del CRM)
+    const condP = _presuCondicionesTexto();
+    if (condP) {
+      const lineasC = doc.splitTextToSize(condP, pageW - margin * 2);
+      const altoC = 10 + lineasC.length * 4.2;
+      if (y + 6 + altoC > pageH - 16) { doc.addPage(); y = margin; }
+      y += 6;
+      doc.setDrawColor(200, 200, 200); doc.line(margin, y, pageW - margin, y);
+      y += 5;
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
+      doc.text('CONDICIONES COMERCIALES', margin, y);
+      y += 4.5;
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 60, 60);
+      doc.text(lineasC, margin, y);
+      y += lineasC.length * 4.2;
+    }
 
     const footerY = pageH - 10;
     doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
@@ -6225,6 +6340,95 @@ function _presuDatosCliente(){
     dni: (_presuClienteDni || document.getElementById('cf-dni')?.value || '').trim(),
   };
 }
+// ── Condiciones comerciales + mensaje al cliente (admin), igual que en Presupuestos del CRM ──
+// Al arrastrar un PDF de presupuesto/pedido de Yiqi se leen "Lugar de Entrega" / "Observaciones"
+// (día de entrega, horario, dirección) y se vuelcan en las condiciones, que salen al pie del
+// presupuesto. Si es un Envío Dentalab, se arma el mensaje de confirmación para el cliente.
+let _presuCondiciones = '';
+let _presuTransporte = '';
+let _presuMsgEnvio = null;
+function _presuCondicionesDesdeDatos(datos){
+  if (!datos) return '';
+  const obsLow = (datos.observaciones || '').toLowerCase();
+  const diceRetira = /\bretir\w*/.test(obsLow), diceEnviar = /\benv[ií]\w*/.test(obsLow);
+  if (diceRetira && !diceEnviar) return ''; // es un retiro: no aplica info de envío
+  const partes = [];
+  if (datos.fechaEntregaTexto) partes.push(`Día de entrega: ${datos.fechaEntregaTexto}`);
+  if (datos.horario) partes.push(`Horario: ${datos.horario}`);
+  let dir = datos.direccion;
+  if (datos.tipoEntrega === 'sucursal') {
+    const cap = t => t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : t;
+    if (datos.sucursalDireccion) dir = `Sucursal, ${datos.sucursalDireccion}`;
+    else { const ps = ['Sucursal']; if (datos.provincia) ps.push(datos.provincia); if (datos.localidad) ps.push(cap(datos.localidad)); dir = ps.join(', '); }
+  }
+  if (dir) partes.push(`Dirección de envío: ${dir}`);
+  return partes.join('\n');
+}
+function _presuArmarTextoConfirmacion({ dia, direccion, horario, cobro, monto }) {
+  let d = (dia || '').replace(/^\s*para\s+/i, '').trim().toLowerCase();
+  if (d && !/^el\s/.test(d) && /^(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)/.test(d)) d = 'el ' + d;
+  let dir = (direccion || '').replace(/\s+/g, ' ').replace(/,\s*,+/g, ',').replace(/[\s,]+$/, '').trim();
+  if (dir && /capital federal/i.test(dir)) dir = dir.replace(/,\s*CABA\s*$/i, '');
+  let hor = (horario || '').replace(/\s+/g, ' ').trim().replace(/(\d{1,2}(?::\d{2})?)\s*a\s*(\d{1,2}(?::\d{2})?)\s*hs?\b/i, (m, a, b) => `${a} a ${b} hs`).replace(/\bA\b/g, 'a').replace(/\bHS\b/g, 'hs');
+  const montoTxt = (cobro === 'efectivo' && monto) ? ` El total a abonar en efectivo es de $${Number(monto).toLocaleString('es-AR')}.` : '';
+  return `¡Buen día! El pedido te lo podemos enviar${d ? ' ' + d : ''}${dir ? ' en ' + dir : ''}${hor ? ', en el horario de ' + hor : ''}.${montoTxt} Si nos confirmás, enviamos el pedido a preparar. ¡Muchas gracias!`;
+}
+function _presuDetectarMensajeEnvio(datos, transporteDetectado, forzarDentalab) {
+  _presuMsgEnvio = null;
+  if (!datos) return;
+  const obs = datos.observaciones || '';
+  const obsLow = obs.toLowerCase();
+  const diceRetira = /\bretir\w*/.test(obsLow);
+  const diceEnviar = /\benv[ií]\w*/.test(obsLow) || /\bdentalab\b/.test(obsLow) || /\bmoto\w*/.test(obsLow);
+  const transporteExterno = transporteDetectado && transporteDetectado !== 'Envíos Dentalab';
+  const esDentalab = forzarDentalab || transporteDetectado === 'Envíos Dentalab' || (!transporteExterno && diceEnviar && !(diceRetira && !/\benv[ií]\w*/.test(obsLow)) && datos.tipoEntrega !== 'sucursal');
+  if (!esDentalab) return;
+  let cobro = '', monto = '';
+  const D = window._depPdf || {};
+  const porObs = (D.cobro && obs) ? D.cobro(obs) : null;
+  if (porObs) { cobro = porObs.cobro; monto = porObs.montoEfectivo || ''; }
+  else if (datos.condicionVenta && D.condVta) cobro = D.condVta(datos.condicionVenta) || '';
+  if (cobro === 'efectivo' && !monto && datos.total) {
+    const n = Math.round(parseFloat(String(datos.total).replace(/\./g, '').replace(',', '.')));
+    if (!isNaN(n) && n > 0) monto = String(n);
+  }
+  const texto = _presuArmarTextoConfirmacion({ dia: datos.fechaEntregaTexto || '', direccion: datos.direccion || '', horario: datos.horario || '', cobro, monto });
+  _presuMsgEnvio = { texto, cobro, monto };
+}
+window.presuAbrirMensajeEnvio = function() {
+  if (!_presuMsgEnvio) return;
+  document.getElementById('presu-msg-envio-bd')?.remove();
+  const bd = document.createElement('div');
+  bd.id = 'presu-msg-envio-bd';
+  bd.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px;';
+  bd.innerHTML = `
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:16px;width:100%;max-width:520px;box-shadow:0 24px 60px rgba(0,0,0,.35);padding:22px 22px 18px;">
+      <div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:4px;">📲 Mensaje para el cliente</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;">Revisá el día, el horario, la dirección y el monto (si paga en efectivo), corregí lo que haga falta y copialo.</div>
+      <textarea id="presu-msg-envio-txt" rows="6" style="width:100%;box-sizing:border-box;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.5;font-family:inherit;resize:vertical;"></textarea>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
+        <button id="presu-msg-envio-cerrar" style="padding:9px 16px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;">Cerrar</button>
+        <button id="presu-msg-envio-copiar" style="padding:9px 16px;background:#10b981;border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">📋 Copiar mensaje</button>
+      </div>
+    </div>`;
+  document.body.appendChild(bd);
+  const ta = document.getElementById('presu-msg-envio-txt');
+  ta.value = _presuMsgEnvio.texto;
+  ta.focus();
+  const cerrar = () => { bd.remove(); document.removeEventListener('keydown', onEsc, true); };
+  const onEsc = e => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); cerrar(); } };
+  document.addEventListener('keydown', onEsc, true);
+  document.getElementById('presu-msg-envio-cerrar').onclick = cerrar;
+  bd.addEventListener('click', e => { if (e.target === bd) cerrar(); });
+  document.getElementById('presu-msg-envio-copiar').onclick = () => {
+    const t = ta.value;
+    const aviso = m => { try { if (typeof _zoomMostrarAviso === 'function') _zoomMostrarAviso(m); } catch (e) {} };
+    const ok = () => { aviso('📲 Mensaje para el cliente copiado'); cerrar(); };
+    const fail = () => aviso('⚠ No se pudo copiar');
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(t).then(ok).catch(fail);
+    else { try { ta.select(); document.execCommand('copy'); ok(); } catch (e2) { fail(); } }
+  };
+};
 let _pedidoFullDosListas = false; // admin + Presupuesto: muestra Lista 1 (Contado) y Lista 2 (Tarjeta) lado a lado
 let _pedidoFullOrden = 'original'; // 'original' | 'precio_asc' | 'precio_desc' | 'manual' — solo aplica en modo Presupuesto
 // Costo de envío que el admin puede sumarle a "Tu pedido" — misma estrategia que
@@ -6247,7 +6451,7 @@ window._quitarEnvioDesdePedido = () => {
   renderCarrito();
 };
 function _pintarEnvioDesdePedido(totalEl){
-  if (!carrito.size) window._envioDesdePedido = null;
+  if (!carrito.size) { window._envioDesdePedido = null; _presuCondiciones = ''; _presuTransporte = ''; _presuMsgEnvio = null; }
   const ep = _envioPedidoActual();
   let fila = document.getElementById('fila-envio-pedido');
   if (!ep) { if (fila) fila.remove(); return; }
@@ -6356,11 +6560,13 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
                 ${_dual ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
                   <div style="display:flex;align-items:baseline;gap:8px;white-space:nowrap;"><span style="font-size:10.5px;font-weight:700;color:#0ea968;">💵 Contado</span><span style="font-size:15px;font-weight:800;color:var(--text);">${fmtMoney((it.p1 || 0) * qty)}</span></div>
                   <div style="display:flex;align-items:baseline;gap:8px;white-space:nowrap;"><span style="font-size:10.5px;font-weight:700;color:#7c3aed;">💳 Tarjeta</span><span style="font-size:15px;font-weight:800;color:var(--text);">${fmtMoney((it.p2 || 0) * qty)}</span></div>
-                </div>` : `<div style="font-size:16px;font-weight:800;color:var(--text);white-space:nowrap;">${fmtMoney(precio * qty)}</div>`}
+                </div>` : (_descItemTexto(sku) && precioBaseCarritoDe(sku) > precio)
+                  ? `<div style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.15;"><span style="font-size:12.5px;font-weight:600;color:var(--text3);text-decoration:line-through;white-space:nowrap;">${fmtMoney(precioBaseCarritoDe(sku) * qty)}</span><span style="font-size:16px;font-weight:800;color:var(--text);white-space:nowrap;">${fmtMoney(precio * qty)}</span></div>`
+                  : `<div style="font-size:16px;font-weight:800;color:var(--text);white-space:nowrap;">${fmtMoney(precio * qty)}</div>`}
                 ${esAdmin ? `<button onclick="_pedidoEditandoPrecioSku='${escHtml(sku)}'; abrirVistaCompletaPedido(true);" title="Cambiar el precio de este producto a mano, solo para este pedido" class="ci-precio-col-hover-btn" style="background:none;border:none;font-size:12px;cursor:pointer;padding:0 2px;line-height:1;">✏️</button>` : ''}
               </div>
               ${_preciosManualesCarrito.has(sku) ? `<button onclick="quitarPrecioManual('${escHtml(sku)}')" title="Volver al precio de catálogo" class="ci-precio-col-hover-btn" style="background:none;border:none;font-size:10px;color:var(--text3);cursor:pointer;padding:0;text-decoration:underline;">↺ precio de catálogo</button>` : ''}`}
-          ${esAdmin && !_dual ? _htmlCtlDescItem(sku, _descItemTexto(sku) ? '' : 'ci-precio-col-hover-btn') : ''}
+          ${esAdmin && !_dual ? _htmlCtlDescItem(sku, 'ci-precio-col-hover-btn') : ''}
           <button onclick="quitarDelPedidoCompleto('${escHtml(sku)}')" title="Quitar del pedido" class="${esAdmin ? 'ci-precio-col-hover-btn' : ''}" style="
             background:none;border:1px solid var(--border);border-radius:8px;color:var(--red,#dc2626);
             font-size:12px;padding:4px 8px;cursor:pointer;white-space:nowrap;
@@ -6425,6 +6631,10 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
         <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--text2);">CUIT / DNI
           <input type="text" id="pedido-presu-dni" inputmode="numeric" value="${escHtml(_presuDatosCliente().dni)}" placeholder="Sin puntos ni guiones" oninput="_presuClienteDni=this.value" style="width:170px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12.5px;background:var(--panel);color:var(--text);">
         </label>
+        <label style="display:flex;align-items:flex-start;gap:6px;font-size:12.5px;font-weight:600;color:var(--text2);flex-basis:100%;" title="Aparecen al pie del presupuesto">Condiciones
+          <textarea id="pedido-presu-condiciones" rows="${Math.min(4, Math.max(1, (_presuCondiciones || '').split('\n').length))}" placeholder="Condiciones comerciales (salen al pie del presupuesto). Se completan solas al arrastrar el PDF." oninput="_presuCondiciones=this.value" style="flex:1;min-width:0;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12.5px;line-height:1.4;background:var(--panel);color:var(--text);resize:vertical;font-family:inherit;">${escHtml(_presuCondiciones || '')}</textarea>
+        </label>
+        ${_presuMsgEnvio ? `<button onclick="presuAbrirMensajeEnvio()" title="Mensaje para confirmarle el envío al cliente (Envío Dentalab detectado en el PDF)" style="padding:7px 12px;background:#10b981;border:none;border-radius:8px;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;">📲 Mensaje al cliente</button>` : ''}
       </div>` : ''}
       <div id="pedido-full-body" style="overflow-y:auto;padding:4px 20px;flex:1;">${_pedidoFullAmplio ? `<div class="pf-cols" style="column-width:480px;column-gap:28px;">${filas}</div>` : filas}</div>
       <div id="pedido-full-footer" style="padding:16px 20px;border-top:1px solid var(--border);">
@@ -6475,7 +6685,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
           width:100%;background:var(--green,#0ea968);color:#fff;border:none;border-radius:10px;
           padding:12px;font-size:14px;font-weight:700;cursor:pointer;
         ">⬇ Descargar PDF con fotos</button>
-        <button onclick="abrirVistaPresupuesto()" style="width:100%;margin-top:10px;background:transparent;border:1px dashed var(--border);border-radius:10px;padding:10px;color:var(--text2);font-size:13px;font-weight:700;cursor:pointer;">📄 Ver como Presupuesto</button>
+        <button onclick="abrirVistaPresupuesto(true)" style="width:100%;margin-top:10px;background:transparent;border:1px dashed var(--border);border-radius:10px;padding:10px;color:var(--text2);font-size:13px;font-weight:700;cursor:pointer;">📄 Ver como Presupuesto</button>
       </div>
     </div>`;
   document.body.appendChild(bd);
@@ -10790,17 +11000,24 @@ document.addEventListener('keydown', (e) => {
   function _parsearEnvioDesdePDFPresupuesto(lines) {
     const iS = lines.findIndex(l => /^\s*servicios\s*$/i.test(String(l).replace(/\t/g, ' ')));
     if (iS < 0) return null;
-    let iF = lines.findIndex((l, i) => i > iS && /observaciones|^\s*neto\b/i.test(String(l)));
+    // La tabla termina donde empiezan Observaciones o los totales (Neto, Total, Desc gral, etc.)
+    let iF = lines.findIndex((l, i) => i > iS && !/c[oó]digo.*descripci[oó]n/i.test(String(l))
+      && /observaciones|^\s*neto\b|\bneto\s*\t|\btotal\b|desc\.?\s*gral|percep|lugar de entrega|^\s*%\s*dto/i.test(String(l)));
     if (iF < 0) iF = Math.min(lines.length, iS + 12);
     const tramo = lines.slice(iS + 1, iF).map(l => String(l).replace(/\t/g, ' '));
     const aNum = t => Number(String(t).replace(/[$\s.]/g, '').replace(',', '.')) || 0;
-    let monto = 0, texto = '';
+    let texto = '';
+    const conMontos = [];
     tramo.forEach(l => {
       if (/c[oó]digo.*descripci[oó]n/i.test(l)) return; // encabezado de la tabla
       texto += ' ' + l;
       const montos = l.match(/\$\s?[\d.]+,\d{2}/g);
-      if (montos && montos.length) monto += aNum(montos[montos.length - 1]); // última columna: Neto c/dto
+      if (montos && montos.length) conMontos.push(montos);
     });
+    // Un renglón de servicio trae "Neto s/dto" y "Neto c/dto": si hay renglones así, solo se suman esos
+    const filasServicio = conMontos.some(m => m.length >= 2) ? conMontos.filter(m => m.length >= 2) : conMontos;
+    let monto = 0;
+    filasServicio.forEach(m => { monto += aNum(m[m.length - 1]); }); // última columna: Neto c/dto
     if (!(monto > 0)) return null;
     const t = texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const nombres = window._SEYI_NOMBRES || {};
@@ -10880,6 +11097,7 @@ document.addEventListener('keydown', (e) => {
     _zoomMostrarAviso('📄 Leyendo el PDF…');
     try {
       const buf = await file.arrayBuffer();
+      const bufCopia = buf.slice(0); // pdf.js se queda con el original; esta copia es para leer condiciones/envío
       const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
       const lines = [];
       for (let p = 1; p <= pdf.numPages; p++) {
@@ -10910,6 +11128,36 @@ document.addEventListener('keydown', (e) => {
         agregados++;
       });
       // Envío del PDF (sección "Servicios" del pedido de Yiqi): se carga igual que con "🛒 Al carrito"
+      // Condiciones comerciales (día, horario, dirección), transporte y mensaje para el cliente — como en el CRM
+      let _extraAviso = '';
+      const D = window._depPdf;
+      if (agregados && esAdminCatalogo() && D) {
+        try {
+          const tl = await D.extraer(bufCopia);
+          // El envío se vuelve a leer de estas líneas (agrupadas con tolerancia, como en el CRM): son más confiables
+          if (envioPDF) { const envio2 = _parsearEnvioDesdePDFPresupuesto(tl.slice()); if (envio2) envioPDF = envio2; }
+          const datos = D.parsear(tl);
+          const nuevo = _presuCondicionesDesdeDatos(datos);
+          if (nuevo) {
+            const previo = (_presuCondiciones || '').trim();
+            if (!previo.includes(nuevo)) _presuCondiciones = previo ? `${previo}\n${nuevo}` : nuevo;
+            _extraAviso += ' · 📍 dirección y horario en Condiciones';
+          }
+          if (datos.cliente && !(_presuClienteNombre || '').trim()) _presuClienteNombre = datos.cliente;
+          const transp = D.transporte(datos.observaciones || '') || D.transporte(tl.join(' '));
+          _presuTransporte = transp || '';
+          _presuDetectarMensajeEnvio(datos, transp);
+          // Como en el CRM (transportista por defecto "Envíos Dentalab"): envío a domicilio cobrado en el
+          // PDF, sin transporte externo ni sucursal → es Envío Dentalab, y se arma el mensaje igual.
+          const _obsL = (datos.observaciones || '').toLowerCase();
+          const _soloRetira = /\bretir\w*/.test(_obsL) && !/env[ií]\w*/.test(_obsL);
+          if (!transp && envioPDF && (envioPDF.seyi === 7 || envioPDF.seyi === 4) && datos.tipoEntrega !== 'sucursal' && !_soloRetira) {
+            _presuTransporte = 'Envíos Dentalab';
+            if (!_presuMsgEnvio) _presuDetectarMensajeEnvio(datos, 'Envíos Dentalab', true);
+          }
+          if (_presuMsgEnvio) _extraAviso += ' · 📲 mensaje al cliente listo (en Presupuesto)';
+        } catch (eC) { console.warn('[Importar pedido PDF] condiciones/envío:', eC.message); }
+      }
       if (agregados && esAdminCatalogo()) window._envioDesdePedido = envioPDF;
       if (typeof renderResultados === 'function') renderResultados();
       renderCarrito();
@@ -10918,8 +11166,10 @@ document.addEventListener('keydown', (e) => {
         ? `✅ Se cargaron ${agregados} producto${agregados !== 1 ? 's' : ''} de tu pedido`
           + (agregados && envioPDF && esAdminCatalogo() ? ` + envío ${envioPDF.nombre} ${fmtMoney(envioPDF.monto)}` : '')
           + (noDisponibles ? ` · ${noDisponibles} ya no ${noDisponibles !== 1 ? 'están' : 'está'} disponible${noDisponibles !== 1 ? 's' : ''}` : '')
+          + _extraAviso
         : '⚠ No encontramos esos productos en el catálogo actual';
       _zoomMostrarAviso(msg);
+      try { if (document.getElementById('pedido-full-backdrop') && typeof abrirVistaCompletaPedido === 'function') abrirVistaCompletaPedido(true); } catch (eR) {}
     } catch (e) {
       console.error('[Importar pedido PDF]', e);
       _zoomMostrarAviso('⚠ No se pudo leer ese PDF');
@@ -16451,6 +16701,8 @@ async function _extraerTextoPDFDesdeBuffer(buf) {
   lines.sort((a, b) => a.page !== b.page ? a.page - b.page : a.y - b.y);
   return lines.map(l => l.items.sort((a, b) => a.x - b.x).map(i => i.str).join('\t'));
 }
+// Los usa también el "arrastrar PDF" del catálogo (condiciones, transporte y mensaje al cliente)
+window._depPdf = { extraer: _extraerTextoPDFDesdeBuffer, parsear: _parsearDatosEnvioDesdePDFTexto, transporte: _detectarTransporteEnTexto, cobro: _detectarCobroEnTexto, condVta: _mapearCobroDesdeCondicionVenta };
 
 function buildSubjectV2(tipo, nro, cliente, vendedor, cobro) {
   const parts = _TIPO_PARTS[tipo];
