@@ -1135,21 +1135,15 @@ window.toggleOcultarAgotado = (sku) => {
 // "Ocultar Agotado". ──
 const LS_KEY_PRECIO_MANUAL = 'dentalab_pedido_precio_manual_v1';
 let _preciosManualesCarrito = new Map(); // sku -> precio unitario manual
+// IMPORTANTE: el precio manual NO se guarda. Vale solo para el pedido que se está armando en este
+// momento: si se saca el producto, se vacía el pedido o se vuelve a abrir el catálogo, vuelve el
+// precio del catálogo. (Antes quedaba guardado y aparecía en cotizaciones siguientes.)
 function _guardarPreciosManualesLS(){
-  try {
-    if (_preciosManualesCarrito.size) localStorage.setItem(LS_KEY_PRECIO_MANUAL, JSON.stringify(Array.from(_preciosManualesCarrito.entries())));
-    else localStorage.removeItem(LS_KEY_PRECIO_MANUAL);
-  } catch(e) {}
+  try { localStorage.removeItem(LS_KEY_PRECIO_MANUAL); } catch(e) {}
 }
 function _restaurarPreciosManualesLS(){
-  try {
-    const raw = localStorage.getItem(LS_KEY_PRECIO_MANUAL);
-    if (!raw) return;
-    const entradas = JSON.parse(raw);
-    if (Array.isArray(entradas)) entradas.forEach(([sku, precio]) => {
-      if (Number.isFinite(precio) && precio >= 0) _preciosManualesCarrito.set(sku, precio);
-    });
-  } catch(e) {}
+  _preciosManualesCarrito.clear();
+  try { localStorage.removeItem(LS_KEY_PRECIO_MANUAL); } catch(e) {} // borra lo que haya quedado guardado de antes
 }
 // Precio a usar para un producto DENTRO del carrito/pedido — si tiene un precio manual
 // cargado, ese; si no, el precio normal de catálogo (precioDe). La grilla de búsqueda
@@ -1166,22 +1160,14 @@ const LS_KEY_DESC_CARRITO = 'dentalab_pedido_descuentos_v1';
 let _descItemCarrito = new Map();             // sku -> { m: 'pct' | 'monto', v: número }
 let _descGlobalCarrito = { m: 'pct', v: 0 };  // descuento global sobre el subtotal
 let _descuentosRestaurados = false;           // hasta restaurarlos no se guarda nada (para no borrarlos al iniciar)
+// Los descuentos tampoco se guardan: valen solo para el pedido que se está armando (igual que el precio manual)
 function _guardarDescuentosLS(){
   if (!_descuentosRestaurados) return;
-  try {
-    const items = Array.from(_descItemCarrito.entries()).filter(([, d]) => d && d.v > 0);
-    if (items.length || _descGlobalCarrito.v > 0) localStorage.setItem(LS_KEY_DESC_CARRITO, JSON.stringify({ items, g: _descGlobalCarrito }));
-    else localStorage.removeItem(LS_KEY_DESC_CARRITO);
-  } catch(e) {}
+  try { localStorage.removeItem(LS_KEY_DESC_CARRITO); } catch(e) {}
 }
 function _restaurarDescuentosLS(){
   _descuentosRestaurados = true;
-  try {
-    const d = JSON.parse(localStorage.getItem(LS_KEY_DESC_CARRITO) || 'null');
-    if (!d) return;
-    if (Array.isArray(d.items)) d.items.forEach(([sku, x]) => { if (x && Number(x.v) > 0) _descItemCarrito.set(sku, { m: x.m === 'monto' ? 'monto' : 'pct', v: Number(x.v) }); });
-    if (d.g && Number(d.g.v) > 0) _descGlobalCarrito = { m: d.g.m === 'monto' ? 'monto' : 'pct', v: Number(d.g.v) };
-  } catch(e) {}
+  try { localStorage.removeItem(LS_KEY_DESC_CARRITO); } catch(e) {} // borra lo que haya quedado guardado de antes
 }
 window._limpiarDescuentosCarrito = () => { _descItemCarrito.clear(); _descGlobalCarrito = { m: 'pct', v: 0 }; _guardarDescuentosLS(); };
 function _descItemUnitario(sku, base){
@@ -6189,6 +6175,8 @@ function renderCarrito(){
   }
   if (totalEl) totalEl.textContent = fmtMoney(calcularTotal());
   // Descuentos de productos que ya no están en el carrito: se olvidan
+  // Producto que sale del pedido: pierde su precio manual (si se vuelve a agregar, toma el del catálogo)
+  _preciosManualesCarrito.forEach((v, sku) => { if (!carrito.has(sku)) _preciosManualesCarrito.delete(sku); });
   if (_descuentosRestaurados) {
     _descItemCarrito.forEach((d, sku) => { if (!carrito.has(sku)) _descItemCarrito.delete(sku); });
     if (!carrito.size) _descGlobalCarrito = { m: _descGlobalCarrito.m, v: 0 };
