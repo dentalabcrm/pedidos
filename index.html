@@ -6746,11 +6746,29 @@ window._pedidoToggleRecorte = async () => {
 // Baja una foto de Drive como dataURL lista para meter en el PDF. Drive no deja "leer" la
 // imagen directo desde el navegador (CORS), así que se pasa por el mismo proxy que ya usa
 // "Copiar tarjeta" (images.weserv.nl) para poder dibujarla.
-async function _cargarFotoComoDataURL(driveId){
+// Las fotos ya bajadas quedan en memoria mientras la página esté abierta (el 2º PDF sale al instante),
+// y cada foto tiene un tiempo máximo: si una tarda demasiado, el PDF sale igual con ese recuadro vacío.
+const _fotoPDFCache = new Map();
+function _cargarFotoComoDataURL(driveId){
+  if (_fotoPDFCache.has(driveId)) return _fotoPDFCache.get(driveId);
+  const p = _cargarFotoComoDataURLRed(driveId).then(r => { if (!r) _fotoPDFCache.delete(driveId); return r; });
+  _fotoPDFCache.set(driveId, p);
+  return p;
+}
+// Baja varias fotos a la vez (de a 8), en lugar de una atrás de la otra
+async function _precargarFotosPDF(ids, onProgreso){
+  const pend = [...new Set(ids.filter(Boolean))];
+  let hechas = 0, i = 0;
+  const trabajador = async () => { while (i < pend.length) { const id = pend[i++]; await _cargarFotoComoDataURL(id); hechas++; if (onProgreso) onProgreso(hechas, pend.length); } };
+  await Promise.all(Array.from({ length: Math.min(8, pend.length) }, trabajador));
+}
+async function _cargarFotoComoDataURLRed(driveId){
   try {
     const original = `drive.google.com/thumbnail?id=${driveId}&sz=w300`;
     const proxiedUrl = `https://images.weserv.nl/?url=${encodeURIComponent(original)}`;
-    const resp = await fetch(proxiedUrl);
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const tmo = ctrl ? setTimeout(() => ctrl.abort(), 12000) : null;
+    const resp = await fetch(proxiedUrl, ctrl ? { signal: ctrl.signal } : undefined).finally(() => { if (tmo) clearTimeout(tmo); });
     if (!resp.ok) return null;
     const blob = await resp.blob();
     return await new Promise(resolve => {
@@ -6859,6 +6877,10 @@ window.descargarPedidoPDFConFotos = async () => {
     doc.line(margin, y, pageW - margin, y);
     y += 6;
 
+    // Todas las fotos se bajan antes y en paralelo (antes se bajaban de a una mientras se armaba cada fila)
+    await _precargarFotosPDF(entradasCarritoPDF.map(([sku]) => { const it = catalogoBySku.get(sku); return it ? ((it.imgs && it.imgs[0]) || it.img) : null; }),
+      (h, t) => { if (btn) btn.textContent = `Generando… fotos ${h}/${t}`; });
+    if (btn) btn.textContent = 'Generando…';
     for (const [sku, qty] of entradasCarritoPDF) {
       const it = catalogoBySku.get(sku);
       if (!it) continue;
