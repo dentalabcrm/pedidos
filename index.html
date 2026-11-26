@@ -17323,5 +17323,22 @@ let __depOk = false; const __t = setInterval(() => { try { if (!__depOk && windo
 })();
 
 </script>
+<script>
+// Tecla Esc: cierra la ventana "Enviar a Google Calendar" (igual que el botón ✕) y nada más.
+// Se escucha antes que el resto (fase de captura) y se frena el Esc ahí, así no cierra también la grilla
+// de Pedidos ni otra ventana que esté abajo. Si está abierto el editor de transportes (que va encima),
+// el Esc queda para ese editor.
+(function(){
+  window.addEventListener('keydown', function(e){
+    if (e.key !== 'Escape' || e.isComposing) return;
+    const bd = document.getElementById('gcal-backdrop');
+    if (!bd) return;
+    if (document.querySelector('.gcal-tr-editor')) return;
+    const btn = bd.querySelector('#gcal-close');
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (btn) btn.click(); else bd.remove();
+  }, true);
+})();
+</script>
 </body>
 </html>
