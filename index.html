@@ -11679,7 +11679,7 @@ document.addEventListener('keydown', (e) => {
         `<div id="yqc-estenv-tr" class="yqc-dos" style="display:none"><select id="yqc-env-tr"><option value="">— Elegir transporte —</option></select><select id="yqc-env-tipo"><option value="">— Domicilio, Sucursal… —</option><option>Domicilio</option><option>Sucursal</option><option>Depósito</option><option>Terminal</option></select></div>`)}
       ${fila('Estado de pago', `<select id="yqc-pago">${PAGO.map(x => `<option value="${esc(x)}">${esc(x || '— Sin especificar —')}</option>`).join('')}</select>`)}
       <div class="yqc-sec">💲 Cobro del envío (servicio del pedido)</div>
-      <div class="yqc-dos3"><label class="yqc-chk"><input type="checkbox" id="yqc-env-on" ${env.activo ? 'checked' : ''}> Cobrar envío</label><select id="yqc-env-seyi">${opts(SEYI, env.seyi)}</select><input id="yqc-env-monto" inputmode="numeric" placeholder="Monto final" value="${env.monto || ''}"></div>
+      <div class="yqc-dos3"><label class="yqc-chk"><input type="checkbox" id="yqc-env-on" ${env.activo ? 'checked' : ''}> Cobrar envío</label><select id="yqc-env-seyi" onchange="var c=document.getElementById('yqc-env-on');if(c)c.checked=true;">${opts(SEYI, env.seyi)}</select><input id="yqc-env-monto" inputmode="numeric" placeholder="Monto final" value="${env.monto || ''}" oninput="var c=document.getElementById('yqc-env-on');if(c)c.checked=(this.value.replace(/[^0-9]/g,'')!=='');"></div>
       <div class="yqc-sec">📦 Productos (${items.length}) · Total ${money(total)}</div>
       <div class="yqc-tw"><table class="yqc-t"><thead><tr><th>SKU</th><th>Producto</th><th class="n">Cant.</th><th class="n">P. unit.</th><th class="n">Subtotal</th><th>Yiqi</th></tr></thead>
       <tbody id="yqc-items">${items.map((i, k) => `<tr data-k="${k}"><td>${esc(i.sku)}</td><td>${esc(i.nombre)}</td><td class="n">${i.qty}</td><td class="n">${money(i.precio)}</td><td class="n">${money(i.qty * i.precio)}</td><td data-id>⏳</td></tr>`).join('')}</tbody></table></div>
@@ -11919,8 +11919,9 @@ document.addEventListener('keydown', (e) => {
     if (falta) { toast('⚠ ' + falta, 'warn'); if (!_cli) { $('yqc-cq-q')?.focus(); const q = $('yqc-cq-q'); if (q) { q.classList.add('yqc-marca'); setTimeout(() => q.classList.remove('yqc-marca'), 1600); } } return; }
     const incl = items.filter(i => _ids[i.sku]);
     const excl = items.filter(i => !_ids[i.sku]);
-    const envOn = $('yqc-env-on').checked;
     const envMonto = parseFloat(String(val('yqc-env-monto')).replace(/\./g, '').replace(',', '.')) || 0;
+    // Si hay un monto de envío escrito, se carga aunque no se haya tildado "Cobrar envío"
+    const envOn = $('yqc-env-on').checked || envMonto > 0;
     const _dtoG = typeof descuentoGlobalPctCarrito === 'function' ? descuentoGlobalPctCarrito() : 0;
     const tot = incl.reduce((s, i) => s + i.qty * i.precio, 0) * (1 - _dtoG / 100) + (envOn ? envMonto : 0);
     if (!incl.length) { toast('⚠ Ningún producto tiene ID de Yiqi', 'warn'); return; }
