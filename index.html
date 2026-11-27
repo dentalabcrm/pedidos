@@ -6395,8 +6395,22 @@ function _presuDetectarMensajeEnvio(datos, transporteDetectado, forzarDentalab) 
   const texto = _presuArmarTextoConfirmacion({ dia: datos.fechaEntregaTexto || '', direccion: datos.direccion || '', horario: datos.horario || '', cobro, monto });
   _presuMsgEnvio = { texto, cobro, monto };
 }
+function _presuHayMensajeEnvio(){
+  if (_presuMsgEnvio) return true;
+  const c = _presuCondicionesTexto();
+  if (!/Direcci[oó]n de env[ií]o\s*:/i.test(c) || /Direcci[oó]n de env[ií]o\s*:\s*Sucursal/i.test(c)) return false;
+  return !_presuTransporte || _presuTransporte === 'Envíos Dentalab';
+}
+function _presuMensajeEnvioActual(){
+  if (_presuMsgEnvio) return _presuMsgEnvio;
+  const cond = _presuCondicionesTexto();
+  const toma = rx => { const m = cond.match(rx); return m ? m[1].trim() : ''; };
+  const texto = _presuArmarTextoConfirmacion({ dia: toma(/D[ií]a de entrega\s*:\s*(.+)/i).toLowerCase(), direccion: toma(/Direcci[oó]n de env[ií]o\s*:\s*(.+)/i), horario: toma(/Horario\s*:\s*(.+)/i), cobro: '', monto: '' });
+  return { texto, cobro: '', monto: '' };
+}
 window.presuAbrirMensajeEnvio = function() {
-  if (!_presuMsgEnvio) return;
+  if (!_presuHayMensajeEnvio()) return;
+  const _msg = _presuMensajeEnvioActual();
   document.getElementById('presu-msg-envio-bd')?.remove();
   const bd = document.createElement('div');
   bd.id = 'presu-msg-envio-bd';
@@ -6413,7 +6427,7 @@ window.presuAbrirMensajeEnvio = function() {
     </div>`;
   document.body.appendChild(bd);
   const ta = document.getElementById('presu-msg-envio-txt');
-  ta.value = _presuMsgEnvio.texto;
+  ta.value = _msg.texto;
   ta.focus();
   const cerrar = () => { bd.remove(); document.removeEventListener('keydown', onEsc, true); };
   const onEsc = e => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); cerrar(); } };
@@ -6634,7 +6648,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
         <label style="display:flex;align-items:flex-start;gap:6px;font-size:12.5px;font-weight:600;color:var(--text2);flex-basis:100%;" title="Aparecen al pie del presupuesto">Condiciones
           <textarea id="pedido-presu-condiciones" rows="${Math.min(4, Math.max(1, (_presuCondiciones || '').split('\n').length))}" placeholder="Condiciones comerciales (salen al pie del presupuesto). Se completan solas al arrastrar el PDF." oninput="_presuCondiciones=this.value" style="flex:1;min-width:0;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12.5px;line-height:1.4;background:var(--panel);color:var(--text);resize:vertical;font-family:inherit;">${escHtml(_presuCondiciones || '')}</textarea>
         </label>
-        ${_presuMsgEnvio ? `<button onclick="presuAbrirMensajeEnvio()" title="Mensaje para confirmarle el envío al cliente (Envío Dentalab detectado en el PDF)" style="padding:7px 12px;background:#10b981;border:none;border-radius:8px;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;">📲 Mensaje al cliente</button>` : ''}
+        ${_presuHayMensajeEnvio() ? `<button onclick="presuAbrirMensajeEnvio()" title="Mensaje para confirmarle el envío al cliente (Envío Dentalab detectado en el PDF)" style="padding:7px 12px;background:#10b981;border:none;border-radius:8px;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;">📲 Mensaje al cliente</button>` : ''}
       </div>` : ''}
       <div id="pedido-full-body" style="overflow-y:auto;padding:4px 20px;flex:1;">${_pedidoFullAmplio ? `<div class="pf-cols" style="column-width:480px;column-gap:28px;">${filas}</div>` : filas}</div>
       <div id="pedido-full-footer" style="padding:16px 20px;border-top:1px solid var(--border);">
@@ -6684,6 +6698,7 @@ window.abrirVistaCompletaPedido = (preservarEstado) => {
         ${(esAdmin && !_esPresu && _presuCondicionesTexto()) ? `<div style="margin:-4px 0 12px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel2);">
           <div style="font-size:10.5px;font-weight:800;letter-spacing:.4px;color:var(--text2);margin-bottom:2px;">CONDICIONES COMERCIALES</div>
           <div style="font-size:12px;color:var(--text);white-space:pre-line;line-height:1.45;">${escHtml(_presuCondicionesTexto())}</div>
+          ${_presuHayMensajeEnvio() ? `<button onclick="presuAbrirMensajeEnvio()" title="Mensaje para confirmarle el envío al cliente" style="margin-top:8px;padding:7px 12px;background:#10b981;border:none;border-radius:8px;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;">📲 Mensaje al cliente</button>` : ''}
         </div>` : ''}
         <button id="btn-descargar-pedido-pdf" onclick="descargarPedidoPDFConFotos()" style="
           width:100%;background:var(--green,#0ea968);color:#fff;border:none;border-radius:10px;
@@ -11155,8 +11170,9 @@ document.addEventListener('keydown', (e) => {
           // PDF, sin transporte externo ni sucursal → es Envío Dentalab, y se arma el mensaje igual.
           const _obsL = (datos.observaciones || '').toLowerCase();
           const _soloRetira = /\bretir\w*/.test(_obsL) && !/env[ií]\w*/.test(_obsL);
-          if (!transp && envioPDF && (envioPDF.seyi === 7 || envioPDF.seyi === 4) && datos.tipoEntrega !== 'sucursal' && !_soloRetira) {
-            _presuTransporte = 'Envíos Dentalab';
+          const _envioDomicilio = envioPDF ? (envioPDF.seyi === 7 || envioPDF.seyi === 4) : !!nuevo; // sin costo en el PDF: alcanza con que haya dirección
+          if (!transp && _envioDomicilio && datos.tipoEntrega !== 'sucursal' && !_soloRetira) {
+            if (envioPDF) _presuTransporte = 'Envíos Dentalab';
             if (!_presuMsgEnvio) _presuDetectarMensajeEnvio(datos, 'Envíos Dentalab', true);
           }
           if (_presuMsgEnvio) _extraAviso += ' · 📲 mensaje al cliente listo (en Presupuesto)';
